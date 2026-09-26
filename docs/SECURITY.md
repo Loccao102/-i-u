@@ -1,104 +1,65 @@
 # Security and privacy baseline
 
-ĐiĐâu is currently personal-first and uses a temporary server-side SQLite store.
+ĐiĐâu uses Supabase PostgreSQL as the persistent store and keeps the existing anonymous personal profile model until real accounts are needed.
+
+## Supabase secret key
+
+The Next.js server creates a dedicated Supabase admin client with:
+
+- `SUPABASE_URL`;
+- `SUPABASE_SECRET_KEY`.
+
+The secret key is server-only and must never be:
+
+- prefixed with `NEXT_PUBLIC_`;
+- rendered into HTML;
+- returned from an API;
+- committed to Git;
+- used in browser code.
+
+The client disables session persistence, refresh and URL session detection so a user Auth session cannot replace the elevated server credential.
 
 ## Anonymous profile boundary
 
-There is no account/login system yet.
+There is no login yet.
 
-The server creates a cryptographically random 256-bit anonymous token and stores it in a cookie configured as:
+The app generates a cryptographically random browser token and stores it in:
 
-- `HttpOnly`;
+- an `HttpOnly` cookie;
 - `SameSite=Strict`;
-- `Secure` in production;
-- one-year expiry.
+- `Secure` in production.
 
-The raw token is not stored in SQLite. A SHA-256 derivative is used as `owner_key` and every personal repository query is scoped by that key.
+Only a SHA-256 derivative is used as `owner_key`.
 
-This protects one anonymous browser profile from accidentally reading another profile's rows through the app. It does **not** provide identity recovery, multi-device sync, password authentication or protection if the browser cookie itself is stolen.
+Every repository read/write is scoped by `owner_key`.
 
-## SQLite
+This is a temporary personal MVP identity layer. It does not provide account recovery or cross-device identity.
 
-SQLite stores:
+## RLS and Data API
 
-- user-added/imported places;
-- Saved links;
-- ratings;
-- check-ins / visit history;
-- collections;
-- collection-place links.
+All personal tables have RLS enabled.
 
-SQLite does not store the user's live GPS position.
+The migration:
 
-The database defaults to:
+- grants no application access to `anon` or `authenticated`;
+- revokes their table access explicitly;
+- grants table access only to `service_role`, which is the Postgres role used by a Supabase secret key.
 
-`.data/di-dau.sqlite`
+No browser Supabase client is created.
 
-and can be moved with `SQLITE_PATH`.
+When Supabase Auth is introduced later, add explicit user-owned RLS policies and switch ordinary user operations to a publishable-key RLS-scoped client where appropriate.
 
-SQLite files, WAL and SHM files are ignored by Git.
+## PostGIS
 
-## Location
+PostGIS is installed in a dedicated `extensions` schema, not `public`.
 
-- geolocation is requested only after a user clicks **Vị trí của tôi**;
-- current coordinates stay in React memory;
-- exact current coordinates are not written to SQLite, localStorage, cookies or analytics;
-- coordinates can be sent transiently to the server to bias a POI search;
-- server code must not log those query parameters.
+`personal_places.location` is generated from longitude/latitude and indexed with GIST.
 
-Saved place coordinates are place data, not current/live user location.
+The included `nearby_personal_places` RPC is executable only by `service_role`.
 
-## State-changing APIs
+## Delete integrity
 
-Mutations:
-
-- use JSON;
-- enforce same-origin when an Origin header is present;
-- use `SameSite=Strict` profile cookies;
-- validate and bound text, coordinates, enums and arrays before database writes;
-- scope every write by `owner_key`.
-
-When real authentication is added, add explicit CSRF tokens if the authentication design or cross-site use requires them.
-
-## POI provider
-
-OpenStreetMap/Nominatim is currently a development/MVP provider.
-
-Provider access is server-side:
-
-- client code does not call Nominatim directly;
-- requests use a descriptive User-Agent;
-- server requests are throttled to roughly one request per second;
-- results are cached briefly in memory;
-- responses are normalized before import.
-
-For a public/high-volume launch, replace the public Nominatim endpoint with an approved commercial provider or a self-hosted search service and comply with the provider's usage policy.
-
-## Secrets
-
-- never put private API keys in `NEXT_PUBLIC_*`;
-- server provider secrets belong in server-only environment variables;
-- do not return provider secrets through API responses;
-- do not proxy arbitrary client-provided URLs.
-
-## User-generated content
-
-- text is length limited;
-- angle brackets are removed by shared plain-text sanitization;
-- UI renders content as React text nodes;
-- no personal content uses `dangerouslySetInnerHTML`.
-
-Future image uploads must use:
-
-- signed uploads;
-- MIME and byte-size validation;
-- metadata stripping;
-- image decoding/re-encoding;
-- non-public object storage by default.
-
-## Deletion behavior
-
-Deleting a personal place transactionally removes that profile's:
+`delete_personal_place` is a server-only RPC that atomically removes the owner's:
 
 - collection links;
 - Saved link;
@@ -106,29 +67,47 @@ Deleting a personal place transactionally removes that profile's:
 - visits;
 - personal place row.
 
-Deleting a collection only deletes the collection and its links.
+The function is revoked from `public`, `anon` and `authenticated`.
 
-## HTTP hardening
+## Location privacy
 
-Next.js enables:
+Live browser GPS:
 
-- CSP;
-- frame denial;
-- no MIME sniffing;
-- no-referrer;
-- cross-origin opener isolation;
-- camera and microphone disabled by policy;
-- geolocation restricted to the same origin.
+- is opt-in;
+- remains in React memory;
+- can be passed transiently to server-side POI search;
+- is not persisted to Supabase;
+- should not be intentionally logged.
 
-Before broad public launch, move CSP toward nonce-based scripts/styles to reduce `unsafe-inline`.
+Saved-place coordinates are place data, not live user position.
 
-## Future account/sync security
+## State-changing APIs
 
-When cloud accounts are introduced:
+Mutations:
 
-- use server-managed sessions in `HttpOnly; Secure; SameSite=Lax/Strict` cookies;
-- add revocable sessions/device history;
-- add rate limits around login, provider search and mutations;
-- enforce object ownership server-side;
-- provide export/delete flows;
-- do not treat the current anonymous cookie as an authenticated account.
+- accept JSON;
+- enforce same-origin when an Origin header is present;
+- rely on SameSite=Strict profile cookies;
+- validate text, coordinates, enum values and array sizes;
+- scope all database work by owner key.
+
+## POI provider
+
+Nominatim/OpenStreetMap remains an MVP provider:
+
+- accessed server-side only;
+- requests are throttled;
+- results are briefly cached;
+- responses are normalized before import.
+
+For public/high-volume traffic, replace the public endpoint with a provider/service whose usage limits fit production load.
+
+## Future Supabase Auth
+
+When accounts become useful:
+
+- use Supabase Auth with server-validated sessions;
+- migrate owner identity from anonymous owner key to user UUID safely;
+- add user-owned RLS policies;
+- preserve explicit export/delete flows;
+- keep elevated secret-key clients separate from user-session clients.
