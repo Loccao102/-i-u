@@ -251,7 +251,7 @@ function candidateScore(input: {
   const costPenalty = costOver / 35_000;
   const routePenalty = legDistance * (previous ? 5.5 : 2.5);
   const novelty = visitCount(signals.visits, place.id) === 0 ? 5 : 0;
-  const variantScore = variantBias(place.id, input.variant) * 8;
+  const variantScore = variantBias(place.id, input.variant) * 18;
 
   return (
     place.match +
