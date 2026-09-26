@@ -1132,3 +1132,247 @@ textarea:focus-visible {
     display: none;
   }
 }
+
+
+.search-submit {
+  border: 0;
+  border-radius: 999px;
+  padding: 7px 11px;
+  background: #232521;
+  color: white;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.search-submit:disabled {
+  opacity: .55;
+  cursor: wait;
+}
+
+.collection-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.collection-strip__scroll {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.collection-strip__scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.collection-chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: white;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.collection-chip small {
+  min-width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.collection-chip--active {
+  border-color: #ffaaa2;
+  background: var(--accent-soft);
+  color: #cf453c;
+}
+
+.mini-add {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: white;
+  cursor: pointer;
+  font-size: 18px;
+}
+
+.small-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.small-actions button,
+.owner-actions button {
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 9px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.provider-results {
+  border: 1px solid #e8e8e3;
+  border-radius: 16px;
+  padding: 9px;
+  background: #fafaf7;
+  display: grid;
+  gap: 6px;
+}
+
+.provider-results__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.provider-results__title strong {
+  color: var(--text);
+}
+
+.provider-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 8px;
+  border-radius: 12px;
+  background: white;
+}
+
+.provider-card > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.provider-card strong,
+.provider-card span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider-card strong {
+  font-size: 11px;
+}
+
+.provider-card span {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.provider-card button {
+  border: 0;
+  border-radius: 999px;
+  padding: 7px 9px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.place-address {
+  margin: 10px 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.primary-actions--three {
+  grid-template-columns: 1.2fr 1fr 1fr;
+}
+
+.owner-actions {
+  margin: -6px 0 14px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.owner-actions .danger-text,
+.small-actions .danger-text {
+  color: #b94a43;
+  background: #fff1ef;
+}
+
+.collection-memberships {
+  margin-top: 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.collection-memberships button {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 9px 10px;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.collection-memberships button.is-included {
+  border-color: #cde6d8;
+  background: #f1f8f4;
+  color: #347057;
+}
+
+.two-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+}
+
+.field select {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  padding: 11px 12px;
+  outline: 0;
+  background: #fbfbf9;
+  color: var(--text);
+  font-weight: 500;
+}
+
+@media (max-width: 1240px) {
+  .primary-actions--three {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .primary-actions--three .primary-button {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 760px) {
+  .provider-results {
+    display: none;
+  }
+
+  .two-fields {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,4 +1,10 @@
-import type { Place, Scenario, UserLocation } from "./types";
+import type {
+  PersonalRating,
+  Place,
+  Scenario,
+  UserLocation,
+  VisitRecord
+} from "./types";
 
 const scenarioTerms: Record<Scenario, string[]> = {
   date: ["date", "hẹn hò", "hen ho", "lãng mạn", "lang man"],
@@ -7,6 +13,12 @@ const scenarioTerms: Record<Scenario, string[]> = {
   coffee: ["cafe", "coffee", "cà phê", "ca phe"],
   fun: ["chơi", "choi", "vui", "game", "activity"],
   chill: ["chill", "yên", "yen", "nói chuyện", "noi chuyen"]
+};
+
+export type PersonalSignals = {
+  savedIds: ReadonlySet<string>;
+  ratings: Readonly<Record<string, PersonalRating>>;
+  visits: ReadonlyArray<VisitRecord>;
 };
 
 function normalize(value: string) {
@@ -36,14 +48,83 @@ export function haversineKm(
   return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+function visitStats(visits: ReadonlyArray<VisitRecord>) {
+  const result = new Map<
+    string,
+    { count: number; latestAt: number }
+  >();
+
+  for (const visit of visits) {
+    const current = result.get(visit.placeId) ?? {
+      count: 0,
+      latestAt: 0
+    };
+    current.count += 1;
+    const time = new Date(visit.visitedAt).getTime();
+    if (Number.isFinite(time)) current.latestAt = Math.max(current.latestAt, time);
+    result.set(visit.placeId, current);
+  }
+
+  return result;
+}
+
+function personalScore(
+  place: Place,
+  selectedScenario: Scenario | "all",
+  detected: Scenario[],
+  distanceKm: number,
+  signals?: PersonalSignals,
+  stats?: ReadonlyMap<string, { count: number; latestAt: number }>
+) {
+  let score = 44;
+
+  if (selectedScenario !== "all" && place.scenarios.includes(selectedScenario)) {
+    score += 14;
+  }
+  if (detected.some((item) => place.scenarios.includes(item))) score += 10;
+
+  const rating = signals?.ratings[place.id];
+  if (rating) {
+    score += rating.stars * 4.5;
+    if (rating.revisit === "yes") score += 8;
+    if (rating.revisit === "no") score -= 10;
+    if (
+      selectedScenario !== "all" &&
+      rating.contexts.includes(selectedScenario)
+    ) {
+      score += 7;
+    }
+  } else if (place.publicRating > 0) {
+    score += place.publicRating * 1.5;
+  }
+
+  if (signals?.savedIds.has(place.id)) score += 4;
+
+  const placeStats = stats?.get(place.id);
+  if (placeStats) {
+    score += Math.min(6, placeStats.count * 1.5);
+    const ageDays =
+      (Date.now() - placeStats.latestAt) / (1000 * 60 * 60 * 24);
+    if (ageDays < 30) score += 3;
+  }
+
+  if (Number.isFinite(distanceKm)) {
+    score += Math.max(0, 14 - Math.min(14, distanceKm * 2.2));
+  }
+
+  return Math.max(1, Math.min(99, Math.round(score)));
+}
+
 export function filterPlaces(
   source: Place[],
   query: string,
   scenario: Scenario | "all",
-  userLocation: UserLocation | null
+  userLocation: UserLocation | null,
+  signals?: PersonalSignals
 ) {
   const normalized = normalize(query);
   const detected = detectScenarios(query);
+  const stats = signals ? visitStats(signals.visits) : null;
 
   return source
     .filter((place) => {
@@ -58,6 +139,7 @@ export function filterPlaces(
           place.kind,
           place.description,
           place.note,
+          place.address ?? "",
           ...place.tags
         ].join(" ")
       );
@@ -70,7 +152,9 @@ export function filterPlaces(
             !["tối", "nay", "gần", "tôi", "cho", "với", "một"].includes(word)
         );
 
-      const textMatch = words.length === 0 || words.some((word) => searchable.includes(word));
+      const textMatch =
+        words.length === 0 ||
+        words.some((word) => searchable.includes(word));
       const contextMatch =
         detected.length === 0 ||
         detected.some((item) => place.scenarios.includes(item));
@@ -85,16 +169,25 @@ export function filterPlaces(
           })
         : place.distanceKm;
 
-      const contextBoost =
-        detected.length > 0 &&
-        detected.some((item) => place.scenarios.includes(item))
-          ? 5
-          : 0;
+      const rating = signals?.ratings[place.id];
+      const score = personalScore(
+        place,
+        scenario,
+        detected,
+        computedDistance,
+        signals,
+        stats ?? undefined
+      );
 
       return {
         ...place,
+        personalRating: rating?.stars,
         distanceKm: computedDistance,
-        match: Math.min(99, place.match + contextBoost)
+        match: score,
+        communityNote:
+          stats?.get(place.id)?.count
+            ? `Bạn đã đi ${stats.get(place.id)!.count} lần`
+            : place.communityNote
       };
     })
     .sort(
