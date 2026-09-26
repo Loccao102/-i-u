@@ -80,6 +80,18 @@ function distanceLabel(value: number) {
   return value.toFixed(value < 10 ? 1 : 0) + " km";
 }
 
+function moneyLabel(value: number) {
+  if (value >= 1_000_000) {
+    const millions = value / 1_000_000;
+    return (
+      millions.toLocaleString("vi-VN", {
+        maximumFractionDigits: millions % 1 === 0 ? 0 : 1
+      }) + " triệu"
+    );
+  }
+  return Math.round(value / 1000) + "k";
+}
+
 function priceText(price: Place["priceLabel"]) {
   return price === "$" ? "Tiết kiệm" : price === "$$" ? "Vừa phải" : "Cao";
 }
@@ -1484,6 +1496,13 @@ export function MapExplorer() {
           </span>
           <button
             type="button"
+            className="plan-button"
+            onClick={openPlanBuilder}
+          >
+            ◫ Kế hoạch
+          </button>
+          <button
+            type="button"
             className="surprise-button"
             onClick={surpriseMe}
           >
@@ -1827,6 +1846,214 @@ export function MapExplorer() {
             {collectionEditingId ? "Lưu thay đổi" : "Tạo bộ sưu tập"}
           </button>
         </form>
+      </dialog>
+
+      <dialog className="app-dialog app-dialog--plan" ref={planDialogRef}>
+        <div className="dialog-card plan-dialog-card">
+          <div className="dialog-header">
+            <div>
+              <span className="eyebrow">Tối nay đi đâu?</span>
+              <h2>Lên một plan vừa đủ</h2>
+            </div>
+            <button
+              className="icon-button"
+              type="button"
+              onClick={() => planDialogRef.current?.close()}
+              aria-label="Đóng"
+            >
+              <CloseIcon />
+            </button>
+          </div>
+
+          <p className="dialog-copy">
+            Ghép các chặng gần nhau từ chính ranking cá nhân, budget và mood hiện tại.
+          </p>
+
+          <fieldset className="dialog-fieldset">
+            <legend>Mood</legend>
+            <div className="scenario-row scenario-row--wrap">
+              {(["date", "friends", "fun", "chill", "food"] as Scenario[]).map(
+                (item) => (
+                  <button
+                    type="button"
+                    key={item}
+                    className={
+                      "scenario-chip" +
+                      (planScenario === item ? " scenario-chip--active" : "")
+                    }
+                    onClick={() => {
+                      setPlanScenario(item);
+                      setActivePlan(null);
+                    }}
+                  >
+                    <span>{scenarioEmoji[item]}</span>
+                    {scenarioLabels[item]}
+                  </button>
+                )
+              )}
+            </div>
+          </fieldset>
+
+          <div className="plan-control-grid">
+            <label className="field">
+              <span>Bắt đầu</span>
+              <input
+                type="time"
+                value={planStartTime}
+                onChange={(event) => {
+                  setPlanStartTime(event.target.value);
+                  setActivePlan(null);
+                }}
+              />
+            </label>
+
+            <label className="field">
+              <span>Budget / 2 người</span>
+              <select
+                value={planBudget}
+                onChange={(event) => {
+                  setPlanBudget(Number(event.target.value));
+                  setActivePlan(null);
+                }}
+              >
+                <option value={400000}>400k</option>
+                <option value={700000}>700k</option>
+                <option value={1000000}>1 triệu</option>
+                <option value={1500000}>1,5 triệu</option>
+              </select>
+            </label>
+
+            <label className="field">
+              <span>Thời lượng</span>
+              <select
+                value={planDuration}
+                onChange={(event) => {
+                  setPlanDuration(Number(event.target.value) as 2 | 3 | 4);
+                  setActivePlan(null);
+                }}
+              >
+                <option value={2}>2 giờ</option>
+                <option value={3}>3 giờ</option>
+                <option value={4}>4 giờ</option>
+              </select>
+            </label>
+
+            <label className="field">
+              <span>Bán kính</span>
+              <select
+                value={planDistance}
+                onChange={(event) => {
+                  setPlanDistance(Number(event.target.value));
+                  setActivePlan(null);
+                }}
+              >
+                <option value={3}>3 km</option>
+                <option value={5}>5 km</option>
+                <option value={8}>8 km</option>
+                <option value={12}>12 km</option>
+              </select>
+            </label>
+          </div>
+
+          <button
+            className="primary-button primary-button--wide"
+            type="button"
+            onClick={() => generatePlan(0)}
+          >
+            Tạo kế hoạch
+          </button>
+
+          {activePlan ? (
+            <div className="plan-result">
+              <div className="plan-result__summary">
+                <div>
+                  <span className="eyebrow">Phương án đề xuất</span>
+                  <strong>{activePlan.summary}</strong>
+                </div>
+                <b>{activePlan.averageMatch}%</b>
+              </div>
+
+              {!activePlan.withinBudget ? (
+                <div className="plan-warning">
+                  Tổng ước lượng đang vượt budget một chút. App vẫn giữ phương án vì độ phù hợp cao nhất trong vùng đã chọn.
+                </div>
+              ) : null}
+
+              <div className="plan-timeline">
+                {activePlan.stops.map((stop, index) => (
+                  <div className="plan-stop" key={stop.place.id}>
+                    <div className="plan-stop__rail">
+                      <span>{index + 1}</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="plan-stop__content"
+                      onClick={() => {
+                        setSelectedId(stop.place.id);
+                        mapRef.current?.flyTo({
+                          center: [
+                            stop.place.longitude,
+                            stop.place.latitude
+                          ],
+                          zoom: 14,
+                          duration: 650,
+                          essential: true
+                        });
+                      }}
+                    >
+                      <span className="plan-stop__top">
+                        <small>
+                          {stop.startTime} · {stop.stageLabel}
+                        </small>
+                        <b>{stop.place.match}%</b>
+                      </span>
+                      <strong>{stop.place.name}</strong>
+                      <span className="plan-stop__reason">{stop.reason}</span>
+                      <span className="plan-stop__meta">
+                        ~{moneyLabel(stop.estimatedCostForTwo)}
+                        {index > 0
+                          ? " · " +
+                            distanceLabel(stop.travelKmFromPrevious) +
+                            " từ chặng trước"
+                          : ""}
+                      </span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="plan-result__footer">
+                <div>
+                  <span>Tổng ước lượng</span>
+                  <strong>
+                    ~{moneyLabel(activePlan.totalEstimatedCostForTwo)}
+                  </strong>
+                </div>
+                <div>
+                  <span>Di chuyển</span>
+                  <strong>{activePlan.routeKm.toFixed(1)} km</strong>
+                </div>
+              </div>
+
+              <div className="plan-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => generatePlan(planVariant + 1)}
+                >
+                  Đổi phương án
+                </button>
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={openPlanRoute}
+                >
+                  <LocationIcon /> Mở tuyến đường
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
       </dialog>
     </main>
   );
