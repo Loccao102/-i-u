@@ -7,7 +7,7 @@ create extension if not exists postgis with schema extensions;
 
 create table if not exists public.personal_places (
   owner_key text not null,
-  id uuid not null,
+  id text not null,
   name text not null check (char_length(name) between 1 and 100),
   kind text not null,
   description text not null default '',
@@ -47,14 +47,14 @@ create index if not exists personal_places_location_gist_idx
 
 create table if not exists public.saved_places (
   owner_key text not null,
-  place_id uuid not null,
+  place_id text not null,
   created_at timestamptz not null default now(),
   primary key (owner_key, place_id)
 );
 
 create table if not exists public.personal_ratings (
   owner_key text not null,
-  place_id uuid not null,
+  place_id text not null,
   stars integer not null check (stars between 1 and 5),
   revisit text not null check (revisit in ('yes', 'maybe', 'no')),
   contexts text[] not null default '{}',
@@ -67,7 +67,7 @@ create table if not exists public.personal_ratings (
 create table if not exists public.visits (
   owner_key text not null,
   id uuid not null,
-  place_id uuid not null,
+  place_id text not null,
   visited_at timestamptz not null default now(),
   rating_stars integer check (rating_stars between 1 and 5),
   created_at timestamptz not null default now(),
@@ -90,7 +90,7 @@ create table if not exists public.collections (
 create table if not exists public.collection_places (
   owner_key text not null,
   collection_id uuid not null,
-  place_id uuid not null,
+  place_id text not null,
   created_at timestamptz not null default now(),
   primary key (owner_key, collection_id, place_id),
   foreign key (owner_key, collection_id)
@@ -126,7 +126,7 @@ grant all on table public.collection_places to service_role;
 -- Atomic delete for one personal/imported place and all personal signals.
 create or replace function public.delete_personal_place(
   p_owner_key text,
-  p_place_id uuid
+  p_place_id text
 )
 returns boolean
 language plpgsql
@@ -156,8 +156,8 @@ begin
 end;
 $$;
 
-revoke all on function public.delete_personal_place(text, uuid) from public, anon, authenticated;
-grant execute on function public.delete_personal_place(text, uuid) to service_role;
+revoke all on function public.delete_personal_place(text, text) from public, anon, authenticated;
+grant execute on function public.delete_personal_place(text, text) to service_role;
 
 -- Geo-ready RPC for future server-side nearby discovery.
 create or replace function public.nearby_personal_places(
@@ -167,7 +167,7 @@ create or replace function public.nearby_personal_places(
   p_limit integer default 100
 )
 returns table (
-  id uuid,
+  id text,
   name text,
   latitude double precision,
   longitude double precision,
