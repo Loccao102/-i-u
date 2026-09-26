@@ -262,6 +262,21 @@ export type Database = {
           name: string
         }[]
       }
+      viewport_personal_places: {
+        Args: {
+          p_east: number
+          p_limit?: number
+          p_north: number
+          p_owner_key: string
+          p_south: number
+          p_west: number
+        }
+        Returns: {
+          id: string
+          latitude: number
+          longitude: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
