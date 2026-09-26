@@ -1780,10 +1780,6 @@ textarea:focus-visible {
 }
 
 @media (max-width: 760px) {
-  .map-floating-top .plan-button {
-    display: none;
-  }
-
   .plan-control-grid {
     grid-template-columns: 1fr;
   }
