@@ -28,6 +28,7 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - weather-aware ranking with visible explanation;
 - compact **Evening Plan Builder** that combines 1–3 nearby stops from mood, budget, duration and radius;
 - multi-stop Google Maps route handoff;
+- **What next?** recommendations after a recent check-in, using transition type, distance and current personal ranking;
 - JSON export/import backup with merge semantics;
 - responsive web UI.
 
@@ -157,9 +158,8 @@ http://localhost:3000
 ## Next
 
 1. enrich provider imports with better opening-hours/price metadata;
-2. add **What next?** recommendations after a check-in or completed stop;
-3. learn stronger taste weights from repeated ratings instead of fixed scoring constants;
-4. add weather forecast awareness for future plans, not only current conditions;
-5. optionally save/favorite generated plans without turning the product into a calendar app;
-6. Supabase Auth only when account recovery/multi-device sync is worth the friction;
-7. Groups and group voting after the personal loop is mature.
+2. learn stronger taste weights from repeated ratings instead of fixed scoring constants;
+3. add weather forecast awareness for future plans, not only current conditions;
+4. optionally save/favorite generated plans without turning the product into a calendar app;
+5. Supabase Auth only when account recovery/multi-device sync is worth the friction;
+6. Groups and group voting after the personal loop is mature.
