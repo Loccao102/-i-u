@@ -93,10 +93,7 @@ export async function getWeatherContext(
   }
 
   const code = Math.round(finite(current.weather_code));
-  const precipitation =
-    finite(current.precipitation) +
-    finite(current.rain) +
-    finite(current.showers);
+  const precipitation = finite(current.precipitation);
 
   const data: WeatherContext = {
     condition: weatherCondition(code),
