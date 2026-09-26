@@ -2,6 +2,7 @@ import type {
   EveningPlan,
   EveningPlanPreferences,
   EveningPlanStop,
+  NextPlaceSuggestion,
   PersonalRating,
   Place,
   PlanStage,
@@ -412,4 +413,109 @@ export function buildEveningPlan(input: {
       routeKm.toFixed(1) +
       " km"
   };
+}
+
+
+function inferStage(place: Place): PlanStage {
+  const kind = normalize(place.kind);
+  if (place.scenarios.includes("food") || kind.includes("restaurant")) {
+    return "food";
+  }
+  if (place.scenarios.includes("fun") || kind.includes("activity")) {
+    return "activity";
+  }
+  return "coffee";
+}
+
+function nextStageOrder(current: Place): PlanStage[] {
+  const currentStage = inferStage(current);
+  if (currentStage === "food") return ["activity", "coffee"];
+  if (currentStage === "activity") return ["coffee", "food"];
+  return ["food", "activity"];
+}
+
+export function suggestWhatNext(input: {
+  current: Place;
+  places: Place[];
+  signals: PlannerSignals;
+  maxDistanceKm?: number;
+  limit?: number;
+}): NextPlaceSuggestion[] {
+  const {
+    current,
+    places,
+    signals,
+    maxDistanceKm = 4,
+    limit = 3
+  } = input;
+
+  const desired = nextStageOrder(current);
+  const currentPoint: UserLocation = {
+    latitude: current.latitude,
+    longitude: current.longitude
+  };
+
+  const scored = places
+    .filter((place) => place.id !== current.id)
+    .filter((place) => signals.ratings[place.id]?.revisit !== "no")
+    .map((place) => {
+      const distanceKm = haversineKm(currentPoint, {
+        latitude: place.latitude,
+        longitude: place.longitude
+      });
+
+      if (distanceKm > maxDistanceKm) return null;
+
+      const stage = inferStage(place);
+      const orderIndex = desired.indexOf(stage);
+      const transitionBonus =
+        orderIndex === 0 ? 24 : orderIndex === 1 ? 12 : 0;
+      const count = visitCount(signals.visits, place.id);
+      const novelty = count === 0 ? 5 : Math.max(0, 3 - count);
+      const score =
+        place.match +
+        transitionBonus +
+        novelty -
+        distanceKm * 7;
+
+      const transitionLabel =
+        stage === "food"
+          ? "Ăn tiếp"
+          : stage === "activity"
+            ? "Đi chơi"
+            : "Cafe / chill";
+
+      const personalReason =
+        place.recommendationReasons?.[0] ??
+        (signals.savedIds.has(place.id)
+          ? "Bạn đã lưu chỗ này"
+          : "Phù hợp với bối cảnh hiện tại");
+
+      return {
+        place,
+        distanceKm,
+        transitionLabel,
+        score,
+        reason:
+          personalReason +
+          " · cách " +
+          (distanceKm < 1
+            ? Math.round(distanceKm * 1000) + " m"
+            : distanceKm.toFixed(1) + " km")
+      };
+    })
+    .filter(
+      (
+        item
+      ): item is NextPlaceSuggestion & { score: number } => item !== null
+    )
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        b.place.match - a.place.match ||
+        a.distanceKm - b.distanceKm
+    )
+    .slice(0, Math.max(1, Math.min(limit, 5)));
+
+  return scored.map(({ score: _score, ...item }) => item);
 }
