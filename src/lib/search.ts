@@ -1,4 +1,5 @@
 import type {
+  Collection,
   PersonalRating,
   Place,
   Scenario,
@@ -61,7 +62,9 @@ function visitStats(visits: ReadonlyArray<VisitRecord>) {
     };
     current.count += 1;
     const time = new Date(visit.visitedAt).getTime();
-    if (Number.isFinite(time)) current.latestAt = Math.max(current.latestAt, time);
+    if (Number.isFinite(time)) {
+      current.latestAt = Math.max(current.latestAt, time);
+    }
     result.set(visit.placeId, current);
   }
 
@@ -77,17 +80,36 @@ function personalScore(
   stats?: ReadonlyMap<string, { count: number; latestAt: number }>
 ) {
   let score = 44;
+  const reasons: string[] = [];
 
-  if (selectedScenario !== "all" && place.scenarios.includes(selectedScenario)) {
+  if (
+    selectedScenario !== "all" &&
+    place.scenarios.includes(selectedScenario)
+  ) {
     score += 14;
+    reasons.push(`Hợp ${selectedScenario}`);
   }
-  if (detected.some((item) => place.scenarios.includes(item))) score += 10;
+
+  if (detected.some((item) => place.scenarios.includes(item))) {
+    score += 10;
+    reasons.push("Khớp điều bạn đang tìm");
+  }
 
   const rating = signals?.ratings[place.id];
   if (rating) {
     score += rating.stars * 4.5;
-    if (rating.revisit === "yes") score += 8;
-    if (rating.revisit === "no") score -= 10;
+    reasons.push(`Bạn từng chấm ${rating.stars}/5`);
+
+    if (rating.revisit === "yes") {
+      score += 8;
+      reasons.push("Bạn muốn quay lại");
+    }
+
+    if (rating.revisit === "no") {
+      score -= 10;
+      reasons.push("Bạn từng không muốn quay lại");
+    }
+
     if (
       selectedScenario !== "all" &&
       rating.contexts.includes(selectedScenario)
@@ -98,21 +120,37 @@ function personalScore(
     score += place.publicRating * 1.5;
   }
 
-  if (signals?.savedIds.has(place.id)) score += 4;
+  if (signals?.savedIds.has(place.id)) {
+    score += 4;
+    reasons.push("Đã lưu");
+  }
 
   const placeStats = stats?.get(place.id);
   if (placeStats) {
     score += Math.min(6, placeStats.count * 1.5);
+    reasons.push(`Đã đi ${placeStats.count} lần`);
+
     const ageDays =
       (Date.now() - placeStats.latestAt) / (1000 * 60 * 60 * 24);
-    if (ageDays < 30) score += 3;
+    if (ageDays < 30) {
+      score += 3;
+      reasons.push("Bạn mới ghé gần đây");
+    }
   }
 
   if (Number.isFinite(distanceKm)) {
     score += Math.max(0, 14 - Math.min(14, distanceKm * 2.2));
+    if (distanceKm <= 2) {
+      reasons.push("Rất gần bạn");
+    } else if (distanceKm <= 5) {
+      reasons.push("Khá gần");
+    }
   }
 
-  return Math.max(1, Math.min(99, Math.round(score)));
+  return {
+    score: Math.max(1, Math.min(99, Math.round(score))),
+    reasons: Array.from(new Set(reasons)).slice(0, 4)
+  };
 }
 
 export function filterPlaces(
@@ -120,7 +158,8 @@ export function filterPlaces(
   query: string,
   scenario: Scenario | "all",
   userLocation: UserLocation | null,
-  signals?: PersonalSignals
+  signals?: PersonalSignals,
+  serverDistances?: Readonly<Record<string, number>>
 ) {
   const normalized = normalize(query);
   const detected = detectScenarios(query);
@@ -162,15 +201,19 @@ export function filterPlaces(
       return textMatch || contextMatch;
     })
     .map((place) => {
-      const computedDistance = userLocation
-        ? haversineKm(userLocation, {
-            latitude: place.latitude,
-            longitude: place.longitude
-          })
-        : place.distanceKm;
+      const serverDistance = serverDistances?.[place.id];
+      const computedDistance =
+        typeof serverDistance === "number"
+          ? serverDistance
+          : userLocation
+            ? haversineKm(userLocation, {
+                latitude: place.latitude,
+                longitude: place.longitude
+              })
+            : place.distanceKm;
 
       const rating = signals?.ratings[place.id];
-      const score = personalScore(
+      const personalized = personalScore(
         place,
         scenario,
         detected,
@@ -183,7 +226,8 @@ export function filterPlaces(
         ...place,
         personalRating: rating?.stars,
         distanceKm: computedDistance,
-        match: score,
+        match: personalized.score,
+        recommendationReasons: personalized.reasons,
         communityNote:
           stats?.get(place.id)?.count
             ? `Bạn đã đi ${stats.get(place.id)!.count} lần`
@@ -197,4 +241,96 @@ export function filterPlaces(
           (a.personalRating ?? a.publicRating) ||
         a.distanceKm - b.distanceKm
     );
+}
+
+export function recommendForCollection(
+  collection: Collection,
+  source: Place[],
+  signals: PersonalSignals,
+  limit = 4
+) {
+  const memberIds = new Set(collection.placeIds);
+  const memberPlaces = source.filter((place) => memberIds.has(place.id));
+
+  if (memberPlaces.length === 0) return [];
+
+  const scenarioWeights = new Map<Scenario, number>();
+  const tagWeights = new Map<string, number>();
+
+  for (const place of memberPlaces) {
+    const personalRating = signals.ratings[place.id]?.stars ?? 3;
+
+    for (const scenario of place.scenarios) {
+      scenarioWeights.set(
+        scenario,
+        (scenarioWeights.get(scenario) ?? 0) + personalRating
+      );
+    }
+
+    for (const tag of place.tags) {
+      const key = normalize(tag);
+      tagWeights.set(key, (tagWeights.get(key) ?? 0) + personalRating);
+    }
+  }
+
+  return source
+    .filter((place) => !memberIds.has(place.id))
+    .map((place) => {
+      let affinity = 0;
+      const reasons: string[] = [];
+
+      const matchingScenarios = place.scenarios
+        .map((scenario) => ({
+          scenario,
+          weight: scenarioWeights.get(scenario) ?? 0
+        }))
+        .filter((item) => item.weight > 0)
+        .sort((a, b) => b.weight - a.weight);
+
+      if (matchingScenarios.length > 0) {
+        affinity += matchingScenarios.reduce(
+          (sum, item) => sum + item.weight,
+          0
+        );
+        reasons.push("Cùng kiểu với các chỗ trong bộ sưu tập");
+      }
+
+      const matchingTags = place.tags
+        .map((tag) => ({
+          tag,
+          weight: tagWeights.get(normalize(tag)) ?? 0
+        }))
+        .filter((item) => item.weight > 0)
+        .sort((a, b) => b.weight - a.weight);
+
+      if (matchingTags.length > 0) {
+        affinity += matchingTags
+          .slice(0, 3)
+          .reduce((sum, item) => sum + item.weight * 0.6, 0);
+        reasons.push(
+          "Có vibe tương tự: " +
+            matchingTags
+              .slice(0, 2)
+              .map((item) => item.tag)
+              .join(", ")
+        );
+      }
+
+      if (signals.savedIds.has(place.id)) affinity += 2;
+      const rating = signals.ratings[place.id];
+      if (rating) affinity += rating.stars * 0.5;
+
+      return {
+        ...place,
+        collectionAffinity: affinity,
+        collectionReasons: reasons.slice(0, 2)
+      };
+    })
+    .filter((place) => place.collectionAffinity > 0)
+    .sort(
+      (a, b) =>
+        b.collectionAffinity - a.collectionAffinity ||
+        b.match - a.match
+    )
+    .slice(0, limit);
 }
