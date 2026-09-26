@@ -1,10 +1,11 @@
 import "server-only";
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "../database.types";
 
 declare global {
   // eslint-disable-next-line no-var
-  var __diDauSupabaseAdmin: SupabaseClient | undefined;
+  var __diDauSupabaseAdmin: SupabaseClient<Database> | undefined;
 }
 
 function required(name: "SUPABASE_URL" | "SUPABASE_SECRET_KEY") {
@@ -16,7 +17,7 @@ function required(name: "SUPABASE_URL" | "SUPABASE_SECRET_KEY") {
 }
 
 export function getSupabaseAdmin() {
-  globalThis.__diDauSupabaseAdmin ??= createClient(
+  globalThis.__diDauSupabaseAdmin ??= createClient<Database>(
     required("SUPABASE_URL"),
     required("SUPABASE_SECRET_KEY"),
     {
