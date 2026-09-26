@@ -72,7 +72,10 @@ export const personalApi = {
 
   saveRating: (
     placeId: string,
-    input: RatingDraft & { visitedAt?: string }
+    input: RatingDraft & {
+      visitedAt?: string;
+      recordVisit?: boolean;
+    }
   ) =>
     api<PersonalRating>(
       "/api/personal/ratings/" + encodeURIComponent(placeId),
