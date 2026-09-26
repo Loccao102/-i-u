@@ -154,3 +154,33 @@ export type ViewportPlaceResult = {
   latitude: number;
   longitude: number;
 };
+
+
+export type PlanStage = "food" | "activity" | "coffee";
+
+export type EveningPlanPreferences = {
+  scenario: Scenario;
+  budgetForTwo: number;
+  maxDistanceKm: number;
+  durationHours: 2 | 3 | 4;
+  startTime: string;
+};
+
+export type EveningPlanStop = {
+  place: Place;
+  stage: PlanStage;
+  stageLabel: string;
+  startTime: string;
+  estimatedCostForTwo: number;
+  travelKmFromPrevious: number;
+  reason: string;
+};
+
+export type EveningPlan = {
+  stops: EveningPlanStop[];
+  totalEstimatedCostForTwo: number;
+  routeKm: number;
+  averageMatch: number;
+  withinBudget: boolean;
+  summary: string;
+};
