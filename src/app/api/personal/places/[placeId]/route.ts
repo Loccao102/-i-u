@@ -26,7 +26,7 @@ export async function PATCH(
     const { placeId } = await context.params;
     const body = await readJsonObject(request);
     const place = parsePlace(body, placeId);
-    upsertPlace(profile.ownerKey, place);
+    await upsertPlace(profile.ownerKey, place);
     return profileJson(profile, place);
   } catch (error) {
     return errorJson(profile, error, "Không thể sửa địa điểm.");
@@ -41,7 +41,7 @@ export async function DELETE(
   try {
     assertSameOriginMutation(request);
     const { placeId } = await context.params;
-    const deleted = deletePlace(profile.ownerKey, placeId);
+    const deleted = await deletePlace(profile.ownerKey, placeId);
     if (!deleted) {
       return profileJson(
         profile,
