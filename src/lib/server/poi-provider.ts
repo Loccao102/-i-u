@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { PoiSearchResult, Scenario } from "../types";
+import type { MapBounds, PoiSearchResult, Scenario } from "../types";
 import { cleanPlainText, suggestScenarios } from "../validation";
 
 const cache = new Map<string, { expiresAt: number; data: PoiSearchResult[] }>();
@@ -54,6 +54,7 @@ export async function searchPoi(input: {
   query: string;
   latitude?: number;
   longitude?: number;
+  bounds?: MapBounds;
 }): Promise<PoiSearchResult[]> {
   const query = cleanPlainText(input.query, 120);
   if (query.length < 2) return [];
@@ -61,7 +62,15 @@ export async function searchPoi(input: {
   const key = [
     query.toLowerCase(),
     input.latitude?.toFixed(2) ?? "",
-    input.longitude?.toFixed(2) ?? ""
+    input.longitude?.toFixed(2) ?? "",
+    input.bounds
+      ? [
+          input.bounds.west.toFixed(2),
+          input.bounds.south.toFixed(2),
+          input.bounds.east.toFixed(2),
+          input.bounds.north.toFixed(2)
+        ].join(",")
+      : ""
   ].join("|");
 
   const cached = cache.get(key);
@@ -76,7 +85,18 @@ export async function searchPoi(input: {
   url.searchParams.set("limit", "8");
   url.searchParams.set("countrycodes", "vn");
 
-  if (
+  if (input.bounds) {
+    url.searchParams.set(
+      "viewbox",
+      [
+        input.bounds.west,
+        input.bounds.north,
+        input.bounds.east,
+        input.bounds.south
+      ].join(",")
+    );
+    url.searchParams.set("bounded", "1");
+  } else if (
     typeof input.latitude === "number" &&
     typeof input.longitude === "number"
   ) {
