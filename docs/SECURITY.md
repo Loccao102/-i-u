@@ -1,41 +1,60 @@
 # Security and privacy baseline
 
-ĐiĐâu is designed for a small trusted group, but the implementation must not assume that every request is trusted.
+ĐiĐâu is personal-first. The initial product stores non-sensitive personal map data locally and does not require an account.
+
+## Local personal data
+
+The browser may persist these items in IndexedDB:
+
+- places the user manually adds;
+- Saved place ids;
+- personal ratings and short notes;
+- visit history.
+
+The IndexedDB payload is validated and bounded when read back. User-generated text is rendered as React text, never injected HTML.
+
+This local storage is a convenience layer, not a secure vault. Do not store passwords, access tokens, private keys, government identifiers, payment data, or other high-sensitivity secrets in it.
 
 ## Location
 
 - Exact browser location is requested only after a user clicks **Vị trí của tôi**.
-- The MVP keeps coordinates in React memory only.
-- Location is not written to localStorage, cookies, logs, analytics, or the repository.
-- A future backend should store exact location only when a product feature explicitly needs it; otherwise use coarse location or short-lived coordinates.
+- Current coordinates stay in React memory only.
+- Coordinates are not written to IndexedDB, localStorage, cookies, logs, analytics, or the repository.
+- Personal saved places have their own place coordinates; they are not treated as the user's live/current location.
 
 ## Secrets and providers
 
 - Never put private provider keys in `NEXT_PUBLIC_*`.
 - `NEXT_PUBLIC_MAP_STYLE_URL` is allowed only for a public map style URL.
-- Paid search/geocoding/AI keys must stay server-side behind authenticated route handlers.
-- Production provider responses must be normalized before reaching UI components.
+- Paid POI search/geocoding/AI keys must stay server-side behind controlled route handlers.
+- Provider responses must be normalized before reaching UI components.
+- Do not proxy arbitrary client-provided URLs from the server.
 
-## User generated content
+## User-generated content
 
-- The MVP renders all user text as React text nodes, never as injected HTML.
-- New-place text is length-limited and strips angle brackets before use.
-- Future image uploads must use signed object-storage uploads, server-side MIME validation, size limits, metadata stripping, and image re-encoding.
+- Text is length-limited and stripped of angle brackets before persistence.
+- No `dangerouslySetInnerHTML` is used for personal content.
+- Future image uploads must use signed object-storage uploads, server-side MIME validation, byte-size limits, metadata stripping, and image re-encoding.
 
-## Authentication and groups
+## Authentication and sync
 
-Do not add a fake client-only authentication system. Before persistent group data ships, implement:
+Authentication is deliberately postponed until the personal core is useful.
+
+When optional cloud sync is added, use:
 
 - server-managed sessions in `HttpOnly; Secure; SameSite=Lax` cookies;
 - CSRF protection for state-changing requests;
-- group membership authorization on every server query;
-- opaque IDs rather than sequential public identifiers;
-- revocable sessions and device/session history;
-- rate limits for login, invitations, ratings, search, and place creation.
+- authorization on every user-owned object;
+- opaque identifiers;
+- revocable sessions and session/device history;
+- rate limits for login, imports, ratings, search, and place creation;
+- explicit account deletion/export flows.
 
-## Database boundary
+Do not replace the local-first model with a fake client-only authentication system.
 
-The planned persistence layer is PostgreSQL + PostGIS. Every row containing user/group data must be scoped by `group_id` and server authorization. Never trust a client-supplied group id without checking membership.
+## Groups
+
+Groups are a later capability, not a core dependency. Before group data ships, every server query must verify membership and resource ownership. A client-supplied `group_id` must never be trusted by itself.
 
 ## HTTP hardening
 
@@ -49,8 +68,8 @@ The Next.js configuration enables:
 - camera and microphone disabled by policy;
 - geolocation restricted to this origin.
 
-The current CSP allows inline scripts/styles because of framework and MapLibre runtime requirements. Before a public launch, move to request nonces so `unsafe-inline` can be removed where supported.
+The current CSP permits inline framework/runtime styles/scripts where required by Next.js and MapLibre. Before a public launch, move toward nonce-based CSP so `unsafe-inline` can be reduced.
 
 ## Dependency policy
 
-The project intentionally uses very few runtime packages. Dependabot is enabled. Dependency additions should be justified in pull requests and should not be used for trivial UI helpers.
+The project intentionally uses very few runtime packages. Dependabot is enabled. Dependency additions should be justified and should not be used for trivial UI helpers.
