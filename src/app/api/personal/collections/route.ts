@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   const profile = resolveAnonymousProfile(request);
   return profileJson(
     profile,
-    { collections: getPersonalSnapshot(profile.ownerKey).collections }
+    { collections: await getPersonalSnapshot(profile.ownerKey).collections }
   );
 }
 
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await readJsonObject(request);
     const input = parseCollection(body);
-    const item = createCollection(
+    const item = await createCollection(
       profile.ownerKey,
       input.name,
       input.description
