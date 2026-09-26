@@ -115,3 +115,42 @@ export type BackupImportResult = {
   collections: number;
   collectionPlaces: number;
 };
+
+
+export type MapBounds = {
+  west: number;
+  south: number;
+  east: number;
+  north: number;
+};
+
+export type WeatherCondition =
+  | "clear"
+  | "cloudy"
+  | "fog"
+  | "rain"
+  | "storm"
+  | "snow";
+
+export type WeatherContext = {
+  condition: WeatherCondition;
+  temperatureC: number;
+  precipitationMm: number;
+  weatherCode: number;
+  isDay: boolean;
+  observedAt: string;
+  timezone: string;
+  source: "Open-Meteo";
+};
+
+export type RecommendationContext = {
+  localHour: number;
+  isWeekend: boolean;
+  weather: WeatherContext | null;
+};
+
+export type ViewportPlaceResult = {
+  placeId: string;
+  latitude: number;
+  longitude: number;
+};
