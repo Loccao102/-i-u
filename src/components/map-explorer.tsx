@@ -717,10 +717,14 @@ export function MapExplorer() {
   }
 
   function generatePlan(nextVariant = planVariant) {
-    const source =
-      view === "discover" && visiblePlaces.length > 0
-        ? visiblePlaces
-        : rankedAll;
+    const source = viewportBounds
+      ? rankedAll.filter((place) => {
+          if (customIds.has(place.id) && viewportPersonalIds) {
+            return viewportPersonalIds.has(place.id);
+          }
+          return placeInsideBounds(place, viewportBounds);
+        })
+      : rankedAll;
 
     const result = buildEveningPlan({
       places: source,
