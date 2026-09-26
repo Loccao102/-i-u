@@ -1376,3 +1376,123 @@ textarea:focus-visible {
     grid-template-columns: 1fr;
   }
 }
+
+
+.backup-button {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 10px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.backup-button:hover {
+  color: var(--text);
+  border-color: #cfcfc8;
+}
+
+.backup-button:disabled {
+  opacity: .5;
+  cursor: wait;
+}
+
+.visually-hidden {
+  position: fixed !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.provider-card button:disabled {
+  background: #f1f3f0;
+  color: #7d817a;
+  cursor: default;
+}
+
+.collection-suggestions {
+  border: 1px solid #ebe8e2;
+  border-radius: 16px;
+  padding: 9px;
+  background: #fffaf7;
+  display: grid;
+  gap: 6px;
+}
+
+.collection-suggestion {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: 6px;
+}
+
+.collection-suggestion > button:first-child {
+  min-width: 0;
+  border: 0;
+  border-radius: 11px;
+  padding: 8px 9px;
+  background: white;
+  text-align: left;
+  cursor: pointer;
+  display: grid;
+  gap: 3px;
+}
+
+.collection-suggestion strong,
+.collection-suggestion span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collection-suggestion strong {
+  font-size: 11px;
+}
+
+.collection-suggestion span {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.collection-suggestion > button:last-child {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+  font-size: 18px;
+}
+
+.recommendation-reasons {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.recommendation-reasons span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: #f3f6f2;
+  color: #4d6354;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+@media (max-width: 900px) {
+  .backup-button {
+    display: none;
+  }
+}

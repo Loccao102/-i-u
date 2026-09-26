@@ -1,5 +1,8 @@
 import type {
+  BackupImportResult,
   Collection,
+  NearbyPlaceResult,
+  PersonalBackup,
   PersonalRating,
   PersonalSnapshot,
   Place,
@@ -152,7 +155,7 @@ export const personalApi = {
       latitude: result.latitude,
       longitude: result.longitude,
       distanceKm: 0,
-      priceLabel: "$$",
+      priceLabel: "$",
       averageForTwo: "Chưa có dữ liệu",
       publicRating: 0,
       match: 78,
@@ -169,6 +172,30 @@ export const personalApi = {
       providerId: result.providerId,
       address: result.displayName
     };
-    return personalApi.createPlace(place);
-  }
+
+    return api<{ place: Place; duplicate: boolean }>(
+      "/api/personal/import-poi",
+      { method: "POST", body: place }
+    );
+  },
+
+  nearby: (location: UserLocation, limit = 100) => {
+    const params = new URLSearchParams({
+      lat: String(location.latitude),
+      lon: String(location.longitude),
+      limit: String(limit)
+    });
+
+    return api<{ results: NearbyPlaceResult[] }>(
+      "/api/personal/nearby?" + params.toString()
+    );
+  },
+
+  exportBackup: () => api<PersonalBackup>("/api/personal/export"),
+
+  importBackup: (backup: PersonalBackup) =>
+    api<BackupImportResult & { mode: "merge" }>(
+      "/api/personal/import",
+      { method: "POST", body: backup }
+    )
 };

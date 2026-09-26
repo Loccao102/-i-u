@@ -31,6 +31,7 @@ export type Place = {
   source?: "personal" | "provider";
   providerId?: string;
   address?: string;
+  recommendationReasons?: string[];
 };
 
 export type UserLocation = {
@@ -86,4 +87,31 @@ export type PoiSearchResult = {
   longitude: number;
   scenarios: Scenario[];
   accent: string;
+};
+
+
+export type NearbyPlaceResult = {
+  placeId: string;
+  distanceKm: number;
+};
+
+export type PoiImportResult = {
+  place: Place;
+  duplicate: boolean;
+};
+
+export type PersonalBackup = {
+  format: "di-dau-personal-backup";
+  version: 1;
+  exportedAt: string;
+  data: PersonalSnapshot;
+};
+
+export type BackupImportResult = {
+  places: number;
+  saved: number;
+  ratings: number;
+  visits: number;
+  collections: number;
+  collectionPlaces: number;
 };

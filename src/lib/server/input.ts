@@ -2,10 +2,14 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import type {
+  Collection,
+  PersonalBackup,
   PersonalRating,
+  PersonalSnapshot,
   Place,
   RatingDraft,
-  Scenario
+  Scenario,
+  VisitRecord
 } from "../types";
 import { cleanPlainText } from "../validation";
 
@@ -187,4 +191,133 @@ export function parseBoolean(value: unknown) {
 
 export function newOpaqueId() {
   return randomUUID();
+}
+
+
+function objectValue(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("INVALID_BODY");
+  }
+  return value as Record<string, unknown>;
+}
+
+function boundedId(value: unknown, max = 80) {
+  const id = stringValue(value, max, true);
+  if (!/^[A-Za-z0-9:_-]+$/.test(id)) {
+    throw new Error("INVALID_BODY");
+  }
+  return id;
+}
+
+function uuidValue(value: unknown) {
+  const id = stringValue(value, 36, true);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+    throw new Error("INVALID_BODY");
+  }
+  return id;
+}
+
+function isoDate(value: unknown) {
+  if (typeof value !== "string") throw new Error("INVALID_BODY");
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) throw new Error("INVALID_BODY");
+  return date.toISOString();
+}
+
+export function parsePersonalBackup(value: unknown): PersonalSnapshot {
+  const envelope = objectValue(value);
+  if (
+    envelope.format !== "di-dau-personal-backup" ||
+    envelope.version !== 1
+  ) {
+    throw new Error("INVALID_BODY");
+  }
+
+  const data = objectValue(envelope.data);
+
+  const rawPlaces = Array.isArray(data.customPlaces)
+    ? data.customPlaces.slice(0, 1000)
+    : [];
+  if (
+    Array.isArray(data.customPlaces) &&
+    data.customPlaces.length > 1000
+  ) {
+    throw new Error("INVALID_BODY");
+  }
+
+  const customPlaces = rawPlaces.map((item) =>
+    parsePlace(objectValue(item))
+  );
+
+  const rawSaved = Array.isArray(data.savedIds) ? data.savedIds : [];
+  if (rawSaved.length > 5000) throw new Error("INVALID_BODY");
+  const savedIds = Array.from(
+    new Set(rawSaved.map((item) => boundedId(item)))
+  );
+
+  const ratings: Record<string, PersonalRating> = {};
+  const rawRatings =
+    data.ratings && typeof data.ratings === "object" && !Array.isArray(data.ratings)
+      ? (data.ratings as Record<string, unknown>)
+      : {};
+  const ratingEntries = Object.entries(rawRatings);
+  if (ratingEntries.length > 5000) throw new Error("INVALID_BODY");
+
+  for (const [placeIdRaw, ratingRaw] of ratingEntries) {
+    const placeId = boundedId(placeIdRaw);
+    const rating = objectValue(ratingRaw);
+    ratings[placeId] = {
+      ...parseRating(placeId, rating),
+      visitedAt: isoDate(rating.visitedAt),
+      updatedAt: isoDate(rating.updatedAt ?? rating.visitedAt)
+    };
+  }
+
+  const rawVisits = Array.isArray(data.visits) ? data.visits : [];
+  if (rawVisits.length > 5000) throw new Error("INVALID_BODY");
+  const visits: VisitRecord[] = rawVisits.map((item) => {
+    const row = objectValue(item);
+    const ratingStars =
+      row.ratingStars === null || row.ratingStars === undefined
+        ? null
+        : Math.round(finiteNumber(row.ratingStars, 1, 5));
+
+    return {
+      id: uuidValue(row.id),
+      placeId: boundedId(row.placeId),
+      visitedAt: isoDate(row.visitedAt),
+      ratingStars
+    };
+  });
+
+  const rawCollections = Array.isArray(data.collections)
+    ? data.collections
+    : [];
+  if (rawCollections.length > 200) throw new Error("INVALID_BODY");
+
+  const collections: Collection[] = rawCollections.map((item) => {
+    const row = objectValue(item);
+    const rawPlaceIds = Array.isArray(row.placeIds) ? row.placeIds : [];
+    if (rawPlaceIds.length > 1000) throw new Error("INVALID_BODY");
+
+    return {
+      id: uuidValue(row.id),
+      name: stringValue(row.name, 60, true),
+      description: stringValue(row.description, 180),
+      placeIds: Array.from(
+        new Set(rawPlaceIds.map((placeId) => boundedId(placeId)))
+      ),
+      createdAt: isoDate(row.createdAt),
+      updatedAt: isoDate(row.updatedAt)
+    };
+  });
+
+  return {
+    version: 2,
+    customPlaces,
+    savedIds,
+    ratings,
+    visits,
+    collections
+  };
 }

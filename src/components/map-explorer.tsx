@@ -25,9 +25,10 @@ import {
 } from "./icons";
 import { personalApi } from "@/lib/personal-api";
 import { places as seedPlaces, scenarioLabels } from "@/lib/places";
-import { filterPlaces } from "@/lib/search";
+import { filterPlaces, recommendForCollection } from "@/lib/search";
 import type {
   Collection,
+  PersonalBackup,
   PersonalRating,
   Place,
   PoiSearchResult,
@@ -121,6 +122,8 @@ export function MapExplorer() {
 
   const [providerResults, setProviderResults] = useState<PoiSearchResult[]>([]);
   const [providerLoading, setProviderLoading] = useState(false);
+  const [serverDistances, setServerDistances] = useState<Record<string, number>>({});
+  const [backupLoading, setBackupLoading] = useState(false);
 
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [locationStatus, setLocationStatus] = useState<
@@ -154,6 +157,7 @@ export function MapExplorer() {
   const editDialogRef = useRef<HTMLDialogElement | null>(null);
   const ratingDialogRef = useRef<HTMLDialogElement | null>(null);
   const collectionDialogRef = useRef<HTMLDialogElement | null>(null);
+  const backupInputRef = useRef<HTMLInputElement | null>(null);
 
   const loadSnapshot = useCallback(async () => {
     try {
@@ -188,6 +192,16 @@ export function MapExplorer() {
     [customPlaces]
   );
 
+  const importedProviderIds = useMemo(
+    () =>
+      new Set(
+        customPlaces
+          .map((place) => place.providerId)
+          .filter((value): value is string => Boolean(value))
+      ),
+    [customPlaces]
+  );
+
   const recentVisitByPlace = useMemo(() => {
     const result = new Map<string, VisitRecord>();
     const ordered = [...visits].sort((a, b) =>
@@ -208,7 +222,8 @@ export function MapExplorer() {
       query,
       scenario,
       userLocation,
-      { savedIds: saved, ratings, visits }
+      { savedIds: saved, ratings, visits },
+      serverDistances
     );
 
     if (view === "saved") {
@@ -242,18 +257,32 @@ export function MapExplorer() {
     visits,
     view,
     selectedCollection,
-    recentVisitByPlace
+    recentVisitByPlace,
+    serverDistances
   ]);
 
   const rankedAll = useMemo(
     () =>
-      filterPlaces(allPlaces, "", "all", userLocation, {
-        savedIds: saved,
-        ratings,
-        visits
-      }),
-    [allPlaces, userLocation, saved, ratings, visits]
+      filterPlaces(
+        allPlaces,
+        "",
+        "all",
+        userLocation,
+        { savedIds: saved, ratings, visits },
+        serverDistances
+      ),
+    [allPlaces, userLocation, saved, ratings, visits, serverDistances]
   );
+
+  const collectionSuggestions = useMemo(() => {
+    if (!selectedCollection) return [];
+    return recommendForCollection(
+      selectedCollection,
+      rankedAll,
+      { savedIds: saved, ratings, visits },
+      4
+    );
+  }, [selectedCollection, rankedAll, saved, ratings, visits]);
 
   const selected =
     visiblePlaces.find((place) => place.id === selectedId) ??
@@ -389,8 +418,21 @@ export function MapExplorer() {
           duration: 700
         });
         setNotice(
-          "GPS chỉ dùng trong phiên hiện tại và không được ghi vào SQLite."
+          "GPS chỉ dùng trong phiên hiện tại và không được ghi vào Supabase."
         );
+
+        void personalApi
+          .nearby(next, 500)
+          .then(({ results }) => {
+            setServerDistances(
+              Object.fromEntries(
+                results.map((item) => [item.placeId, item.distanceKm])
+              )
+            );
+          })
+          .catch(() => {
+            setServerDistances({});
+          });
       },
       () => {
         setLocationStatus("denied");
@@ -440,15 +482,73 @@ export function MapExplorer() {
 
   async function importPoi(result: PoiSearchResult) {
     try {
-      const place = await personalApi.importPoi(result);
+      const imported = await personalApi.importPoi(result);
       await loadSnapshot();
-      setSelectedId(place.id);
+      setSelectedId(imported.place.id);
       setProviderResults((current) =>
         current.filter((item) => item.providerId !== result.providerId)
       );
-      setNotice("Đã nhập địa điểm vào Supabase cá nhân.");
+      setNotice(
+        imported.duplicate
+          ? "Địa điểm này đã có trong dữ liệu cá nhân."
+          : "Đã nhập địa điểm vào Supabase cá nhân."
+      );
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Không thể nhập POI.");
+    }
+  }
+
+  async function exportBackup() {
+    setBackupLoading(true);
+    try {
+      const backup = await personalApi.exportBackup();
+      const blob = new Blob([JSON.stringify(backup, null, 2)], {
+        type: "application/json"
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download =
+        "di-dau-backup-" + new Date().toISOString().slice(0, 10) + ".json";
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setNotice("Đã xuất bản sao lưu cá nhân.");
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "Không thể xuất backup."
+      );
+    } finally {
+      setBackupLoading(false);
+    }
+  }
+
+  async function importBackupFile(file: File) {
+    if (file.size > 5 * 1024 * 1024) {
+      setNotice("File backup quá lớn. Giới hạn hiện tại là 5 MB.");
+      return;
+    }
+
+    setBackupLoading(true);
+    try {
+      const parsed: unknown = JSON.parse(await file.text());
+      const result = await personalApi.importBackup(parsed as PersonalBackup);
+      await loadSnapshot();
+      setNotice(
+        "Đã merge backup: " +
+          result.places +
+          " địa điểm, " +
+          result.ratings +
+          " rating, " +
+          result.collections +
+          " bộ sưu tập."
+      );
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "Không thể nhập backup."
+      );
+    } finally {
+      if (backupInputRef.current) backupInputRef.current.value = "";
+      setBackupLoading(false);
     }
   }
 
@@ -675,12 +775,15 @@ export function MapExplorer() {
     }
   }
 
-  async function toggleCollectionPlace(collection: Collection) {
-    const included = !collection.placeIds.includes(selected.id);
+  async function toggleCollectionPlace(
+    collection: Collection,
+    placeId = selected.id
+  ) {
+    const included = !collection.placeIds.includes(placeId);
     try {
       await personalApi.setCollectionPlace(
         collection.id,
-        selected.id,
+        placeId,
         included
       );
       await loadSnapshot();
@@ -801,6 +904,33 @@ export function MapExplorer() {
           </span>
 
           <button
+            className="backup-button"
+            type="button"
+            disabled={backupLoading}
+            onClick={() => void exportBackup()}
+          >
+            Xuất
+          </button>
+          <button
+            className="backup-button"
+            type="button"
+            disabled={backupLoading}
+            onClick={() => backupInputRef.current?.click()}
+          >
+            Nhập
+          </button>
+          <input
+            ref={backupInputRef}
+            className="visually-hidden"
+            type="file"
+            accept="application/json,.json"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void importBackupFile(file);
+            }}
+          />
+
+          <button
             className={
               "location-button" +
               (locationStatus === "ready" ? " location-button--ready" : "")
@@ -896,14 +1026,54 @@ export function MapExplorer() {
               <strong>OpenStreetMap</strong>
               <span>{providerResults.length} kết quả ngoài</span>
             </div>
-            {providerResults.slice(0, 4).map((item) => (
-              <div className="provider-card" key={item.providerId}>
-                <div>
-                  <strong>{item.name}</strong>
-                  <span>{item.displayName}</span>
+            {providerResults.slice(0, 4).map((item) => {
+              const imported = importedProviderIds.has(item.providerId);
+              return (
+                <div className="provider-card" key={item.providerId}>
+                  <div>
+                    <strong>{item.name}</strong>
+                    <span>{item.displayName}</span>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={imported}
+                    onClick={() => void importPoi(item)}
+                  >
+                    {imported ? "Đã lưu" : "+ Lưu"}
+                  </button>
                 </div>
-                <button type="button" onClick={() => void importPoi(item)}>
-                  + Lưu
+              );
+            })}
+          </div>
+        ) : null}
+
+        {view === "collections" &&
+        selectedCollection &&
+        collectionSuggestions.length > 0 ? (
+          <div className="collection-suggestions">
+            <div className="provider-results__title">
+              <strong>Gợi ý thêm</strong>
+              <span>Theo gu của bộ sưu tập</span>
+            </div>
+            {collectionSuggestions.map((place) => (
+              <div className="collection-suggestion" key={place.id}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedId(place.id)}
+                >
+                  <strong>{place.name}</strong>
+                  <span>
+                    {place.collectionReasons[0] ?? "Có điểm tương đồng"}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  aria-label={"Thêm " + place.name + " vào bộ sưu tập"}
+                  onClick={() =>
+                    void toggleCollectionPlace(selectedCollection, place.id)
+                  }
+                >
+                  +
                 </button>
               </div>
             ))}
@@ -966,7 +1136,10 @@ export function MapExplorer() {
                     </span>
                     <span className="tag-line">
                       {visit ? <i>Đã đi {formatVisitedAt(visit.visitedAt)}</i> : null}
-                      {place.tags.slice(0, 2).map((tag) => <i key={tag}>{tag}</i>)}
+                      {place.recommendationReasons?.[0] ? (
+                        <i>{place.recommendationReasons[0]}</i>
+                      ) : null}
+                      {place.tags.slice(0, 1).map((tag) => <i key={tag}>{tag}</i>)}
                     </span>
                   </span>
                 </button>
@@ -1102,6 +1275,18 @@ export function MapExplorer() {
               </button>
             </div>
           ) : null}
+
+          <section className="detail-section">
+            <span className="eyebrow">Vì sao được gợi ý</span>
+            <div className="recommendation-reasons">
+              {(selected.recommendationReasons?.length
+                ? selected.recommendationReasons
+                : ["Phù hợp với bộ lọc hiện tại"]
+              ).map((reason) => (
+                <span key={reason}>{reason}</span>
+              ))}
+            </div>
+          </section>
 
           <section className="detail-section">
             <span className="eyebrow">Trải nghiệm của bạn</span>
