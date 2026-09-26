@@ -19,6 +19,7 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - collections;
 - OpenStreetMap/Nominatim search and import;
 - smarter personal ranking with visible recommendation reasons;
+- learned **Taste Profile** from rating, revisit intent and repeat visits; similar places inherit preference signals for scenario, price, noise and crowd level;
 - collection-based recommendations;
 - duplicate-safe provider imports;
 - PostGIS-backed nearby distance lookup for persisted places;
@@ -158,8 +159,8 @@ http://localhost:3000
 ## Next
 
 1. enrich provider imports with better opening-hours/price metadata;
-2. learn stronger taste weights from repeated ratings instead of fixed scoring constants;
-3. add weather forecast awareness for future plans, not only current conditions;
-4. optionally save/favorite generated plans without turning the product into a calendar app;
+2. add weather forecast awareness for future plans, not only current conditions;
+3. optionally save/favorite generated plans without turning the product into a calendar app;
+4. add lightweight feedback on recommendations so the learned taste model can distinguish "not now" from "not my taste";
 5. Supabase Auth only when account recovery/multi-device sync is worth the friction;
 6. Groups and group voting after the personal loop is mature.
