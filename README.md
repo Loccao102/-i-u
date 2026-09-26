@@ -1,23 +1,40 @@
 # ĐiĐâu
 
-**Đúng chỗ, đúng lúc, đúng người.**
+**Đúng chỗ, đúng lúc, đúng mood.**
 
-ĐiĐâu is a minimal, context-aware map for small groups. It helps answer a practical question: **“Trong hoàn cảnh này, nhóm mình nên đi đâu?”**
+ĐiĐâu is a minimal, context-aware personal map. The first goal is simple:
 
-## MVP
+> **Mở app → tìm một chỗ phù hợp → đi → lưu lại trải nghiệm → lần sau app gợi ý tốt hơn.**
 
-The first web slice is deliberately small:
+Group features are intentionally postponed. The core must be useful for one person first.
+
+## Personal-first core
+
+The current web slice includes:
 
 - full-screen map-first discovery;
 - context chips: Date, Bạn bè, Ăn uống, Cafe, Vui chơi, Chill;
 - natural-language-ish local search;
 - nearby ranking with explicit opt-in browser location;
-- place detail focused on group signal, not public popularity;
-- quick rating;
-- add-place flow with safe plain-text handling and automatic context suggestions;
+- Saved places;
+- personal ratings;
+- personal visit history;
+- user-added places;
+- persistent local data with IndexedDB;
 - responsive desktop/mobile layout.
 
-No fake authentication or insecure persistent group backend is included. The current data is demo/session-only until a proper authenticated persistence boundary is implemented.
+Personal ratings are ranked ahead of public fallback ratings. Exact current location is **never persisted**.
+
+## Local data model
+
+These items are stored only on the current browser/device:
+
+- places you add;
+- Saved place ids;
+- your ratings;
+- visit history.
+
+No account is required yet. Clearing browser site data will remove this local data.
 
 ## Stack
 
@@ -25,6 +42,7 @@ No fake authentication or insecure persistent group backend is included. The cur
 - React 19
 - TypeScript
 - MapLibre GL JS
+- IndexedDB
 - plain CSS
 
 The runtime dependency surface is intentionally small.
@@ -46,16 +64,29 @@ cp .env.example .env.local
 
 ## Privacy
 
-Precise location is requested **only after the user presses “Vị trí của tôi”** and remains in memory for the current session.
+Precise location is requested **only after the user presses “Vị trí của tôi”**. Coordinates remain in React memory for the current session and are not written to IndexedDB, localStorage, cookies, or analytics.
 
-See [docs/SECURITY.md](docs/SECURITY.md) before adding authentication, persistence, uploads, third-party AI, or paid map/search providers.
+See [docs/SECURITY.md](docs/SECURITY.md).
 
-## Next product slices
+## Product order
 
-1. authenticated groups + invite flow;
-2. PostgreSQL/PostGIS persistence;
-3. server-side nearby search and ranking;
-4. group ratings and visit history;
-5. group decision/voting;
-6. provider-backed POI import;
-7. server-side AI intent/category extraction.
+### Core first
+
+1. personal map/search;
+2. Saved;
+3. personal ratings + visit history;
+4. persistent user-added places;
+5. edit/delete personal data;
+6. collections;
+7. provider-backed POI search/import;
+8. smarter personal ranking.
+
+### Later
+
+9. optional account + encrypted/safe cloud sync;
+10. groups;
+11. group ratings;
+12. group decision/voting;
+13. server-side AI intent/category extraction.
+
+The product should never require a group account just to answer **“Mình nên đi đâu?”**
