@@ -446,7 +446,7 @@ export function MapExplorer() {
       setProviderResults((current) =>
         current.filter((item) => item.providerId !== result.providerId)
       );
-      setNotice("Đã nhập địa điểm vào SQLite cá nhân.");
+      setNotice("Đã nhập địa điểm vào Supabase cá nhân.");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Không thể nhập POI.");
     }
@@ -553,7 +553,7 @@ export function MapExplorer() {
       setSelectedId(created.id);
       addDialogRef.current?.close();
       event.currentTarget.reset();
-      setNotice("Đã lưu địa điểm vào SQLite.");
+      setNotice("Đã lưu địa điểm vào Supabase.");
     } catch (error) {
       setNotice(
         error instanceof Error ? error.message : "Không thể thêm địa điểm."
@@ -794,10 +794,10 @@ export function MapExplorer() {
           >
             <span className="privacy-dot" />
             {dataStatus === "loading"
-              ? "Đang mở SQLite…"
+              ? "Đang mở Supabase…"
               : dataStatus === "error"
                 ? "Không tải được dữ liệu"
-                : "Cá nhân · SQLite"}
+                : "Cá nhân · Supabase"}
           </span>
 
           <button
@@ -1005,7 +1005,7 @@ export function MapExplorer() {
           <span className="privacy-dot" />
           {userLocation
             ? "GPS chỉ sống trong phiên"
-            : "SQLite không lưu GPS hiện tại"}
+            : "Supabase không lưu GPS hiện tại"}
         </div>
       </section>
 
@@ -1186,7 +1186,7 @@ export function MapExplorer() {
       <dialog className="app-dialog" ref={addDialogRef}>
         <form className="dialog-card" onSubmit={submitNewPlace}>
           <div className="dialog-header">
-            <div><span className="eyebrow">SQLite cá nhân</span><h2>Thêm địa điểm</h2></div>
+            <div><span className="eyebrow">Supabase cá nhân</span><h2>Thêm địa điểm</h2></div>
             <button className="icon-button" type="button" onClick={() => addDialogRef.current?.close()}><CloseIcon /></button>
           </div>
           <p className="dialog-copy">
