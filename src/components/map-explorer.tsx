@@ -192,6 +192,16 @@ export function MapExplorer() {
     [customPlaces]
   );
 
+  const importedProviderIds = useMemo(
+    () =>
+      new Set(
+        customPlaces
+          .map((place) => place.providerId)
+          .filter((value): value is string => Boolean(value))
+      ),
+    [customPlaces]
+  );
+
   const recentVisitByPlace = useMemo(() => {
     const result = new Map<string, VisitRecord>();
     const ordered = [...visits].sort((a, b) =>
@@ -891,6 +901,33 @@ export function MapExplorer() {
           </span>
 
           <button
+            className="backup-button"
+            type="button"
+            disabled={backupLoading}
+            onClick={() => void exportBackup()}
+          >
+            Xuất
+          </button>
+          <button
+            className="backup-button"
+            type="button"
+            disabled={backupLoading}
+            onClick={() => backupInputRef.current?.click()}
+          >
+            Nhập
+          </button>
+          <input
+            ref={backupInputRef}
+            className="visually-hidden"
+            type="file"
+            accept="application/json,.json"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void importBackupFile(file);
+            }}
+          />
+
+          <button
             className={
               "location-button" +
               (locationStatus === "ready" ? " location-button--ready" : "")
@@ -986,14 +1023,52 @@ export function MapExplorer() {
               <strong>OpenStreetMap</strong>
               <span>{providerResults.length} kết quả ngoài</span>
             </div>
-            {providerResults.slice(0, 4).map((item) => (
-              <div className="provider-card" key={item.providerId}>
-                <div>
-                  <strong>{item.name}</strong>
-                  <span>{item.displayName}</span>
+            {providerResults.slice(0, 4).map((item) => {
+              const imported = importedProviderIds.has(item.providerId);
+              return (
+                <div className="provider-card" key={item.providerId}>
+                  <div>
+                    <strong>{item.name}</strong>
+                    <span>{item.displayName}</span>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={imported}
+                    onClick={() => void importPoi(item)}
+                  >
+                    {imported ? "Đã lưu" : "+ Lưu"}
+                  </button>
                 </div>
-                <button type="button" onClick={() => void importPoi(item)}>
-                  + Lưu
+              );
+            })}
+          </div>
+        ) : null}
+
+        {view === "collections" &&
+        selectedCollection &&
+        collectionSuggestions.length > 0 ? (
+          <div className="collection-suggestions">
+            <div className="provider-results__title">
+              <strong>Gợi ý thêm</strong>
+              <span>Theo gu của bộ sưu tập</span>
+            </div>
+            {collectionSuggestions.map((place) => (
+              <div className="collection-suggestion" key={place.id}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedId(place.id)}
+                >
+                  <strong>{place.name}</strong>
+                  <span>
+                    {place.collectionReasons[0] ?? "Có điểm tương đồng"}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  aria-label={"Thêm " + place.name + " vào bộ sưu tập"}
+                  onClick={() => void toggleCollectionPlace(selectedCollection)}
+                >
+                  +
                 </button>
               </div>
             ))}
@@ -1056,7 +1131,10 @@ export function MapExplorer() {
                     </span>
                     <span className="tag-line">
                       {visit ? <i>Đã đi {formatVisitedAt(visit.visitedAt)}</i> : null}
-                      {place.tags.slice(0, 2).map((tag) => <i key={tag}>{tag}</i>)}
+                      {place.recommendationReasons?.[0] ? (
+                        <i>{place.recommendationReasons[0]}</i>
+                      ) : null}
+                      {place.tags.slice(0, 1).map((tag) => <i key={tag}>{tag}</i>)}
                     </span>
                   </span>
                 </button>
@@ -1192,6 +1270,18 @@ export function MapExplorer() {
               </button>
             </div>
           ) : null}
+
+          <section className="detail-section">
+            <span className="eyebrow">Vì sao được gợi ý</span>
+            <div className="recommendation-reasons">
+              {(selected.recommendationReasons?.length
+                ? selected.recommendationReasons
+                : ["Phù hợp với bộ lọc hiện tại"]
+              ).map((reason) => (
+                <span key={reason}>{reason}</span>
+              ))}
+            </div>
+          </section>
 
           <section className="detail-section">
             <span className="eyebrow">Trải nghiệm của bạn</span>
