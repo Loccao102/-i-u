@@ -20,7 +20,7 @@ export async function PUT(
     const { placeId } = await context.params;
     const body = await readJsonObject(request);
     const saved = parseBoolean(body.saved);
-    setSaved(profile.ownerKey, placeId, saved);
+    await setSaved(profile.ownerKey, placeId, saved);
     return profileJson(profile, { saved });
   } catch (error) {
     return errorJson(profile, error, "Không thể cập nhật Saved.");

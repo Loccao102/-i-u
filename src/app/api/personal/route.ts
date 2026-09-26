@@ -7,5 +7,5 @@ export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
   const profile = resolveAnonymousProfile(request);
-  return profileJson(profile, getPersonalSnapshot(profile.ownerKey));
+  return profileJson(profile, await getPersonalSnapshot(profile.ownerKey));
 }

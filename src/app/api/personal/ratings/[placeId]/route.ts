@@ -23,10 +23,10 @@ export async function PUT(
     const { placeId } = await context.params;
     const body = await readJsonObject(request);
     const rating = parseRating(placeId, body);
-    saveRating(profile.ownerKey, rating);
+    await saveRating(profile.ownerKey, rating);
 
     if (body.recordVisit === true) {
-      addVisit(
+      await addVisit(
         profile.ownerKey,
         placeId,
         rating.stars,

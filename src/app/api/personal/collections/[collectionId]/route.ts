@@ -26,7 +26,7 @@ export async function PATCH(
     const { collectionId } = await context.params;
     const body = await readJsonObject(request);
     const input = parseCollection(body);
-    const updated = updateCollection(
+    const updated = await updateCollection(
       profile.ownerKey,
       collectionId,
       input.name,
@@ -53,7 +53,7 @@ export async function DELETE(
   try {
     assertSameOriginMutation(request);
     const { collectionId } = await context.params;
-    const deleted = deleteCollection(
+    const deleted = await deleteCollection(
       profile.ownerKey,
       collectionId
     );

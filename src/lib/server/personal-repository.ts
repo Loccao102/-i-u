@@ -1,7 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { getDatabase } from "./sqlite";
+import { getSupabaseAdmin } from "./supabase";
 import type {
   Collection,
   PersonalRating,
@@ -11,7 +11,7 @@ import type {
   VisitRecord
 } from "../types";
 
-type DbPlaceRow = {
+type PlaceRow = {
   id: string;
   name: string;
   kind: string;
@@ -28,27 +28,22 @@ type DbPlaceRow = {
   best_time: string;
   noise: Place["noise"];
   crowd: Place["crowd"];
-  tags_json: string;
-  scenarios_json: string;
+  tags: string[] | null;
+  scenarios: string[] | null;
   note: string;
   accent: string;
-  source: string;
+  source: "PERSONAL" | "PROVIDER";
   provider_id: string | null;
   address: string | null;
 };
 
-function safeStringArray(value: string): string[] {
-  try {
-    const parsed: unknown = JSON.parse(value);
-    return Array.isArray(parsed)
-      ? parsed.filter((item): item is string => typeof item === "string")
-      : [];
-  } catch {
-    return [];
+function dbError(error: { message?: string } | null, context: string) {
+  if (error) {
+    throw new Error(`${context}: ${error.message ?? "Supabase error"}`);
   }
 }
 
-function mapPlace(row: DbPlaceRow): Place {
+function mapPlace(row: PlaceRow): Place {
   return {
     id: row.id,
     name: row.name,
@@ -66,8 +61,16 @@ function mapPlace(row: DbPlaceRow): Place {
     bestTime: row.best_time,
     noise: row.noise,
     crowd: row.crowd,
-    tags: safeStringArray(row.tags_json),
-    scenarios: safeStringArray(row.scenarios_json) as Scenario[],
+    tags: (row.tags ?? []).filter((item): item is string => typeof item === "string"),
+    scenarios: (row.scenarios ?? []).filter(
+      (item): item is Scenario =>
+        item === "date" ||
+        item === "friends" ||
+        item === "food" ||
+        item === "coffee" ||
+        item === "fun" ||
+        item === "chill"
+    ),
     note: row.note,
     accent: row.accent,
     source: row.source === "PROVIDER" ? "provider" : "personal",
@@ -76,298 +79,262 @@ function mapPlace(row: DbPlaceRow): Place {
   };
 }
 
-function listPlaces(ownerKey: string) {
-  return (
-    getDatabase()
-      .prepare(
-        `SELECT *
-         FROM personal_places
-         WHERE owner_key = ?
-         ORDER BY updated_at DESC
-         LIMIT 1000`
-      )
-      .all(ownerKey) as unknown as DbPlaceRow[]
-  ).map(mapPlace);
-}
-
-function listSaved(ownerKey: string) {
-  return (
-    getDatabase()
-      .prepare(
-        `SELECT place_id
-         FROM saved_places
-         WHERE owner_key = ?
-         ORDER BY created_at DESC
-         LIMIT 5000`
-      )
-      .all(ownerKey) as unknown as Array<{ place_id: string }>
-  ).map((row) => row.place_id);
-}
-
-function listRatings(ownerKey: string) {
-  const rows = getDatabase()
-    .prepare(
-      `SELECT place_id, stars, revisit, contexts_json, note, visited_at, updated_at
-       FROM personal_ratings
-       WHERE owner_key = ?`
+async function listPlaces(ownerKey: string): Promise<Place[]> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("personal_places")
+    .select(
+      "id,name,kind,description,latitude,longitude,distance_km,price_label,average_for_two,public_rating,match_score,community_note,open_until,best_time,noise,crowd,tags,scenarios,note,accent,source,provider_id,address"
     )
-    .all(ownerKey) as unknown as Array<{
-    place_id: string;
-    stars: number;
-    revisit: PersonalRating["revisit"];
-    contexts_json: string;
-    note: string;
-    visited_at: string;
-    updated_at: string;
-  }>;
+    .eq("owner_key", ownerKey)
+    .order("updated_at", { ascending: false })
+    .limit(1000);
+
+  dbError(error, "List places");
+  return ((data ?? []) as PlaceRow[]).map(mapPlace);
+}
+
+async function listSaved(ownerKey: string): Promise<string[]> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("saved_places")
+    .select("place_id")
+    .eq("owner_key", ownerKey)
+    .order("created_at", { ascending: false })
+    .limit(5000);
+
+  dbError(error, "List saved");
+  return (data ?? []).map((row) => String(row.place_id));
+}
+
+async function listRatings(
+  ownerKey: string
+): Promise<Record<string, PersonalRating>> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("personal_ratings")
+    .select("place_id,stars,revisit,contexts,note,visited_at,updated_at")
+    .eq("owner_key", ownerKey);
+
+  dbError(error, "List ratings");
 
   const result: Record<string, PersonalRating> = {};
-  for (const row of rows) {
-    result[row.place_id] = {
-      placeId: row.place_id,
-      stars: row.stars,
-      revisit: row.revisit,
-      contexts: safeStringArray(row.contexts_json) as Scenario[],
-      note: row.note,
-      visitedAt: row.visited_at,
-      updatedAt: row.updated_at
+  for (const row of data ?? []) {
+    const placeId = String(row.place_id);
+    result[placeId] = {
+      placeId,
+      stars: Number(row.stars),
+      revisit:
+        row.revisit === "yes" || row.revisit === "no" ? row.revisit : "maybe",
+      contexts: Array.isArray(row.contexts)
+        ? row.contexts.filter(
+            (item): item is Scenario =>
+              item === "date" ||
+              item === "friends" ||
+              item === "food" ||
+              item === "coffee" ||
+              item === "fun" ||
+              item === "chill"
+          )
+        : [],
+      note: typeof row.note === "string" ? row.note : "",
+      visitedAt: String(row.visited_at),
+      updatedAt: String(row.updated_at)
     };
   }
   return result;
 }
 
-function listVisits(ownerKey: string): VisitRecord[] {
-  const rows = getDatabase()
-    .prepare(
-      `SELECT id, place_id, visited_at, rating_stars
-       FROM visits
-       WHERE owner_key = ?
-       ORDER BY visited_at DESC
-       LIMIT 5000`
-    )
-    .all(ownerKey) as unknown as Array<{
-    id: string;
-    place_id: string;
-    visited_at: string;
-    rating_stars: number | null;
-  }>;
+async function listVisits(ownerKey: string): Promise<VisitRecord[]> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("visits")
+    .select("id,place_id,visited_at,rating_stars")
+    .eq("owner_key", ownerKey)
+    .order("visited_at", { ascending: false })
+    .limit(5000);
 
-  return rows.map((row) => ({
-    id: row.id,
-    placeId: row.place_id,
-    visitedAt: row.visited_at,
-    ratingStars: row.rating_stars
+  dbError(error, "List visits");
+
+  return (data ?? []).map((row) => ({
+    id: String(row.id),
+    placeId: String(row.place_id),
+    visitedAt: String(row.visited_at),
+    ratingStars:
+      row.rating_stars === null || row.rating_stars === undefined
+        ? null
+        : Number(row.rating_stars)
   }));
 }
 
-function listCollections(ownerKey: string): Collection[] {
-  const collections = getDatabase()
-    .prepare(
-      `SELECT id, name, description, created_at, updated_at
-       FROM collections
-       WHERE owner_key = ?
-       ORDER BY updated_at DESC
-       LIMIT 200`
-    )
-    .all(ownerKey) as unknown as Array<{
-    id: string;
-    name: string;
-    description: string;
-    created_at: string;
-    updated_at: string;
-  }>;
+async function listCollections(ownerKey: string): Promise<Collection[]> {
+  const client = getSupabaseAdmin();
+  const [collectionsResult, linksResult] = await Promise.all([
+    client
+      .from("collections")
+      .select("id,name,description,created_at,updated_at")
+      .eq("owner_key", ownerKey)
+      .order("updated_at", { ascending: false })
+      .limit(200),
+    client
+      .from("collection_places")
+      .select("collection_id,place_id")
+      .eq("owner_key", ownerKey)
+  ]);
 
-  const links = getDatabase()
-    .prepare(
-      `SELECT collection_id, place_id
-       FROM collection_places
-       WHERE owner_key = ?`
-    )
-    .all(ownerKey) as unknown as Array<{
-    collection_id: string;
-    place_id: string;
-  }>;
+  dbError(collectionsResult.error, "List collections");
+  dbError(linksResult.error, "List collection places");
 
   const byCollection = new Map<string, string[]>();
-  for (const link of links) {
-    const items = byCollection.get(link.collection_id) ?? [];
-    items.push(link.place_id);
-    byCollection.set(link.collection_id, items);
+  for (const link of linksResult.data ?? []) {
+    const collectionId = String(link.collection_id);
+    const items = byCollection.get(collectionId) ?? [];
+    items.push(String(link.place_id));
+    byCollection.set(collectionId, items);
   }
 
-  return collections.map((item) => ({
-    id: item.id,
-    name: item.name,
-    description: item.description,
-    placeIds: byCollection.get(item.id) ?? [],
-    createdAt: item.created_at,
-    updatedAt: item.updated_at
+  return (collectionsResult.data ?? []).map((item) => ({
+    id: String(item.id),
+    name: String(item.name),
+    description: String(item.description ?? ""),
+    placeIds: byCollection.get(String(item.id)) ?? [],
+    createdAt: String(item.created_at),
+    updatedAt: String(item.updated_at)
   }));
 }
 
-export function getPersonalSnapshot(ownerKey: string): PersonalSnapshot {
+export async function getPersonalSnapshot(
+  ownerKey: string
+): Promise<PersonalSnapshot> {
+  const [customPlaces, savedIds, ratings, visits, collections] =
+    await Promise.all([
+      listPlaces(ownerKey),
+      listSaved(ownerKey),
+      listRatings(ownerKey),
+      listVisits(ownerKey),
+      listCollections(ownerKey)
+    ]);
+
   return {
     version: 2,
-    customPlaces: listPlaces(ownerKey),
-    savedIds: listSaved(ownerKey),
-    ratings: listRatings(ownerKey),
-    visits: listVisits(ownerKey),
-    collections: listCollections(ownerKey)
+    customPlaces,
+    savedIds,
+    ratings,
+    visits,
+    collections
   };
 }
 
-export function upsertPlace(ownerKey: string, place: Place) {
+export async function upsertPlace(ownerKey: string, place: Place) {
   const now = new Date().toISOString();
-
-  getDatabase()
-    .prepare(
-      `INSERT INTO personal_places (
-         owner_key, id, name, kind, description, latitude, longitude,
-         distance_km, price_label, average_for_two, public_rating,
-         match_score, community_note, open_until, best_time, noise, crowd,
-         tags_json, scenarios_json, note, accent, source, provider_id,
-         address, created_at, updated_at
-       ) VALUES (
-         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-         ?, ?, ?, ?, ?
-       )
-       ON CONFLICT(owner_key, id) DO UPDATE SET
-         name = excluded.name,
-         kind = excluded.kind,
-         description = excluded.description,
-         latitude = excluded.latitude,
-         longitude = excluded.longitude,
-         distance_km = excluded.distance_km,
-         price_label = excluded.price_label,
-         average_for_two = excluded.average_for_two,
-         public_rating = excluded.public_rating,
-         match_score = excluded.match_score,
-         community_note = excluded.community_note,
-         open_until = excluded.open_until,
-         best_time = excluded.best_time,
-         noise = excluded.noise,
-         crowd = excluded.crowd,
-         tags_json = excluded.tags_json,
-         scenarios_json = excluded.scenarios_json,
-         note = excluded.note,
-         accent = excluded.accent,
-         source = excluded.source,
-         provider_id = excluded.provider_id,
-         address = excluded.address,
-         updated_at = excluded.updated_at`
-    )
-    .run(
-      ownerKey,
-      place.id,
-      place.name,
-      place.kind,
-      place.description,
-      place.latitude,
-      place.longitude,
-      place.distanceKm,
-      place.priceLabel,
-      place.averageForTwo,
-      place.publicRating,
-      place.match,
-      place.communityNote,
-      place.openUntil,
-      place.bestTime,
-      place.noise,
-      place.crowd,
-      JSON.stringify(place.tags),
-      JSON.stringify(place.scenarios),
-      place.note,
-      place.accent,
-      place.source === "provider" ? "PROVIDER" : "PERSONAL",
-      place.providerId ?? null,
-      place.address ?? null,
-      now,
-      now
+  const { error } = await getSupabaseAdmin()
+    .from("personal_places")
+    .upsert(
+      {
+        owner_key: ownerKey,
+        id: place.id,
+        name: place.name,
+        kind: place.kind,
+        description: place.description,
+        latitude: place.latitude,
+        longitude: place.longitude,
+        distance_km: place.distanceKm,
+        price_label: place.priceLabel,
+        average_for_two: place.averageForTwo,
+        public_rating: place.publicRating,
+        match_score: place.match,
+        community_note: place.communityNote,
+        open_until: place.openUntil,
+        best_time: place.bestTime,
+        noise: place.noise,
+        crowd: place.crowd,
+        tags: place.tags,
+        scenarios: place.scenarios,
+        note: place.note,
+        accent: place.accent,
+        source: place.source === "provider" ? "PROVIDER" : "PERSONAL",
+        provider_id: place.providerId ?? null,
+        address: place.address ?? null,
+        updated_at: now
+      },
+      { onConflict: "owner_key,id" }
     );
 
+  dbError(error, "Upsert place");
   return place;
 }
 
-export function deletePlace(ownerKey: string, placeId: string) {
-  const db = getDatabase();
-  db.exec("BEGIN IMMEDIATE");
+export async function deletePlace(ownerKey: string, placeId: string) {
+  const { data, error } = await getSupabaseAdmin().rpc(
+    "delete_personal_place",
+    {
+      p_owner_key: ownerKey,
+      p_place_id: placeId
+    }
+  );
 
-  try {
-    db.prepare(
-      "DELETE FROM collection_places WHERE owner_key = ? AND place_id = ?"
-    ).run(ownerKey, placeId);
-    db.prepare(
-      "DELETE FROM saved_places WHERE owner_key = ? AND place_id = ?"
-    ).run(ownerKey, placeId);
-    db.prepare(
-      "DELETE FROM personal_ratings WHERE owner_key = ? AND place_id = ?"
-    ).run(ownerKey, placeId);
-    db.prepare(
-      "DELETE FROM visits WHERE owner_key = ? AND place_id = ?"
-    ).run(ownerKey, placeId);
-    const result = db
-      .prepare(
-        "DELETE FROM personal_places WHERE owner_key = ? AND id = ?"
-      )
-      .run(ownerKey, placeId);
-    db.exec("COMMIT");
-    return result.changes > 0;
-  } catch (error) {
-    db.exec("ROLLBACK");
-    throw error;
-  }
+  dbError(error, "Delete place");
+  return data === true;
 }
 
-export function setSaved(ownerKey: string, placeId: string, saved: boolean) {
+export async function setSaved(
+  ownerKey: string,
+  placeId: string,
+  saved: boolean
+) {
+  const client = getSupabaseAdmin();
+
   if (saved) {
-    getDatabase()
-      .prepare(
-        `INSERT OR IGNORE INTO saved_places (owner_key, place_id, created_at)
-         VALUES (?, ?, ?)`
-      )
-      .run(ownerKey, placeId, new Date().toISOString());
-  } else {
-    getDatabase()
-      .prepare(
-        "DELETE FROM saved_places WHERE owner_key = ? AND place_id = ?"
-      )
-      .run(ownerKey, placeId);
+    const { error } = await client
+      .from("saved_places")
+      .upsert(
+        {
+          owner_key: ownerKey,
+          place_id: placeId,
+          created_at: new Date().toISOString()
+        },
+        {
+          onConflict: "owner_key,place_id",
+          ignoreDuplicates: true
+        }
+      );
+    dbError(error, "Save place");
+    return;
   }
+
+  const { error } = await client
+    .from("saved_places")
+    .delete()
+    .eq("owner_key", ownerKey)
+    .eq("place_id", placeId);
+  dbError(error, "Unsave place");
 }
 
-export function saveRating(ownerKey: string, rating: PersonalRating) {
-  getDatabase()
-    .prepare(
-      `INSERT INTO personal_ratings (
-         owner_key, place_id, stars, revisit, contexts_json, note,
-         visited_at, updated_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(owner_key, place_id) DO UPDATE SET
-         stars = excluded.stars,
-         revisit = excluded.revisit,
-         contexts_json = excluded.contexts_json,
-         note = excluded.note,
-         visited_at = excluded.visited_at,
-         updated_at = excluded.updated_at`
-    )
-    .run(
-      ownerKey,
-      rating.placeId,
-      rating.stars,
-      rating.revisit,
-      JSON.stringify(rating.contexts),
-      rating.note,
-      rating.visitedAt,
-      rating.updatedAt
+export async function saveRating(
+  ownerKey: string,
+  rating: PersonalRating
+) {
+  const { error } = await getSupabaseAdmin()
+    .from("personal_ratings")
+    .upsert(
+      {
+        owner_key: ownerKey,
+        place_id: rating.placeId,
+        stars: rating.stars,
+        revisit: rating.revisit,
+        contexts: rating.contexts,
+        note: rating.note,
+        visited_at: rating.visitedAt,
+        updated_at: rating.updatedAt
+      },
+      { onConflict: "owner_key,place_id" }
     );
+
+  dbError(error, "Save rating");
 }
 
-export function addVisit(
+export async function addVisit(
   ownerKey: string,
   placeId: string,
   ratingStars: number | null,
   visitedAt = new Date().toISOString()
-): VisitRecord {
+): Promise<VisitRecord> {
   const visit: VisitRecord = {
     id: randomUUID(),
     placeId,
@@ -375,29 +342,23 @@ export function addVisit(
     ratingStars
   };
 
-  getDatabase()
-    .prepare(
-      `INSERT INTO visits (
-         owner_key, id, place_id, visited_at, rating_stars, created_at
-       ) VALUES (?, ?, ?, ?, ?, ?)`
-    )
-    .run(
-      ownerKey,
-      visit.id,
-      visit.placeId,
-      visit.visitedAt,
-      visit.ratingStars,
-      new Date().toISOString()
-    );
+  const { error } = await getSupabaseAdmin().from("visits").insert({
+    owner_key: ownerKey,
+    id: visit.id,
+    place_id: visit.placeId,
+    visited_at: visit.visitedAt,
+    rating_stars: visit.ratingStars
+  });
 
+  dbError(error, "Add visit");
   return visit;
 }
 
-export function createCollection(
+export async function createCollection(
   ownerKey: string,
   name: string,
   description: string
-): Collection {
+): Promise<Collection> {
   const now = new Date().toISOString();
   const item: Collection = {
     id: randomUUID(),
@@ -408,82 +369,107 @@ export function createCollection(
     updatedAt: now
   };
 
-  getDatabase()
-    .prepare(
-      `INSERT INTO collections (
-         owner_key, id, name, description, created_at, updated_at
-       ) VALUES (?, ?, ?, ?, ?, ?)`
-    )
-    .run(ownerKey, item.id, item.name, item.description, now, now);
+  const { error } = await getSupabaseAdmin().from("collections").insert({
+    owner_key: ownerKey,
+    id: item.id,
+    name: item.name,
+    description: item.description,
+    created_at: now,
+    updated_at: now
+  });
 
+  dbError(error, "Create collection");
   return item;
 }
 
-export function updateCollection(
+export async function updateCollection(
   ownerKey: string,
   collectionId: string,
   name: string,
   description: string
 ) {
-  const result = getDatabase()
-    .prepare(
-      `UPDATE collections
-       SET name = ?, description = ?, updated_at = ?
-       WHERE owner_key = ? AND id = ?`
-    )
-    .run(
+  const { data, error } = await getSupabaseAdmin()
+    .from("collections")
+    .update({
       name,
       description,
-      new Date().toISOString(),
-      ownerKey,
-      collectionId
-    );
-  return result.changes > 0;
+      updated_at: new Date().toISOString()
+    })
+    .eq("owner_key", ownerKey)
+    .eq("id", collectionId)
+    .select("id")
+    .maybeSingle();
+
+  dbError(error, "Update collection");
+  return Boolean(data);
 }
 
-export function deleteCollection(ownerKey: string, collectionId: string) {
-  const result = getDatabase()
-    .prepare("DELETE FROM collections WHERE owner_key = ? AND id = ?")
-    .run(ownerKey, collectionId);
-  return result.changes > 0;
+export async function deleteCollection(
+  ownerKey: string,
+  collectionId: string
+) {
+  const { data, error } = await getSupabaseAdmin()
+    .from("collections")
+    .delete()
+    .eq("owner_key", ownerKey)
+    .eq("id", collectionId)
+    .select("id")
+    .maybeSingle();
+
+  dbError(error, "Delete collection");
+  return Boolean(data);
 }
 
-export function setCollectionPlace(
+export async function setCollectionPlace(
   ownerKey: string,
   collectionId: string,
   placeId: string,
   included: boolean
 ) {
-  const collection = getDatabase()
-    .prepare(
-      "SELECT 1 AS ok FROM collections WHERE owner_key = ? AND id = ?"
-    )
-    .get(ownerKey, collectionId) as { ok: number } | undefined;
+  const client = getSupabaseAdmin();
 
+  const { data: collection, error: collectionError } = await client
+    .from("collections")
+    .select("id")
+    .eq("owner_key", ownerKey)
+    .eq("id", collectionId)
+    .maybeSingle();
+
+  dbError(collectionError, "Check collection");
   if (!collection) return false;
 
   if (included) {
-    getDatabase()
-      .prepare(
-        `INSERT OR IGNORE INTO collection_places (
-           owner_key, collection_id, place_id, created_at
-         ) VALUES (?, ?, ?, ?)`
-      )
-      .run(ownerKey, collectionId, placeId, new Date().toISOString());
+    const { error } = await client
+      .from("collection_places")
+      .upsert(
+        {
+          owner_key: ownerKey,
+          collection_id: collectionId,
+          place_id: placeId,
+          created_at: new Date().toISOString()
+        },
+        {
+          onConflict: "owner_key,collection_id,place_id",
+          ignoreDuplicates: true
+        }
+      );
+    dbError(error, "Add place to collection");
   } else {
-    getDatabase()
-      .prepare(
-        `DELETE FROM collection_places
-         WHERE owner_key = ? AND collection_id = ? AND place_id = ?`
-      )
-      .run(ownerKey, collectionId, placeId);
+    const { error } = await client
+      .from("collection_places")
+      .delete()
+      .eq("owner_key", ownerKey)
+      .eq("collection_id", collectionId)
+      .eq("place_id", placeId);
+    dbError(error, "Remove place from collection");
   }
 
-  getDatabase()
-    .prepare(
-      "UPDATE collections SET updated_at = ? WHERE owner_key = ? AND id = ?"
-    )
-    .run(new Date().toISOString(), ownerKey, collectionId);
+  const { error: touchError } = await client
+    .from("collections")
+    .update({ updated_at: new Date().toISOString() })
+    .eq("owner_key", ownerKey)
+    .eq("id", collectionId);
+  dbError(touchError, "Touch collection");
 
   return true;
 }

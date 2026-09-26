@@ -18,7 +18,7 @@ export async function POST(
   try {
     await readJsonObject(request);
     const { placeId } = await context.params;
-    const visit = addVisit(profile.ownerKey, placeId, null);
+    const visit = await addVisit(profile.ownerKey, placeId, null);
     return profileJson(profile, visit, { status: 201 });
   } catch (error) {
     return errorJson(profile, error, "Không thể check-in.");

@@ -23,7 +23,7 @@ export async function PUT(
     const { collectionId, placeId } = await context.params;
     const body = await readJsonObject(request);
     const included = parseBoolean(body.included);
-    const ok = setCollectionPlace(
+    const ok = await setCollectionPlace(
       profile.ownerKey,
       collectionId,
       placeId,
