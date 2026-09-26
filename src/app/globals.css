@@ -1910,3 +1910,49 @@ textarea:focus-visible {
     grid-template-columns: 84px minmax(0, 1fr);
   }
 }
+
+
+.taste-strip {
+  min-width: 0;
+  border: 1px solid #e6e2f2;
+  border-radius: 13px;
+  padding: 8px 10px;
+  background: #faf8ff;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+}
+
+.taste-strip > span {
+  color: #75659e;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.taste-strip > strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #4c4659;
+  font-size: 10px;
+}
+
+.taste-strip > small {
+  color: var(--muted);
+  font-size: 8px;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .taste-strip {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .taste-strip > small {
+    display: none;
+  }
+}
