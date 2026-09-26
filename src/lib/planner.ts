@@ -34,6 +34,21 @@ function normalize(value: string) {
 }
 
 function parseMoney(value: string) {
+  const range = /(\d+(?:[.,]\d+)?)\s*[-–—]\s*(\d+(?:[.,]\d+)?)\s*(k|nghìn|ngàn|triệu|tr)\b/i.exec(
+    value
+  );
+
+  if (range) {
+    const low = Number(range[1]!.replace(",", "."));
+    const high = Number(range[2]!.replace(",", "."));
+    const unit = normalize(range[3]!);
+    if (Number.isFinite(low) && Number.isFinite(high)) {
+      const multiplier =
+        unit === "triệu" || unit === "tr" ? 1_000_000 : 1_000;
+      return Math.round(((low + high) / 2) * multiplier);
+    }
+  }
+
   const matches = Array.from(
     value.matchAll(/(\d+(?:[.,]\d+)?)\s*(k|nghìn|ngàn|triệu|tr)\b/gi)
   );
@@ -284,6 +299,7 @@ export function buildEveningPlan(input: {
       .filter((place) => matchesStage(place, stage))
       .map((place) => ({
         place,
+        cost: estimateCostForTwo(place),
         score: candidateScore({
           place,
           stage,
@@ -301,40 +317,19 @@ export function buildEveningPlan(input: {
           item
         ): item is {
           place: Place;
+          cost: number;
           score: number;
         } => item.score !== null
-      )
-      .sort((a, b) => b.score - a.score);
+      );
 
-    let chosen = stageCandidates[0]?.place;
+    const affordable = stageCandidates.filter(
+      (item) => item.cost <= Math.max(200_000, stageBudget * 1.35)
+    );
+    const candidatePool =
+      affordable.length > 0 ? affordable : stageCandidates;
 
-    if (!chosen) {
-      chosen = places
-        .filter((place) => !used.has(place.id))
-        .map((place) => ({
-          place,
-          score: candidateScore({
-            place,
-            stage,
-            scenario: preferences.scenario,
-            signals,
-            origin,
-            previous,
-            maxDistanceKm: preferences.maxDistanceKm,
-            stageBudget,
-            variant
-          })
-        }))
-        .filter(
-          (
-            item
-          ): item is {
-            place: Place;
-            score: number;
-          } => item.score !== null
-        )
-        .sort((a, b) => b.score - a.score)[0]?.place;
-    }
+    candidatePool.sort((a, b) => b.score - a.score);
+    const chosen = candidatePool[0]?.place;
 
     if (!chosen) continue;
 
