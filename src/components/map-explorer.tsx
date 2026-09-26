@@ -292,15 +292,34 @@ export function MapExplorer() {
   const selectedCollection =
     collections.find((item) => item.id === selectedCollectionId) ?? null;
 
+  const recommendationContext = useMemo<RecommendationContext>(
+    () => ({
+      localHour: clock.getHours(),
+      isWeekend: clock.getDay() === 0 || clock.getDay() === 6,
+      weather
+    }),
+    [clock, weather]
+  );
+
   const visiblePlaces = useMemo(() => {
-    const filtered = filterPlaces(
+    const contextual = filterPlaces(
       allPlaces,
       query,
       scenario,
       userLocation,
       { savedIds: saved, ratings, visits },
-      serverDistances
+      serverDistances,
+      recommendationContext
     );
+
+    const filtered = viewportBounds
+      ? contextual.filter((place) => {
+          if (customIds.has(place.id) && viewportPersonalIds) {
+            return viewportPersonalIds.has(place.id);
+          }
+          return placeInsideBounds(place, viewportBounds);
+        })
+      : contextual;
 
     if (view === "saved") {
       return filtered.filter((place) => saved.has(place.id));
@@ -334,7 +353,11 @@ export function MapExplorer() {
     view,
     selectedCollection,
     recentVisitByPlace,
-    serverDistances
+    serverDistances,
+    recommendationContext,
+    viewportBounds,
+    viewportPersonalIds,
+    customIds
   ]);
 
   const rankedAll = useMemo(
@@ -345,9 +368,18 @@ export function MapExplorer() {
         "all",
         userLocation,
         { savedIds: saved, ratings, visits },
-        serverDistances
+        serverDistances,
+        recommendationContext
       ),
-    [allPlaces, userLocation, saved, ratings, visits, serverDistances]
+    [
+      allPlaces,
+      userLocation,
+      saved,
+      ratings,
+      visits,
+      serverDistances,
+      recommendationContext
+    ]
   );
 
   const collectionSuggestions = useMemo(() => {
@@ -410,6 +442,15 @@ export function MapExplorer() {
       mapRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const center = mapRef.current.getCenter();
+    void refreshWeather({
+      latitude: center.lat,
+      longitude: center.lng
+    });
+  }, [mapReady, refreshWeather]);
 
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
@@ -497,6 +538,8 @@ export function MapExplorer() {
           "GPS chỉ dùng trong phiên hiện tại và không được ghi vào Supabase."
         );
 
+        void refreshWeather(next);
+
         void personalApi
           .nearby(next, 500)
           .then(({ results }) => {
@@ -532,7 +575,10 @@ export function MapExplorer() {
     }
   }
 
-  async function runPoiSearch(event?: FormEvent) {
+  async function runPoiSearch(
+    event?: FormEvent,
+    boundsOverride?: MapBounds | null
+  ) {
     event?.preventDefault();
     const cleaned = cleanPlainText(query, 120);
     if (cleaned.length < 2) {
@@ -542,7 +588,11 @@ export function MapExplorer() {
 
     setProviderLoading(true);
     try {
-      const result = await personalApi.searchPoi(cleaned, userLocation);
+      const result = await personalApi.searchPoi(
+        cleaned,
+        userLocation,
+        boundsOverride === undefined ? viewportBounds : boundsOverride
+      );
       setProviderResults(result.results);
       if (result.results.length === 0) {
         setNotice("Không tìm thấy POI ngoài cho từ khóa này.");
@@ -554,6 +604,84 @@ export function MapExplorer() {
     } finally {
       setProviderLoading(false);
     }
+  }
+
+  async function searchCurrentArea() {
+    if (!mapRef.current) return;
+
+    const raw = mapRef.current.getBounds();
+    const bounds: MapBounds = {
+      west: raw.getWest(),
+      south: raw.getSouth(),
+      east: raw.getEast(),
+      north: raw.getNorth()
+    };
+    const center = mapRef.current.getCenter();
+
+    setViewportLoading(true);
+    setViewportBounds(bounds);
+
+    try {
+      const [viewportResult] = await Promise.all([
+        personalApi.viewport(bounds),
+        refreshWeather({
+          latitude: center.lat,
+          longitude: center.lng
+        })
+      ]);
+
+      setViewportPersonalIds(
+        new Set(viewportResult.results.map((item) => item.placeId))
+      );
+
+      const cleaned = cleanPlainText(query, 120);
+      if (cleaned.length >= 2) {
+        await runPoiSearch(undefined, bounds);
+      } else {
+        setProviderResults([]);
+      }
+
+      setNotice("Đã lọc theo vùng bản đồ đang nhìn.");
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "Không thể tìm trong khu vực này."
+      );
+    } finally {
+      setViewportLoading(false);
+    }
+  }
+
+  function clearViewportFilter() {
+    setViewportBounds(null);
+    setViewportPersonalIds(null);
+    setProviderResults([]);
+    setNotice("Đã bỏ giới hạn khu vực bản đồ.");
+  }
+
+  function surpriseMe() {
+    const picked = pickSurprisePlace(
+      visiblePlaces.length > 0 ? visiblePlaces : rankedAll,
+      { savedIds: saved, ratings, visits }
+    );
+
+    if (!picked) {
+      setNotice("Chưa có địa điểm phù hợp để chọn bất ngờ.");
+      return;
+    }
+
+    setSelectedId(picked.id);
+    mapRef.current?.flyTo({
+      center: [picked.longitude, picked.latitude],
+      zoom: 14,
+      duration: 700,
+      essential: true
+    });
+
+    const reason =
+      picked.recommendationReasons?.[0] ?? "phù hợp với gu hiện tại";
+    setNotice("🎯 " + picked.name + " · " + reason);
   }
 
   async function importPoi(result: PoiSearchResult) {
