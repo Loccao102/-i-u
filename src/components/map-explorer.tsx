@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -22,18 +23,21 @@ import {
   SearchIcon,
   StarIcon
 } from "./icons";
+import { personalApi } from "@/lib/personal-api";
 import { places as seedPlaces, scenarioLabels } from "@/lib/places";
-import { loadPersonalSnapshot, savePersonalSnapshot } from "@/lib/personal-store";
 import { filterPlaces } from "@/lib/search";
 import type {
+  Collection,
   PersonalRating,
   Place,
+  PoiSearchResult,
   RatingDraft,
   Scenario,
   UserLocation,
   VisitRecord
 } from "@/lib/types";
 import {
+  cleanPlainText,
   suggestScenarios,
   validateNewPlace
 } from "@/lib/validation";
@@ -59,7 +63,7 @@ const scenarioEmoji: Record<Scenario, string> = {
   chill: "☾"
 };
 
-type PersonalView = "discover" | "saved" | "history";
+type PersonalView = "discover" | "saved" | "history" | "collections";
 
 function distanceLabel(value: number) {
   if (value < 1) return Math.round(value * 1000) + " m";
@@ -90,11 +94,19 @@ function revisitLabel(value: RatingDraft["revisit"]) {
   return "Không muốn quay lại";
 }
 
+function placeIcon(place: Pick<Place, "kind">) {
+  if (place.kind.includes("Activity")) return "◇";
+  if (place.kind.includes("Restaurant")) return "◉";
+  if (place.kind.includes("Bar")) return "◐";
+  return "☕";
+}
+
 export function MapExplorer() {
   const [customPlaces, setCustomPlaces] = useState<Place[]>([]);
   const [saved, setSaved] = useState(() => new Set<string>());
   const [ratings, setRatings] = useState<Record<string, PersonalRating>>({});
   const [visits, setVisits] = useState<VisitRecord[]>([]);
+  const [collections, setCollections] = useState<Collection[]>([]);
   const [dataStatus, setDataStatus] = useState<
     "loading" | "ready" | "error"
   >("loading");
@@ -103,6 +115,12 @@ export function MapExplorer() {
   const [query, setQuery] = useState("");
   const [scenario, setScenario] = useState<Scenario | "all">("all");
   const [selectedId, setSelectedId] = useState(seedPlaces[0]!.id);
+  const [selectedCollectionId, setSelectedCollectionId] = useState<
+    string | null
+  >(null);
+
+  const [providerResults, setProviderResults] = useState<PoiSearchResult[]>([]);
+  const [providerLoading, setProviderLoading] = useState(false);
 
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [locationStatus, setLocationStatus] = useState<
@@ -117,46 +135,80 @@ export function MapExplorer() {
   const [ratingContexts, setRatingContexts] = useState<Scenario[]>(["date"]);
   const [ratingNote, setRatingNote] = useState("");
 
+  const [editName, setEditName] = useState("");
+  const [editNote, setEditNote] = useState("");
+  const [editAddress, setEditAddress] = useState("");
+  const [editPrice, setEditPrice] = useState<Place["priceLabel"]>("$$");
+  const [editBestTime, setEditBestTime] = useState("");
+  const [editOpenUntil, setEditOpenUntil] = useState("");
+
+  const [collectionEditingId, setCollectionEditingId] =
+    useState<string | null>(null);
+  const [collectionName, setCollectionName] = useState("");
+  const [collectionDescription, setCollectionDescription] = useState("");
+
   const mapNodeRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markerRefs = useRef<MapLibreMarker[]>([]);
   const addDialogRef = useRef<HTMLDialogElement | null>(null);
+  const editDialogRef = useRef<HTMLDialogElement | null>(null);
   const ratingDialogRef = useRef<HTMLDialogElement | null>(null);
+  const collectionDialogRef = useRef<HTMLDialogElement | null>(null);
 
-  const allPlaces = useMemo(() => {
-    return [...customPlaces, ...seedPlaces].map((place) => {
-      const personal = ratings[place.id];
-      if (!personal) return place;
+  const loadSnapshot = useCallback(async () => {
+    try {
+      const snapshot = await personalApi.snapshot();
+      setCustomPlaces(snapshot.customPlaces);
+      setSaved(new Set(snapshot.savedIds));
+      setRatings(snapshot.ratings);
+      setVisits(snapshot.visits);
+      setCollections(snapshot.collections);
+      setDataStatus("ready");
+    } catch (error) {
+      setDataStatus("error");
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "Không thể tải dữ liệu cá nhân."
+      );
+    }
+  }, []);
 
-      return {
-        ...place,
-        personalRating: personal.stars,
-        scenarios: Array.from(
-          new Set([...place.scenarios, ...personal.contexts])
-        ),
-        note: personal.note || place.note
-      };
-    });
-  }, [customPlaces, ratings]);
+  useEffect(() => {
+    void loadSnapshot();
+  }, [loadSnapshot]);
+
+  const allPlaces = useMemo(
+    () => [...customPlaces, ...seedPlaces],
+    [customPlaces]
+  );
+
+  const customIds = useMemo(
+    () => new Set(customPlaces.map((place) => place.id)),
+    [customPlaces]
+  );
 
   const recentVisitByPlace = useMemo(() => {
     const result = new Map<string, VisitRecord>();
     const ordered = [...visits].sort((a, b) =>
       b.visitedAt.localeCompare(a.visitedAt)
     );
-
     for (const visit of ordered) {
       if (!result.has(visit.placeId)) result.set(visit.placeId, visit);
     }
     return result;
   }, [visits]);
 
+  const selectedCollection =
+    collections.find((item) => item.id === selectedCollectionId) ?? null;
+
   const visiblePlaces = useMemo(() => {
     const filtered = filterPlaces(
       allPlaces,
       query,
       scenario,
-      userLocation
+      userLocation,
+      { savedIds: saved, ratings, visits }
     );
 
     if (view === "saved") {
@@ -167,10 +219,16 @@ export function MapExplorer() {
       return filtered
         .filter((place) => recentVisitByPlace.has(place.id))
         .sort((a, b) => {
-          const aVisit = recentVisitByPlace.get(a.id)?.visitedAt ?? "";
-          const bVisit = recentVisitByPlace.get(b.id)?.visitedAt ?? "";
-          return bVisit.localeCompare(aVisit);
+          const aDate = recentVisitByPlace.get(a.id)?.visitedAt ?? "";
+          const bDate = recentVisitByPlace.get(b.id)?.visitedAt ?? "";
+          return bDate.localeCompare(aDate);
         });
+    }
+
+    if (view === "collections") {
+      if (!selectedCollection) return [];
+      const ids = new Set(selectedCollection.placeIds);
+      return filtered.filter((place) => ids.has(place.id));
     }
 
     return filtered;
@@ -179,63 +237,33 @@ export function MapExplorer() {
     query,
     scenario,
     userLocation,
-    view,
     saved,
+    ratings,
+    visits,
+    view,
+    selectedCollection,
     recentVisitByPlace
   ]);
+
+  const rankedAll = useMemo(
+    () =>
+      filterPlaces(allPlaces, "", "all", userLocation, {
+        savedIds: saved,
+        ratings,
+        visits
+      }),
+    [allPlaces, userLocation, saved, ratings, visits]
+  );
 
   const selected =
     allPlaces.find((place) => place.id === selectedId) ??
     visiblePlaces[0] ??
-    allPlaces[0]!;
+    rankedAll[0] ??
+    seedPlaces[0]!;
 
   const selectedPersonalRating = ratings[selected.id] ?? null;
   const selectedVisit = recentVisitByPlace.get(selected.id) ?? null;
-
-  useEffect(() => {
-    let active = true;
-
-    void loadPersonalSnapshot()
-      .then((snapshot) => {
-        if (!active) return;
-        setCustomPlaces(snapshot.customPlaces);
-        setSaved(new Set(snapshot.savedIds));
-        setRatings(snapshot.ratings);
-        setVisits(snapshot.visits);
-        setDataStatus("ready");
-      })
-      .catch(() => {
-        if (!active) return;
-        setDataStatus("error");
-        setNotice(
-          "Không mở được bộ nhớ cục bộ. Bạn vẫn có thể dùng app trong phiên này."
-        );
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (dataStatus !== "ready") return;
-
-    const timer = window.setTimeout(() => {
-      void savePersonalSnapshot({
-        version: 1,
-        customPlaces,
-        savedIds: [...saved],
-        ratings,
-        visits
-      }).catch(() => {
-        setNotice(
-          "Không lưu được thay đổi trên thiết bị. Dữ liệu phiên hiện tại vẫn còn."
-        );
-      });
-    }, 120);
-
-    return () => window.clearTimeout(timer);
-  }, [customPlaces, saved, ratings, visits, dataStatus]);
+  const isPersonalPlace = customIds.has(selected.id);
 
   useEffect(() => {
     let active = true;
@@ -308,17 +336,14 @@ export function MapExplorer() {
       }
 
       if (userLocation) {
-        const userDot = document.createElement("div");
-        userDot.className = "map-user-dot";
-        userDot.setAttribute("aria-label", "Vị trí hiện tại");
-
-        const userMarker = new maplibre.Marker({
-          element: userDot
-        })
-          .setLngLat([userLocation.longitude, userLocation.latitude])
-          .addTo(mapRef.current);
-
-        markerRefs.current.push(userMarker);
+        const dot = document.createElement("div");
+        dot.className = "map-user-dot";
+        dot.setAttribute("aria-label", "Vị trí hiện tại");
+        markerRefs.current.push(
+          new maplibre.Marker({ element: dot })
+            .setLngLat([userLocation.longitude, userLocation.latitude])
+            .addTo(mapRef.current)
+        );
       }
     });
   }, [mapReady, visiblePlaces, selectedId, userLocation]);
@@ -363,14 +388,12 @@ export function MapExplorer() {
           duration: 700
         });
         setNotice(
-          "Vị trí chỉ dùng để tính khoảng cách trong phiên này và không được lưu."
+          "GPS chỉ dùng trong phiên hiện tại và không được ghi vào SQLite."
         );
       },
       () => {
         setLocationStatus("denied");
-        setNotice(
-          "Không lấy được vị trí. Bạn vẫn có thể dùng bản đồ bình thường."
-        );
+        setNotice("Không lấy được vị trí. Bản đồ vẫn dùng bình thường.");
       },
       {
         enableHighAccuracy: false,
@@ -380,19 +403,62 @@ export function MapExplorer() {
     );
   }
 
-  function toggleSaved(placeId: string) {
-    setSaved((current) => {
-      const next = new Set(current);
-      if (next.has(placeId)) next.delete(placeId);
-      else next.add(placeId);
-      return next;
-    });
-  }
-
   function switchView(next: PersonalView) {
     setView(next);
     setQuery("");
     setScenario("all");
+    setProviderResults([]);
+    if (next === "collections" && !selectedCollectionId && collections[0]) {
+      setSelectedCollectionId(collections[0].id);
+    }
+  }
+
+  async function runPoiSearch(event?: FormEvent) {
+    event?.preventDefault();
+    const cleaned = cleanPlainText(query, 120);
+    if (cleaned.length < 2) {
+      setProviderResults([]);
+      return;
+    }
+
+    setProviderLoading(true);
+    try {
+      const result = await personalApi.searchPoi(cleaned, userLocation);
+      setProviderResults(result.results);
+      if (result.results.length === 0) {
+        setNotice("Không tìm thấy POI ngoài cho từ khóa này.");
+      }
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "Không thể tìm POI."
+      );
+    } finally {
+      setProviderLoading(false);
+    }
+  }
+
+  async function importPoi(result: PoiSearchResult) {
+    try {
+      const place = await personalApi.importPoi(result);
+      await loadSnapshot();
+      setSelectedId(place.id);
+      setProviderResults((current) =>
+        current.filter((item) => item.providerId !== result.providerId)
+      );
+      setNotice("Đã nhập địa điểm vào SQLite cá nhân.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Không thể nhập POI.");
+    }
+  }
+
+  async function toggleSaved(placeId: string) {
+    const next = !saved.has(placeId);
+    try {
+      await personalApi.setSaved(placeId, next);
+      await loadSnapshot();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Không thể lưu.");
+    }
   }
 
   function openRating() {
@@ -406,7 +472,39 @@ export function MapExplorer() {
     ratingDialogRef.current?.showModal();
   }
 
-  function submitNewPlace(event: FormEvent<HTMLFormElement>) {
+  async function submitRating(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    try {
+      await personalApi.saveRating(selected.id, {
+        stars: ratingStars,
+        revisit: ratingRevisit,
+        contexts: ratingContexts,
+        note: ratingNote,
+        recordVisit: !selectedVisit
+      });
+      await loadSnapshot();
+      ratingDialogRef.current?.close();
+      setNotice("Đã lưu đánh giá và cập nhật ranking cá nhân.");
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "Không thể lưu đánh giá."
+      );
+    }
+  }
+
+  async function checkIn() {
+    try {
+      await personalApi.checkIn(selected.id);
+      await loadSnapshot();
+      setNotice("Đã check-in. Bạn có thể đánh giá sau.");
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "Không thể check-in."
+      );
+    }
+  }
+
+  async function submitNewPlace(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     const center = mapRef.current?.getCenter();
@@ -423,78 +521,175 @@ export function MapExplorer() {
       return;
     }
 
-    const detectedScenarios = suggestScenarios(validated.value.note);
-    const id = crypto.randomUUID();
-
-    const newPlace: Place = {
-      id,
+    const detected = suggestScenarios(validated.value.note);
+    const place: Place = {
+      id: crypto.randomUUID(),
       name: validated.value.name,
       kind: "Địa điểm của bạn",
-      description:
-        validated.value.note ||
-        "Chưa có mô tả. Đi thử rồi thêm trải nghiệm của bạn.",
+      description: validated.value.note,
       latitude: validated.value.latitude,
       longitude: validated.value.longitude,
-      distanceKm: 1,
+      distanceKm: 0,
       priceLabel: "$$",
       averageForTwo: "Chưa có dữ liệu",
       publicRating: 0,
-      match: 80,
+      match: 75,
       communityNote: "Địa điểm cá nhân",
       openUntil: "Chưa rõ",
       bestTime: "Chưa có dữ liệu",
       noise: "Vừa",
       crowd: "Vừa",
-      tags: detectedScenarios.map((item) => scenarioLabels[item]),
-      scenarios: detectedScenarios,
-      note: validated.value.note || "Chưa có ghi chú.",
-      accent: "#ff6b5e"
+      tags: detected.map((item) => scenarioLabels[item]),
+      scenarios: detected,
+      note: validated.value.note,
+      accent: "#ff6b5e",
+      source: "personal"
     };
 
-    setCustomPlaces((current) => [newPlace, ...current]);
-    setSelectedId(id);
-    setView("discover");
-    addDialogRef.current?.close();
-    event.currentTarget.reset();
-    setNotice("Đã lưu địa điểm trên thiết bị này.");
+    try {
+      const created = await personalApi.createPlace(place);
+      await loadSnapshot();
+      setSelectedId(created.id);
+      addDialogRef.current?.close();
+      event.currentTarget.reset();
+      setNotice("Đã lưu địa điểm vào SQLite.");
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "Không thể thêm địa điểm."
+      );
+    }
   }
 
-  function submitRating(event: FormEvent<HTMLFormElement>) {
+  function openEditPlace() {
+    setEditName(selected.name);
+    setEditNote(selected.note);
+    setEditAddress(selected.address ?? "");
+    setEditPrice(selected.priceLabel);
+    setEditBestTime(selected.bestTime);
+    setEditOpenUntil(selected.openUntil);
+    editDialogRef.current?.showModal();
+  }
+
+  async function submitEditPlace(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!isPersonalPlace) return;
 
-    const cleanedNote = ratingNote
-      .replace(/[<>]/g, "")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 240);
+    try {
+      const updated: Place = {
+        ...selected,
+        name: cleanPlainText(editName, 100),
+        note: cleanPlainText(editNote, 500),
+        description: cleanPlainText(editNote, 500) || selected.description,
+        address: cleanPlainText(editAddress, 260) || undefined,
+        priceLabel: editPrice,
+        bestTime: cleanPlainText(editBestTime, 100) || "Chưa có dữ liệu",
+        openUntil: cleanPlainText(editOpenUntil, 60) || "Chưa rõ",
+        scenarios: suggestScenarios(editNote || selected.kind),
+        tags: suggestScenarios(editNote || selected.kind).map(
+          (item) => scenarioLabels[item]
+        )
+      };
+      await personalApi.updatePlace(selected.id, updated);
+      await loadSnapshot();
+      editDialogRef.current?.close();
+      setNotice("Đã cập nhật địa điểm.");
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "Không thể sửa địa điểm."
+      );
+    }
+  }
 
-    const now = new Date().toISOString();
+  async function deleteSelectedPlace() {
+    if (!isPersonalPlace) return;
+    if (!window.confirm("Xóa địa điểm này và dữ liệu cá nhân liên quan?")) {
+      return;
+    }
 
-    const personalRating: PersonalRating = {
-      placeId: selected.id,
-      stars: ratingStars,
-      revisit: ratingRevisit,
-      contexts: ratingContexts,
-      note: cleanedNote,
-      visitedAt: now,
-      updatedAt: now
-    };
+    try {
+      await personalApi.deletePlace(selected.id);
+      setSelectedId(seedPlaces[0]!.id);
+      await loadSnapshot();
+      setNotice("Đã xóa địa điểm cá nhân.");
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "Không thể xóa địa điểm."
+      );
+    }
+  }
 
-    const visit: VisitRecord = {
-      id: crypto.randomUUID(),
-      placeId: selected.id,
-      visitedAt: now,
-      ratingStars
-    };
+  function openCreateCollection() {
+    setCollectionEditingId(null);
+    setCollectionName("");
+    setCollectionDescription("");
+    collectionDialogRef.current?.showModal();
+  }
 
-    setRatings((current) => ({
-      ...current,
-      [selected.id]: personalRating
-    }));
-    setVisits((current) => [visit, ...current].slice(0, 5000));
+  function openEditCollection(collection: Collection) {
+    setCollectionEditingId(collection.id);
+    setCollectionName(collection.name);
+    setCollectionDescription(collection.description);
+    collectionDialogRef.current?.showModal();
+  }
 
-    ratingDialogRef.current?.close();
-    setNotice("Đã lưu trải nghiệm của bạn trên thiết bị.");
+  async function submitCollection(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    try {
+      if (collectionEditingId) {
+        await personalApi.updateCollection(collectionEditingId, {
+          name: collectionName,
+          description: collectionDescription
+        });
+      } else {
+        const created = await personalApi.createCollection({
+          name: collectionName,
+          description: collectionDescription
+        });
+        setSelectedCollectionId(created.id);
+      }
+      await loadSnapshot();
+      collectionDialogRef.current?.close();
+      setView("collections");
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "Không thể lưu bộ sưu tập."
+      );
+    }
+  }
+
+  async function deleteSelectedCollection() {
+    if (!selectedCollection) return;
+    if (!window.confirm("Xóa bộ sưu tập này? Địa điểm bên trong không bị xóa.")) {
+      return;
+    }
+    try {
+      await personalApi.deleteCollection(selectedCollection.id);
+      setSelectedCollectionId(null);
+      await loadSnapshot();
+      setNotice("Đã xóa bộ sưu tập.");
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "Không thể xóa bộ sưu tập."
+      );
+    }
+  }
+
+  async function toggleCollectionPlace(collection: Collection) {
+    const included = !collection.placeIds.includes(selected.id);
+    try {
+      await personalApi.setCollectionPlace(
+        collection.id,
+        selected.id,
+        included
+      );
+      await loadSnapshot();
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "Không thể cập nhật bộ sưu tập."
+      );
+    }
   }
 
   function toggleRatingContext(context: Scenario) {
@@ -510,58 +705,46 @@ export function MapExplorer() {
       ? visiblePlaces.length + " địa điểm đã lưu"
       : view === "history"
         ? visiblePlaces.length + " nơi bạn đã đi"
-        : visiblePlaces.length + " địa điểm phù hợp";
-
-  const eyebrow =
-    view === "saved"
-      ? "Muốn quay lại sau"
-      : view === "history"
-        ? "Trải nghiệm của bạn"
-        : "Gợi ý cho bạn";
+        : view === "collections"
+          ? selectedCollection?.name ?? "Bộ sưu tập"
+          : visiblePlaces.length + " địa điểm phù hợp";
 
   return (
     <main className="app-shell">
       <aside className="rail" aria-label="Điều hướng chính">
-        <div className="rail-brand" aria-label="ĐiĐâu">
+        <div className="rail-brand">
           <span className="rail-brand__mark"><PinIcon /></span>
           <strong>ĐiĐâu</strong>
         </div>
 
         <nav className="rail-nav">
           <button
-            className={
-              "rail-action" +
-              (view === "discover" ? " rail-action--active" : "")
-            }
+            className={"rail-action" + (view === "discover" ? " rail-action--active" : "")}
             type="button"
             onClick={() => switchView("discover")}
           >
-            <PinIcon />
-            <span>Bản đồ</span>
+            <PinIcon /><span>Bản đồ</span>
           </button>
-
           <button
-            className={
-              "rail-action" +
-              (view === "saved" ? " rail-action--active" : "")
-            }
+            className={"rail-action" + (view === "saved" ? " rail-action--active" : "")}
             type="button"
             onClick={() => switchView("saved")}
           >
-            <HeartIcon />
-            <span>Đã lưu</span>
+            <HeartIcon /><span>Đã lưu</span>
           </button>
-
           <button
-            className={
-              "rail-action" +
-              (view === "history" ? " rail-action--active" : "")
-            }
+            className={"rail-action" + (view === "history" ? " rail-action--active" : "")}
             type="button"
             onClick={() => switchView("history")}
           >
-            <HistoryIcon />
-            <span>Lịch sử</span>
+            <HistoryIcon /><span>Lịch sử</span>
+          </button>
+          <button
+            className={"rail-action" + (view === "collections" ? " rail-action--active" : "")}
+            type="button"
+            onClick={() => switchView("collections")}
+          >
+            <StarIcon /><span>Bộ sưu tập</span>
           </button>
         </nav>
 
@@ -570,47 +753,50 @@ export function MapExplorer() {
           type="button"
           onClick={() => addDialogRef.current?.showModal()}
         >
-          <PlusIcon />
-          <span>Thêm</span>
+          <PlusIcon /><span>Thêm</span>
         </button>
       </aside>
 
       <header className="topbar">
-        <div className="topbar-search">
+        <form className="topbar-search" onSubmit={(event) => void runPoiSearch(event)}>
           <SearchIcon />
           <input
             aria-label="Tìm địa điểm"
             value={query}
             onChange={(event) => setQuery(event.target.value.slice(0, 120))}
-            placeholder="Date yên tĩnh, cafe gần tôi, ăn tối…"
+            placeholder="Tìm quanh đây hoặc gõ: cafe yên tĩnh…"
           />
           {query ? (
             <button
               className="icon-button"
               type="button"
               aria-label="Xóa tìm kiếm"
-              onClick={() => setQuery("")}
+              onClick={() => {
+                setQuery("");
+                setProviderResults([]);
+              }}
             >
               <CloseIcon />
             </button>
           ) : null}
-        </div>
+          <button className="search-submit" type="submit" disabled={providerLoading}>
+            {providerLoading ? "..." : "Tìm"}
+          </button>
+        </form>
 
         <div className="topbar-actions">
           <span
             className={
               "personal-mode-badge" +
-              (dataStatus === "error"
-                ? " personal-mode-badge--error"
-                : "")
+              (dataStatus === "error" ? " personal-mode-badge--error" : "")
             }
           >
             <span className="privacy-dot" />
             {dataStatus === "loading"
-              ? "Đang mở dữ liệu cá nhân…"
+              ? "Đang mở SQLite…"
               : dataStatus === "error"
-                ? "Chỉ dùng trong phiên"
-                : "Cá nhân · lưu trên thiết bị"}
+                ? "Không tải được dữ liệu"
+                : "Cá nhân · SQLite"}
           </span>
 
           <button
@@ -634,8 +820,8 @@ export function MapExplorer() {
         </div>
       </header>
 
-      <section className="results-pane" aria-label="Kết quả tìm kiếm">
-        <div className="scenario-row" aria-label="Hoàn cảnh">
+      <section className="results-pane" aria-label="Danh sách địa điểm">
+        <div className="scenario-row">
           {scenarios.map((item) => (
             <button
               type="button"
@@ -652,76 +838,122 @@ export function MapExplorer() {
           ))}
         </div>
 
+        {view === "collections" ? (
+          <div className="collection-strip">
+            <div className="collection-strip__scroll">
+              {collections.map((collection) => (
+                <button
+                  type="button"
+                  key={collection.id}
+                  className={
+                    "collection-chip" +
+                    (collection.id === selectedCollectionId
+                      ? " collection-chip--active"
+                      : "")
+                  }
+                  onClick={() => setSelectedCollectionId(collection.id)}
+                >
+                  {collection.name}
+                  <small>{collection.placeIds.length}</small>
+                </button>
+              ))}
+            </div>
+            <button type="button" className="mini-add" onClick={openCreateCollection}>
+              +
+            </button>
+          </div>
+        ) : null}
+
         <div className="results-heading">
           <div>
-            <span className="eyebrow">{eyebrow}</span>
+            <span className="eyebrow">
+              {view === "history"
+                ? "Trải nghiệm của bạn"
+                : view === "collections"
+                  ? selectedCollection?.description || "Bộ sưu tập cá nhân"
+                  : "Gợi ý cá nhân"}
+            </span>
             <h1>{heading}</h1>
           </div>
-          <span className="sort-label">
-            {view === "history" ? "Gần đây nhất" : "Phù hợp nhất"}
-          </span>
+          {view === "collections" && selectedCollection ? (
+            <div className="small-actions">
+              <button type="button" onClick={() => openEditCollection(selectedCollection)}>
+                Sửa
+              </button>
+              <button type="button" onClick={() => void deleteSelectedCollection()}>
+                Xóa
+              </button>
+            </div>
+          ) : (
+            <span className="sort-label">Phù hợp nhất</span>
+          )}
         </div>
+
+        {providerResults.length > 0 ? (
+          <div className="provider-results">
+            <div className="provider-results__title">
+              <strong>OpenStreetMap</strong>
+              <span>{providerResults.length} kết quả ngoài</span>
+            </div>
+            {providerResults.slice(0, 4).map((item) => (
+              <div className="provider-card" key={item.providerId}>
+                <div>
+                  <strong>{item.name}</strong>
+                  <span>{item.displayName}</span>
+                </div>
+                <button type="button" onClick={() => void importPoi(item)}>
+                  + Lưu
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : null}
 
         <div className="place-list">
           {visiblePlaces.length === 0 ? (
             <div className="empty-state">
               <strong>
-                {view === "saved"
-                  ? "Bạn chưa lưu chỗ nào ở bộ lọc này."
-                  : view === "history"
-                    ? "Chưa có trải nghiệm nào."
-                    : "Chưa có chỗ nào khớp."}
+                {view === "collections" && collections.length === 0
+                  ? "Chưa có bộ sưu tập."
+                  : "Chưa có địa điểm trong chế độ này."}
               </strong>
               <span>
-                {view === "history"
-                  ? "Đánh giá một địa điểm sau khi đi để bắt đầu lịch sử cá nhân."
-                  : "Thử bớt từ khóa hoặc đổi hoàn cảnh."}
+                {view === "collections"
+                  ? "Tạo bộ sưu tập rồi thêm địa điểm từ phần chi tiết."
+                  : "Thử đổi bộ lọc hoặc tìm POI thật ở ô phía trên."}
               </span>
             </div>
           ) : (
             visiblePlaces.map((place) => {
-              const personal = ratings[place.id];
+              const rating = ratings[place.id];
               const visit = recentVisitByPlace.get(place.id);
-
               return (
                 <button
                   type="button"
                   key={place.id}
                   className={
                     "place-card" +
-                    (selected.id === place.id
-                      ? " place-card--active"
-                      : "")
+                    (selected.id === place.id ? " place-card--active" : "")
                   }
                   onClick={() => setSelectedId(place.id)}
                 >
                   <span
                     className="place-thumb"
-                    style={
-                      {
-                        "--place-accent": place.accent
-                      } as CSSProperties
-                    }
+                    style={{ "--place-accent": place.accent } as CSSProperties}
                     aria-hidden="true"
                   >
-                    {place.kind.includes("Activity")
-                      ? "◇"
-                      : place.kind.includes("Restaurant")
-                        ? "◉"
-                        : "☕"}
+                    {placeIcon(place)}
                   </span>
-
                   <span className="place-card__content">
                     <span className="place-card__top">
                       <strong>{place.name}</strong>
                       <small>{place.match}%</small>
                     </span>
-
                     <span className="place-card__meta">
                       <b>
                         ★{" "}
-                        {personal
-                          ? personal.stars.toFixed(1) + " của bạn"
+                        {rating
+                          ? rating.stars.toFixed(1) + " của bạn"
                           : place.publicRating > 0
                             ? place.publicRating.toFixed(1)
                             : "Mới"}
@@ -731,14 +963,9 @@ export function MapExplorer() {
                       <span>·</span>
                       <span>{place.priceLabel}</span>
                     </span>
-
                     <span className="tag-line">
-                      {view === "history" && visit ? (
-                        <i>Đã đi {formatVisitedAt(visit.visitedAt)}</i>
-                      ) : null}
-                      {place.tags.slice(0, 2).map((tag) => (
-                        <i key={tag}>{tag}</i>
-                      ))}
+                      {visit ? <i>Đã đi {formatVisitedAt(visit.visitedAt)}</i> : null}
+                      {place.tags.slice(0, 2).map((tag) => <i key={tag}>{tag}</i>)}
                     </span>
                   </span>
                 </button>
@@ -753,90 +980,65 @@ export function MapExplorer() {
           onClick={() => addDialogRef.current?.showModal()}
         >
           <PlusIcon />
-          Thêm một địa điểm bạn biết
+          Thêm địa điểm thủ công
         </button>
       </section>
 
       <section className="map-pane" aria-label="Bản đồ">
         <div ref={mapNodeRef} className="map-canvas" />
-
         <div className="map-floating-top">
           <span>
-            {view === "history"
-              ? "Lịch sử cá nhân"
-              : view === "saved"
-                ? "Những nơi bạn đã lưu"
-                : scenario === "all"
-                  ? "Ưu tiên trải nghiệm của bạn"
-                  : "Đang tìm cho: " + readableScenario(scenario)}
+            {view === "discover"
+              ? "Ranking học từ rating + lịch sử + Saved"
+              : view === "collections"
+                ? "Bộ sưu tập cá nhân"
+                : view === "history"
+                  ? "Lịch sử đã đi"
+                  : "Địa điểm đã lưu"}
           </span>
-          <button
-            type="button"
-            onClick={() => {
-              const center = mapRef.current?.getCenter();
-              if (center) {
-                setNotice(
-                  "Tâm bản đồ: " +
-                    center.lat.toFixed(3) +
-                    ", " +
-                    center.lng.toFixed(3)
-                );
-              }
-            }}
-          >
-            Khu vực này
+          <button type="button" onClick={() => void runPoiSearch()}>
+            Tìm khu vực này
           </button>
         </div>
-
         <div className="privacy-pill">
           <span className="privacy-dot" />
           {userLocation
-            ? "Vị trí hiện tại không được lưu"
-            : "Chưa dùng vị trí chính xác"}
+            ? "GPS chỉ sống trong phiên"
+            : "SQLite không lưu GPS hiện tại"}
         </div>
       </section>
 
       <aside className="detail-pane" aria-label="Chi tiết địa điểm">
         <div
           className="detail-hero"
-          style={
-            {
-              "--place-accent": selected.accent
-            } as CSSProperties
-          }
+          style={{ "--place-accent": selected.accent } as CSSProperties}
         >
           <span className="detail-hero__icon" aria-hidden="true">
-            {selected.kind.includes("Activity")
-              ? "◇"
-              : selected.kind.includes("Restaurant")
-                ? "◉"
-                : "☕"}
+            {placeIcon(selected)}
           </span>
           <div className="detail-hero__match">
             <strong>{selected.match}%</strong>
-            <span>phù hợp</span>
+            <span>match cá nhân</span>
           </div>
         </div>
 
         <div className="detail-body">
           <div className="detail-title-row">
             <div>
-              <span className="eyebrow">{selected.kind}</span>
+              <span className="eyebrow">
+                {selected.kind}
+                {selected.source === "provider" ? " · OSM" : ""}
+              </span>
               <h2>{selected.name}</h2>
             </div>
-
             <button
               className={
                 "save-button" +
-                (saved.has(selected.id)
-                  ? " save-button--active"
-                  : "")
+                (saved.has(selected.id) ? " save-button--active" : "")
               }
               type="button"
-              onClick={() => toggleSaved(selected.id)}
-              aria-label={
-                saved.has(selected.id) ? "Bỏ lưu" : "Lưu địa điểm"
-              }
+              onClick={() => void toggleSaved(selected.id)}
+              aria-label={saved.has(selected.id) ? "Bỏ lưu" : "Lưu"}
             >
               <HeartIcon />
             </button>
@@ -858,15 +1060,17 @@ export function MapExplorer() {
             <span>{distanceLabel(selected.distanceKm)}</span>
             <span>·</span>
             <span>{selected.priceLabel}</span>
-            <span>·</span>
-            <span>đến {selected.openUntil}</span>
           </div>
+
+          {selected.address ? (
+            <p className="place-address">{selected.address}</p>
+          ) : null}
 
           <div className="tag-line tag-line--large">
             {selected.tags.map((tag) => <i key={tag}>{tag}</i>)}
           </div>
 
-          <div className="primary-actions">
+          <div className="primary-actions primary-actions--three">
             <button
               type="button"
               className="primary-button"
@@ -879,47 +1083,32 @@ export function MapExplorer() {
                 window.open(url, "_blank", "noopener,noreferrer");
               }}
             >
-              <LocationIcon />
-              Chỉ đường
+              <LocationIcon /> Chỉ đường
             </button>
-
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={openRating}
-            >
-              <StarIcon />
-              {selectedPersonalRating ? "Sửa đánh giá" : "Đã đi"}
+            <button type="button" className="secondary-button" onClick={() => void checkIn()}>
+              <PinIcon /> Check-in
+            </button>
+            <button type="button" className="secondary-button" onClick={openRating}>
+              <StarIcon /> Đánh giá
             </button>
           </div>
 
-          <section className="detail-section">
-            <span className="eyebrow">Hợp với</span>
-            <div className="context-grid">
-              {selected.scenarios.slice(0, 4).map((item) => (
-                <div key={item}>
-                  <span>{scenarioEmoji[item]}</span>
-                  <strong>{scenarioLabels[item]}</strong>
-                  <b>
-                    {selectedPersonalRating?.contexts.includes(item)
-                      ? "Bạn chọn"
-                      : "Phù hợp"}
-                  </b>
-                </div>
-              ))}
+          {isPersonalPlace ? (
+            <div className="owner-actions">
+              <button type="button" onClick={openEditPlace}>Sửa địa điểm</button>
+              <button className="danger-text" type="button" onClick={() => void deleteSelectedPlace()}>
+                Xóa
+              </button>
             </div>
-          </section>
+          ) : null}
 
           <section className="detail-section">
             <span className="eyebrow">Trải nghiệm của bạn</span>
-
             {selectedPersonalRating ? (
               <div className="personal-summary">
                 <div>
                   <strong>★ {selectedPersonalRating.stars.toFixed(1)}</strong>
-                  <span>
-                    {revisitLabel(selectedPersonalRating.revisit)}
-                  </span>
+                  <span>{revisitLabel(selectedPersonalRating.revisit)}</span>
                 </div>
                 <div>
                   <strong>
@@ -930,20 +1119,41 @@ export function MapExplorer() {
                   <span>Lần gần nhất</span>
                 </div>
                 {selectedPersonalRating.note ? (
-                  <blockquote>
-                    “{selectedPersonalRating.note}”
-                  </blockquote>
+                  <blockquote>“{selectedPersonalRating.note}”</blockquote>
                 ) : null}
               </div>
             ) : (
               <div className="personal-empty">
-                <strong>Chưa có đánh giá cá nhân.</strong>
-                <span>
-                  Sau khi đi, một rating ngắn sẽ làm gợi ý sau này chính xác hơn.
-                </span>
-                <button type="button" onClick={openRating}>
-                  Thêm trải nghiệm
-                </button>
+                <strong>Chưa có rating cá nhân.</strong>
+                <span>Check-in trước, hoặc đánh giá luôn sau khi đi.</span>
+                <button type="button" onClick={openRating}>Thêm đánh giá</button>
+              </div>
+            )}
+          </section>
+
+          <section className="detail-section">
+            <span className="eyebrow">Bộ sưu tập</span>
+            {collections.length === 0 ? (
+              <div className="personal-empty">
+                <strong>Chưa có bộ sưu tập.</strong>
+                <button type="button" onClick={openCreateCollection}>Tạo bộ sưu tập</button>
+              </div>
+            ) : (
+              <div className="collection-memberships">
+                {collections.map((collection) => {
+                  const included = collection.placeIds.includes(selected.id);
+                  return (
+                    <button
+                      type="button"
+                      key={collection.id}
+                      className={included ? "is-included" : ""}
+                      onClick={() => void toggleCollectionPlace(collection)}
+                    >
+                      <span>{collection.name}</span>
+                      <b>{included ? "✓" : "+"}</b>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </section>
@@ -951,33 +1161,14 @@ export function MapExplorer() {
           <section className="detail-section">
             <span className="eyebrow">Cần biết</span>
             <dl className="fact-grid">
-              <div>
-                <dt>Giá tham khảo</dt>
-                <dd>{selected.averageForTwo}</dd>
-              </div>
-              <div>
-                <dt>Khoảng giá</dt>
-                <dd>{priceText(selected.priceLabel)}</dd>
-              </div>
-              <div>
-                <dt>Không gian</dt>
-                <dd>{selected.noise}</dd>
-              </div>
-              <div>
-                <dt>Đông đúc</dt>
-                <dd>{selected.crowd}</dd>
-              </div>
-              <div>
-                <dt>Đi đẹp nhất</dt>
-                <dd>{selected.bestTime}</dd>
-              </div>
-              <div>
-                <dt>Khoảng cách</dt>
-                <dd>{distanceLabel(selected.distanceKm)}</dd>
-              </div>
+              <div><dt>Giá tham khảo</dt><dd>{selected.averageForTwo}</dd></div>
+              <div><dt>Khoảng giá</dt><dd>{priceText(selected.priceLabel)}</dd></div>
+              <div><dt>Không gian</dt><dd>{selected.noise}</dd></div>
+              <div><dt>Đông đúc</dt><dd>{selected.crowd}</dd></div>
+              <div><dt>Đi đẹp nhất</dt><dd>{selected.bestTime}</dd></div>
+              <div><dt>Đóng cửa</dt><dd>{selected.openUntil}</dd></div>
             </dl>
-
-            <blockquote>“{selected.note}”</blockquote>
+            {selected.note ? <blockquote>“{selected.note}”</blockquote> : null}
           </section>
         </div>
       </aside>
@@ -985,12 +1176,7 @@ export function MapExplorer() {
       {notice ? (
         <div className="toast" role="status">
           <span>{notice}</span>
-          <button
-            type="button"
-            onClick={() => setNotice(null)}
-            aria-label="Đóng"
-            className="icon-button"
-          >
+          <button className="icon-button" type="button" onClick={() => setNotice(null)} aria-label="Đóng">
             <CloseIcon />
           </button>
         </div>
@@ -999,117 +1185,70 @@ export function MapExplorer() {
       <dialog className="app-dialog" ref={addDialogRef}>
         <form className="dialog-card" onSubmit={submitNewPlace}>
           <div className="dialog-header">
-            <div>
-              <span className="eyebrow">Địa điểm cá nhân</span>
-              <h2>Thêm một chỗ</h2>
-            </div>
-            <button
-              className="icon-button"
-              type="button"
-              onClick={() => addDialogRef.current?.close()}
-              aria-label="Đóng"
-            >
-              <CloseIcon />
-            </button>
+            <div><span className="eyebrow">SQLite cá nhân</span><h2>Thêm địa điểm</h2></div>
+            <button className="icon-button" type="button" onClick={() => addDialogRef.current?.close()}><CloseIcon /></button>
           </div>
-
           <p className="dialog-copy">
-            Pin được đặt tại <strong>tâm bản đồ hiện tại</strong>. Chỉ cần
-            tên và điều bạn biết; app tự gợi ý hoàn cảnh.
+            Pin được đặt tại tâm bản đồ. App tự suy ra context từ ghi chú.
           </p>
-
           <label className="field">
-            <span>Tên địa điểm</span>
-            <input
-              name="name"
-              required
-              minLength={2}
-              maxLength={80}
-              autoComplete="off"
-              placeholder="Ví dụ: Hidden Garden"
-            />
+            <span>Tên</span>
+            <input name="name" required minLength={2} maxLength={80} />
           </label>
-
           <label className="field">
-            <span>Bạn biết gì về chỗ này?</span>
-            <textarea
-              name="note"
-              maxLength={300}
-              rows={4}
-              placeholder="Cafe khá yên, đi tối đẹp, hợp date…"
-            />
+            <span>Ghi chú</span>
+            <textarea name="note" rows={4} maxLength={300} placeholder="Yên, hợp date, đi tối đẹp…" />
           </label>
-
-          <div className="security-note">
-            Dữ liệu này được lưu bằng IndexedDB trên chính thiết bị của bạn.
-            Vị trí hiện tại của bạn không được lưu cùng dữ liệu.
-          </div>
-
-          <button
-            className="primary-button primary-button--wide"
-            type="submit"
-          >
-            <PlusIcon />
+          <button className="primary-button primary-button--wide" type="submit">
             Lưu địa điểm
           </button>
+        </form>
+      </dialog>
+
+      <dialog className="app-dialog" ref={editDialogRef}>
+        <form className="dialog-card" onSubmit={submitEditPlace}>
+          <div className="dialog-header">
+            <div><span className="eyebrow">Quản lý địa điểm</span><h2>Sửa {selected.name}</h2></div>
+            <button className="icon-button" type="button" onClick={() => editDialogRef.current?.close()}><CloseIcon /></button>
+          </div>
+          <label className="field"><span>Tên</span><input value={editName} onChange={(e) => setEditName(e.target.value)} maxLength={100} required /></label>
+          <label className="field"><span>Địa chỉ</span><input value={editAddress} onChange={(e) => setEditAddress(e.target.value)} maxLength={260} /></label>
+          <div className="two-fields">
+            <label className="field"><span>Giá</span><select value={editPrice} onChange={(e) => setEditPrice(e.target.value as Place["priceLabel"])}><option value="$">$</option><option value="$$">$$</option><option value="$$$">$$$</option></select></label>
+            <label className="field"><span>Đóng cửa</span><input value={editOpenUntil} onChange={(e) => setEditOpenUntil(e.target.value)} maxLength={60} /></label>
+          </div>
+          <label className="field"><span>Thời gian đẹp nhất</span><input value={editBestTime} onChange={(e) => setEditBestTime(e.target.value)} maxLength={100} /></label>
+          <label className="field"><span>Ghi chú</span><textarea value={editNote} onChange={(e) => setEditNote(e.target.value)} rows={4} maxLength={500} /></label>
+          <button className="primary-button primary-button--wide" type="submit">Lưu thay đổi</button>
         </form>
       </dialog>
 
       <dialog className="app-dialog" ref={ratingDialogRef}>
         <form className="dialog-card" onSubmit={submitRating}>
           <div className="dialog-header">
-            <div>
-              <span className="eyebrow">Trải nghiệm cá nhân</span>
-              <h2>{selected.name}</h2>
-            </div>
-            <button
-              className="icon-button"
-              type="button"
-              onClick={() => ratingDialogRef.current?.close()}
-              aria-label="Đóng"
-            >
-              <CloseIcon />
-            </button>
+            <div><span className="eyebrow">Tín hiệu ranking</span><h2>Đánh giá {selected.name}</h2></div>
+            <button className="icon-button" type="button" onClick={() => ratingDialogRef.current?.close()}><CloseIcon /></button>
           </div>
-
-          <div
-            className="rating-stars"
-            aria-label={"Đánh giá " + ratingStars + " sao"}
-          >
-            {[1, 2, 3, 4, 5].map((star) => (
+          <div className="rating-stars">
+            {[1,2,3,4,5].map((star) => (
               <button
                 key={star}
                 type="button"
-                className={
-                  ratingStars >= star
-                    ? "rating-star rating-star--active"
-                    : "rating-star"
-                }
+                className={ratingStars >= star ? "rating-star rating-star--active" : "rating-star"}
                 onClick={() => setRatingStars(star)}
-                aria-label={star + " sao"}
               >
                 <StarIcon />
               </button>
             ))}
           </div>
-
           <fieldset className="dialog-fieldset">
             <legend>Hợp với</legend>
             <div className="scenario-row scenario-row--wrap">
-              {(
-                scenarios.filter(
-                  (item): item is Scenario => item !== "all"
-                )
-              ).map((item) => (
+              {scenarios.filter((item): item is Scenario => item !== "all").map((item) => (
                 <button
                   type="button"
                   key={item}
-                  className={
-                    "scenario-chip" +
-                    (ratingContexts.includes(item)
-                      ? " scenario-chip--active"
-                      : "")
-                  }
+                  className={"scenario-chip" + (ratingContexts.includes(item) ? " scenario-chip--active" : "")}
                   onClick={() => toggleRatingContext(item)}
                 >
                   {scenarioLabels[item]}
@@ -1117,55 +1256,37 @@ export function MapExplorer() {
               ))}
             </div>
           </fieldset>
-
           <fieldset className="dialog-fieldset">
             <legend>Có quay lại không?</legend>
             <div className="segmented">
-              {(
-                [
-                  ["yes", "Có"],
-                  ["maybe", "Có thể"],
-                  ["no", "Không"]
-                ] as const
-              ).map(([value, label]) => (
-                <button
-                  type="button"
-                  key={value}
-                  className={
-                    ratingRevisit === value ? "is-active" : ""
-                  }
-                  onClick={() => setRatingRevisit(value)}
-                >
+              {([["yes","Có"],["maybe","Có thể"],["no","Không"]] as const).map(([value,label]) => (
+                <button type="button" key={value} className={ratingRevisit === value ? "is-active" : ""} onClick={() => setRatingRevisit(value)}>
                   {label}
                 </button>
               ))}
             </div>
           </fieldset>
-
           <label className="field">
-            <span>
-              Một điều nên nhớ? <small>Tùy chọn</small>
-            </span>
-            <textarea
-              value={ratingNote}
-              onChange={(event) =>
-                setRatingNote(event.target.value.slice(0, 240))
-              }
-              rows={3}
-              placeholder="Đi tối đẹp hơn, cuối tuần hơi đông…"
-            />
+            <span>Một điều nên nhớ?</span>
+            <textarea value={ratingNote} onChange={(e) => setRatingNote(e.target.value.slice(0,240))} rows={3} />
           </label>
+          <button className="primary-button primary-button--wide" type="submit">Lưu đánh giá</button>
+        </form>
+      </dialog>
 
-          <div className="security-note">
-            Rating và lịch sử được lưu cục bộ trên thiết bị. Chưa có tài
-            khoản hoặc đồng bộ cloud ở giai đoạn này.
+      <dialog className="app-dialog" ref={collectionDialogRef}>
+        <form className="dialog-card" onSubmit={submitCollection}>
+          <div className="dialog-header">
+            <div>
+              <span className="eyebrow">Bộ sưu tập</span>
+              <h2>{collectionEditingId ? "Sửa bộ sưu tập" : "Tạo bộ sưu tập"}</h2>
+            </div>
+            <button className="icon-button" type="button" onClick={() => collectionDialogRef.current?.close()}><CloseIcon /></button>
           </div>
-
-          <button
-            className="primary-button primary-button--wide"
-            type="submit"
-          >
-            Lưu trải nghiệm
+          <label className="field"><span>Tên</span><input value={collectionName} onChange={(e) => setCollectionName(e.target.value)} maxLength={60} required placeholder="Date tối, Cafe yên…" /></label>
+          <label className="field"><span>Mô tả</span><textarea value={collectionDescription} onChange={(e) => setCollectionDescription(e.target.value)} maxLength={180} rows={3} /></label>
+          <button className="primary-button primary-button--wide" type="submit">
+            {collectionEditingId ? "Lưu thay đổi" : "Tạo bộ sưu tập"}
           </button>
         </form>
       </dialog>
