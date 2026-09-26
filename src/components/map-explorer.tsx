@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type FormEvent
 } from "react";
 import type {
@@ -14,20 +15,23 @@ import type {
 import {
   CloseIcon,
   HeartIcon,
+  HistoryIcon,
   LocationIcon,
   PinIcon,
   PlusIcon,
   SearchIcon,
-  StarIcon,
-  UsersIcon
+  StarIcon
 } from "./icons";
 import { places as seedPlaces, scenarioLabels } from "@/lib/places";
+import { loadPersonalSnapshot, savePersonalSnapshot } from "@/lib/personal-store";
 import { filterPlaces } from "@/lib/search";
 import type {
+  PersonalRating,
   Place,
   RatingDraft,
   Scenario,
-  UserLocation
+  UserLocation,
+  VisitRecord
 } from "@/lib/types";
 import {
   suggestScenarios,
@@ -35,6 +39,7 @@ import {
 } from "@/lib/validation";
 
 const defaultCenter: [number, number] = [105.8342, 21.0278];
+
 const scenarios: Array<Scenario | "all"> = [
   "all",
   "date",
@@ -54,6 +59,8 @@ const scenarioEmoji: Record<Scenario, string> = {
   chill: "☾"
 };
 
+type PersonalView = "discover" | "saved" | "history";
+
 function distanceLabel(value: number) {
   if (value < 1) return Math.round(value * 1000) + " m";
   return value.toFixed(value < 10 ? 1 : 0) + " km";
@@ -67,22 +74,48 @@ function readableScenario(value: Scenario | "all") {
   return value === "all" ? "Tất cả" : scenarioLabels[value];
 }
 
+function formatVisitedAt(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Không rõ";
+  return new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  }).format(date);
+}
+
+function revisitLabel(value: RatingDraft["revisit"]) {
+  if (value === "yes") return "Muốn quay lại";
+  if (value === "maybe") return "Có thể quay lại";
+  return "Không muốn quay lại";
+}
+
 export function MapExplorer() {
-  const [allPlaces, setAllPlaces] = useState<Place[]>(seedPlaces);
+  const [customPlaces, setCustomPlaces] = useState<Place[]>([]);
+  const [saved, setSaved] = useState(() => new Set<string>());
+  const [ratings, setRatings] = useState<Record<string, PersonalRating>>({});
+  const [visits, setVisits] = useState<VisitRecord[]>([]);
+  const [dataStatus, setDataStatus] = useState<
+    "loading" | "ready" | "error"
+  >("loading");
+
+  const [view, setView] = useState<PersonalView>("discover");
   const [query, setQuery] = useState("");
   const [scenario, setScenario] = useState<Scenario | "all">("all");
   const [selectedId, setSelectedId] = useState(seedPlaces[0]!.id);
-  const [saved, setSaved] = useState(() => new Set<string>(["lake-house"]));
+
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [locationStatus, setLocationStatus] = useState<
     "idle" | "loading" | "ready" | "denied"
   >("idle");
   const [mapReady, setMapReady] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+
   const [ratingStars, setRatingStars] = useState(5);
   const [ratingRevisit, setRatingRevisit] =
     useState<RatingDraft["revisit"]>("yes");
   const [ratingContexts, setRatingContexts] = useState<Scenario[]>(["date"]);
+  const [ratingNote, setRatingNote] = useState("");
 
   const mapNodeRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -90,15 +123,119 @@ export function MapExplorer() {
   const addDialogRef = useRef<HTMLDialogElement | null>(null);
   const ratingDialogRef = useRef<HTMLDialogElement | null>(null);
 
-  const visiblePlaces = useMemo(
-    () => filterPlaces(allPlaces, query, scenario, userLocation),
-    [allPlaces, query, scenario, userLocation]
-  );
+  const allPlaces = useMemo(() => {
+    return [...customPlaces, ...seedPlaces].map((place) => {
+      const personal = ratings[place.id];
+      if (!personal) return place;
+
+      return {
+        ...place,
+        personalRating: personal.stars,
+        scenarios: Array.from(
+          new Set([...place.scenarios, ...personal.contexts])
+        ),
+        note: personal.note || place.note
+      };
+    });
+  }, [customPlaces, ratings]);
+
+  const recentVisitByPlace = useMemo(() => {
+    const result = new Map<string, VisitRecord>();
+    const ordered = [...visits].sort((a, b) =>
+      b.visitedAt.localeCompare(a.visitedAt)
+    );
+
+    for (const visit of ordered) {
+      if (!result.has(visit.placeId)) result.set(visit.placeId, visit);
+    }
+    return result;
+  }, [visits]);
+
+  const visiblePlaces = useMemo(() => {
+    const filtered = filterPlaces(
+      allPlaces,
+      query,
+      scenario,
+      userLocation
+    );
+
+    if (view === "saved") {
+      return filtered.filter((place) => saved.has(place.id));
+    }
+
+    if (view === "history") {
+      return filtered
+        .filter((place) => recentVisitByPlace.has(place.id))
+        .sort((a, b) => {
+          const aVisit = recentVisitByPlace.get(a.id)?.visitedAt ?? "";
+          const bVisit = recentVisitByPlace.get(b.id)?.visitedAt ?? "";
+          return bVisit.localeCompare(aVisit);
+        });
+    }
+
+    return filtered;
+  }, [
+    allPlaces,
+    query,
+    scenario,
+    userLocation,
+    view,
+    saved,
+    recentVisitByPlace
+  ]);
 
   const selected =
     allPlaces.find((place) => place.id === selectedId) ??
     visiblePlaces[0] ??
     allPlaces[0]!;
+
+  const selectedPersonalRating = ratings[selected.id] ?? null;
+  const selectedVisit = recentVisitByPlace.get(selected.id) ?? null;
+
+  useEffect(() => {
+    let active = true;
+
+    void loadPersonalSnapshot()
+      .then((snapshot) => {
+        if (!active) return;
+        setCustomPlaces(snapshot.customPlaces);
+        setSaved(new Set(snapshot.savedIds));
+        setRatings(snapshot.ratings);
+        setVisits(snapshot.visits);
+        setDataStatus("ready");
+      })
+      .catch(() => {
+        if (!active) return;
+        setDataStatus("error");
+        setNotice(
+          "Không mở được bộ nhớ cục bộ. Bạn vẫn có thể dùng app trong phiên này."
+        );
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (dataStatus !== "ready") return;
+
+    const timer = window.setTimeout(() => {
+      void savePersonalSnapshot({
+        version: 1,
+        customPlaces,
+        savedIds: [...saved],
+        ratings,
+        visits
+      }).catch(() => {
+        setNotice(
+          "Không lưu được thay đổi trên thiết bị. Dữ liệu phiên hiện tại vẫn còn."
+        );
+      });
+    }, 120);
+
+    return () => window.clearTimeout(timer);
+  }, [customPlaces, saved, ratings, visits, dataStatus]);
 
   useEffect(() => {
     let active = true;
@@ -153,13 +290,12 @@ export function MapExplorer() {
         const element = document.createElement("button");
         element.type = "button";
         element.className =
-          "map-marker" + (place.id === selectedId ? " map-marker--active" : "");
+          "map-marker" +
+          (place.id === selectedId ? " map-marker--active" : "");
         element.setAttribute("aria-label", "Mở " + place.name);
         element.textContent = place.match + "%";
         element.style.setProperty("--marker-accent", place.accent);
-        element.addEventListener("click", () => {
-          setSelectedId(place.id);
-        });
+        element.addEventListener("click", () => setSelectedId(place.id));
 
         const marker = new maplibre.Marker({
           element,
@@ -198,7 +334,10 @@ export function MapExplorer() {
   }, [mapReady, selected]);
 
   useEffect(() => {
-    if (visiblePlaces.length > 0 && !visiblePlaces.some((p) => p.id === selectedId)) {
+    if (
+      visiblePlaces.length > 0 &&
+      !visiblePlaces.some((place) => place.id === selectedId)
+    ) {
       setSelectedId(visiblePlaces[0]!.id);
     }
   }, [visiblePlaces, selectedId]);
@@ -223,11 +362,15 @@ export function MapExplorer() {
           zoom: 13,
           duration: 700
         });
-        setNotice("Vị trí chỉ được giữ trong bộ nhớ của phiên này.");
+        setNotice(
+          "Vị trí chỉ dùng để tính khoảng cách trong phiên này và không được lưu."
+        );
       },
       () => {
         setLocationStatus("denied");
-        setNotice("Không lấy được vị trí. Bạn vẫn có thể dùng bản đồ bình thường.");
+        setNotice(
+          "Không lấy được vị trí. Bạn vẫn có thể dùng bản đồ bình thường."
+        );
       },
       {
         enableHighAccuracy: false,
@@ -246,14 +389,28 @@ export function MapExplorer() {
     });
   }
 
-  function openAddDialog() {
-    addDialogRef.current?.showModal();
+  function switchView(next: PersonalView) {
+    setView(next);
+    setQuery("");
+    setScenario("all");
+  }
+
+  function openRating() {
+    const current = ratings[selected.id];
+    setRatingStars(current?.stars ?? 5);
+    setRatingRevisit(current?.revisit ?? "yes");
+    setRatingContexts(
+      current?.contexts.length ? current.contexts : selected.scenarios.slice(0, 2)
+    );
+    setRatingNote(current?.note ?? "");
+    ratingDialogRef.current?.showModal();
   }
 
   function submitNewPlace(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     const center = mapRef.current?.getCenter();
+
     const validated = validateNewPlace({
       name: String(data.get("name") ?? ""),
       note: String(data.get("note") ?? ""),
@@ -268,72 +425,76 @@ export function MapExplorer() {
 
     const detectedScenarios = suggestScenarios(validated.value.note);
     const id = crypto.randomUUID();
+
     const newPlace: Place = {
       id,
       name: validated.value.name,
-      kind: "Địa điểm do nhóm thêm",
+      kind: "Địa điểm của bạn",
       description:
-        validated.value.note || "Chưa có mô tả. Hãy đi thử và để lại đánh giá.",
+        validated.value.note ||
+        "Chưa có mô tả. Đi thử rồi thêm trải nghiệm của bạn.",
       latitude: validated.value.latitude,
       longitude: validated.value.longitude,
-      distanceKm: userLocation ? 0 : 1,
+      distanceKm: 1,
       priceLabel: "$$",
       averageForTwo: "Chưa có dữ liệu",
-      rating: 0,
-      groupRating: 0,
+      publicRating: 0,
       match: 80,
-      revisit: "Chưa có đánh giá",
+      communityNote: "Địa điểm cá nhân",
       openUntil: "Chưa rõ",
       bestTime: "Chưa có dữ liệu",
       noise: "Vừa",
       crowd: "Vừa",
       tags: detectedScenarios.map((item) => scenarioLabels[item]),
       scenarios: detectedScenarios,
-      note: validated.value.note || "Chưa có tip từ nhóm.",
+      note: validated.value.note || "Chưa có ghi chú.",
       accent: "#ff6b5e"
     };
 
-    setAllPlaces((current) => [newPlace, ...current]);
+    setCustomPlaces((current) => [newPlace, ...current]);
     setSelectedId(id);
+    setView("discover");
     addDialogRef.current?.close();
     event.currentTarget.reset();
-    setNotice(
-      "Đã thêm vào phiên hiện tại. Chưa lưu lên server cho tới khi có auth an toàn."
-    );
+    setNotice("Đã lưu địa điểm trên thiết bị này.");
   }
 
   function submitRating(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    const note = String(data.get("ratingNote") ?? "")
+
+    const cleanedNote = ratingNote
       .replace(/[<>]/g, "")
+      .replace(/\s+/g, " ")
       .trim()
       .slice(0, 240);
 
-    setAllPlaces((current) =>
-      current.map((place) =>
-        place.id !== selected.id
-          ? place
-          : {
-              ...place,
-              groupRating: ratingStars,
-              rating: place.rating || ratingStars,
-              scenarios: Array.from(
-                new Set([...place.scenarios, ...ratingContexts])
-              ),
-              note: note || place.note,
-              revisit:
-                ratingRevisit === "yes"
-                  ? "Bạn sẽ quay lại"
-                  : ratingRevisit === "maybe"
-                    ? "Bạn còn cân nhắc"
-                    : "Bạn không muốn quay lại"
-            }
-      )
-    );
+    const now = new Date().toISOString();
+
+    const personalRating: PersonalRating = {
+      placeId: selected.id,
+      stars: ratingStars,
+      revisit: ratingRevisit,
+      contexts: ratingContexts,
+      note: cleanedNote,
+      visitedAt: now,
+      updatedAt: now
+    };
+
+    const visit: VisitRecord = {
+      id: crypto.randomUUID(),
+      placeId: selected.id,
+      visitedAt: now,
+      ratingStars
+    };
+
+    setRatings((current) => ({
+      ...current,
+      [selected.id]: personalRating
+    }));
+    setVisits((current) => [visit, ...current].slice(0, 5000));
 
     ratingDialogRef.current?.close();
-    setNotice("Đánh giá đã được cập nhật trong phiên demo.");
+    setNotice("Đã lưu trải nghiệm của bạn trên thiết bị.");
   }
 
   function toggleRatingContext(context: Scenario) {
@@ -344,8 +505,19 @@ export function MapExplorer() {
     );
   }
 
-  const groupRatingLabel =
-    selected.groupRating > 0 ? selected.groupRating.toFixed(1) : "Mới";
+  const heading =
+    view === "saved"
+      ? visiblePlaces.length + " địa điểm đã lưu"
+      : view === "history"
+        ? visiblePlaces.length + " nơi bạn đã đi"
+        : visiblePlaces.length + " địa điểm phù hợp";
+
+  const eyebrow =
+    view === "saved"
+      ? "Muốn quay lại sau"
+      : view === "history"
+        ? "Trải nghiệm của bạn"
+        : "Gợi ý cho bạn";
 
   return (
     <main className="app-shell">
@@ -356,25 +528,48 @@ export function MapExplorer() {
         </div>
 
         <nav className="rail-nav">
-          <button className="rail-action rail-action--active" type="button">
+          <button
+            className={
+              "rail-action" +
+              (view === "discover" ? " rail-action--active" : "")
+            }
+            type="button"
+            onClick={() => switchView("discover")}
+          >
             <PinIcon />
             <span>Bản đồ</span>
           </button>
-          <button className="rail-action" type="button" onClick={() => setNotice("Khám phá sẽ dùng cùng ranking, không thêm feed rối.")}>
-            <SearchIcon />
-            <span>Khám phá</span>
-          </button>
-          <button className="rail-action" type="button" onClick={() => setNotice(saved.size + " địa điểm đã lưu trong phiên này.")}>
+
+          <button
+            className={
+              "rail-action" +
+              (view === "saved" ? " rail-action--active" : "")
+            }
+            type="button"
+            onClick={() => switchView("saved")}
+          >
             <HeartIcon />
             <span>Đã lưu</span>
           </button>
-          <button className="rail-action" type="button" onClick={() => setNotice("Group Decision là slice tiếp theo sau auth + persistence.")}>
-            <UsersIcon />
-            <span>Nhóm</span>
+
+          <button
+            className={
+              "rail-action" +
+              (view === "history" ? " rail-action--active" : "")
+            }
+            type="button"
+            onClick={() => switchView("history")}
+          >
+            <HistoryIcon />
+            <span>Lịch sử</span>
           </button>
         </nav>
 
-        <button className="rail-add" type="button" onClick={openAddDialog}>
+        <button
+          className="rail-add"
+          type="button"
+          onClick={() => addDialogRef.current?.showModal()}
+        >
           <PlusIcon />
           <span>Thêm</span>
         </button>
@@ -387,7 +582,7 @@ export function MapExplorer() {
             aria-label="Tìm địa điểm"
             value={query}
             onChange={(event) => setQuery(event.target.value.slice(0, 120))}
-            placeholder="Tìm địa điểm, hoặc hỏi: date yên tĩnh tối nay…"
+            placeholder="Date yên tĩnh, cafe gần tôi, ăn tối…"
           />
           {query ? (
             <button
@@ -402,6 +597,22 @@ export function MapExplorer() {
         </div>
 
         <div className="topbar-actions">
+          <span
+            className={
+              "personal-mode-badge" +
+              (dataStatus === "error"
+                ? " personal-mode-badge--error"
+                : "")
+            }
+          >
+            <span className="privacy-dot" />
+            {dataStatus === "loading"
+              ? "Đang mở dữ liệu cá nhân…"
+              : dataStatus === "error"
+                ? "Chỉ dùng trong phiên"
+                : "Cá nhân · lưu trên thiết bị"}
+          </span>
+
           <button
             className={
               "location-button" +
@@ -420,9 +631,6 @@ export function MapExplorer() {
                   : "Vị trí của tôi"}
             </span>
           </button>
-          <div className="group-avatars" aria-label="Nhóm Weekend có 5 người">
-            <span>L</span><span>M</span><span>K</span><b>+2</b>
-          </div>
         </div>
       </header>
 
@@ -446,95 +654,163 @@ export function MapExplorer() {
 
         <div className="results-heading">
           <div>
-            <span className="eyebrow">Gợi ý cho bạn</span>
-            <h1>{visiblePlaces.length} địa điểm phù hợp</h1>
+            <span className="eyebrow">{eyebrow}</span>
+            <h1>{heading}</h1>
           </div>
-          <span className="sort-label">Phù hợp nhất</span>
+          <span className="sort-label">
+            {view === "history" ? "Gần đây nhất" : "Phù hợp nhất"}
+          </span>
         </div>
 
         <div className="place-list">
           {visiblePlaces.length === 0 ? (
             <div className="empty-state">
-              <strong>Chưa có chỗ nào khớp.</strong>
-              <span>Thử bớt từ khóa hoặc đổi hoàn cảnh.</span>
+              <strong>
+                {view === "saved"
+                  ? "Bạn chưa lưu chỗ nào ở bộ lọc này."
+                  : view === "history"
+                    ? "Chưa có trải nghiệm nào."
+                    : "Chưa có chỗ nào khớp."}
+              </strong>
+              <span>
+                {view === "history"
+                  ? "Đánh giá một địa điểm sau khi đi để bắt đầu lịch sử cá nhân."
+                  : "Thử bớt từ khóa hoặc đổi hoàn cảnh."}
+              </span>
             </div>
           ) : (
-            visiblePlaces.map((place) => (
-              <button
-                type="button"
-                key={place.id}
-                className={
-                  "place-card" +
-                  (selected.id === place.id ? " place-card--active" : "")
-                }
-                onClick={() => setSelectedId(place.id)}
-              >
-                <span
-                  className="place-thumb"
-                  style={{ "--place-accent": place.accent } as React.CSSProperties}
-                  aria-hidden="true"
+            visiblePlaces.map((place) => {
+              const personal = ratings[place.id];
+              const visit = recentVisitByPlace.get(place.id);
+
+              return (
+                <button
+                  type="button"
+                  key={place.id}
+                  className={
+                    "place-card" +
+                    (selected.id === place.id
+                      ? " place-card--active"
+                      : "")
+                  }
+                  onClick={() => setSelectedId(place.id)}
                 >
-                  {place.kind.includes("Activity") ? "◇" : place.kind.includes("Restaurant") ? "◉" : "☕"}
-                </span>
-                <span className="place-card__content">
-                  <span className="place-card__top">
-                    <strong>{place.name}</strong>
-                    <small>{place.match}%</small>
+                  <span
+                    className="place-thumb"
+                    style={
+                      {
+                        "--place-accent": place.accent
+                      } as CSSProperties
+                    }
+                    aria-hidden="true"
+                  >
+                    {place.kind.includes("Activity")
+                      ? "◇"
+                      : place.kind.includes("Restaurant")
+                        ? "◉"
+                        : "☕"}
                   </span>
-                  <span className="place-card__meta">
-                    <b>★ {place.groupRating || "Mới"}</b>
-                    <span>·</span>
-                    <span>{distanceLabel(place.distanceKm)}</span>
-                    <span>·</span>
-                    <span>{place.priceLabel}</span>
+
+                  <span className="place-card__content">
+                    <span className="place-card__top">
+                      <strong>{place.name}</strong>
+                      <small>{place.match}%</small>
+                    </span>
+
+                    <span className="place-card__meta">
+                      <b>
+                        ★{" "}
+                        {personal
+                          ? personal.stars.toFixed(1) + " của bạn"
+                          : place.publicRating > 0
+                            ? place.publicRating.toFixed(1)
+                            : "Mới"}
+                      </b>
+                      <span>·</span>
+                      <span>{distanceLabel(place.distanceKm)}</span>
+                      <span>·</span>
+                      <span>{place.priceLabel}</span>
+                    </span>
+
+                    <span className="tag-line">
+                      {view === "history" && visit ? (
+                        <i>Đã đi {formatVisitedAt(visit.visitedAt)}</i>
+                      ) : null}
+                      {place.tags.slice(0, 2).map((tag) => (
+                        <i key={tag}>{tag}</i>
+                      ))}
+                    </span>
                   </span>
-                  <span className="tag-line">
-                    {place.tags.slice(0, 3).map((tag) => (
-                      <i key={tag}>{tag}</i>
-                    ))}
-                  </span>
-                </span>
-              </button>
-            ))
+                </button>
+              );
+            })
           )}
         </div>
 
-        <button className="wide-secondary" type="button" onClick={openAddDialog}>
+        <button
+          className="wide-secondary"
+          type="button"
+          onClick={() => addDialogRef.current?.showModal()}
+        >
           <PlusIcon />
-          Thêm một chỗ nhóm bạn biết
+          Thêm một địa điểm bạn biết
         </button>
       </section>
 
       <section className="map-pane" aria-label="Bản đồ">
         <div ref={mapNodeRef} className="map-canvas" />
+
         <div className="map-floating-top">
           <span>
-            {scenario === "all"
-              ? "Đang ưu tiên rating của nhóm"
-              : "Đang tìm cho: " + readableScenario(scenario)}
+            {view === "history"
+              ? "Lịch sử cá nhân"
+              : view === "saved"
+                ? "Những nơi bạn đã lưu"
+                : scenario === "all"
+                  ? "Ưu tiên trải nghiệm của bạn"
+                  : "Đang tìm cho: " + readableScenario(scenario)}
           </span>
-          <button type="button" onClick={() => {
-            const center = mapRef.current?.getCenter();
-            if (center) setNotice("Khu vực bản đồ: " + center.lat.toFixed(3) + ", " + center.lng.toFixed(3));
-          }}>
-            Tìm khu vực này
+          <button
+            type="button"
+            onClick={() => {
+              const center = mapRef.current?.getCenter();
+              if (center) {
+                setNotice(
+                  "Tâm bản đồ: " +
+                    center.lat.toFixed(3) +
+                    ", " +
+                    center.lng.toFixed(3)
+                );
+              }
+            }}
+          >
+            Khu vực này
           </button>
         </div>
+
         <div className="privacy-pill">
           <span className="privacy-dot" />
           {userLocation
-            ? "Vị trí chỉ dùng trong phiên"
-            : "Không dùng vị trí cho tới khi bạn cho phép"}
+            ? "Vị trí hiện tại không được lưu"
+            : "Chưa dùng vị trí chính xác"}
         </div>
       </section>
 
       <aside className="detail-pane" aria-label="Chi tiết địa điểm">
         <div
           className="detail-hero"
-          style={{ "--place-accent": selected.accent } as React.CSSProperties}
+          style={
+            {
+              "--place-accent": selected.accent
+            } as CSSProperties
+          }
         >
           <span className="detail-hero__icon" aria-hidden="true">
-            {selected.kind.includes("Activity") ? "◇" : selected.kind.includes("Restaurant") ? "◉" : "☕"}
+            {selected.kind.includes("Activity")
+              ? "◇"
+              : selected.kind.includes("Restaurant")
+                ? "◉"
+                : "☕"}
           </span>
           <div className="detail-hero__match">
             <strong>{selected.match}%</strong>
@@ -548,21 +824,36 @@ export function MapExplorer() {
               <span className="eyebrow">{selected.kind}</span>
               <h2>{selected.name}</h2>
             </div>
+
             <button
               className={
                 "save-button" +
-                (saved.has(selected.id) ? " save-button--active" : "")
+                (saved.has(selected.id)
+                  ? " save-button--active"
+                  : "")
               }
               type="button"
               onClick={() => toggleSaved(selected.id)}
-              aria-label={saved.has(selected.id) ? "Bỏ lưu" : "Lưu"}
+              aria-label={
+                saved.has(selected.id) ? "Bỏ lưu" : "Lưu địa điểm"
+              }
             >
               <HeartIcon />
             </button>
           </div>
 
           <div className="detail-score-line">
-            <span><b>★ {groupRatingLabel}</b> nhóm bạn</span>
+            <span>
+              <b>
+                ★{" "}
+                {selectedPersonalRating
+                  ? selectedPersonalRating.stars.toFixed(1)
+                  : selected.publicRating > 0
+                    ? selected.publicRating.toFixed(1)
+                    : "Mới"}
+              </b>{" "}
+              {selectedPersonalRating ? "của bạn" : "tham khảo"}
+            </span>
             <span>·</span>
             <span>{distanceLabel(selected.distanceKm)}</span>
             <span>·</span>
@@ -582,51 +873,111 @@ export function MapExplorer() {
               onClick={() => {
                 const url =
                   "https://www.google.com/maps/dir/?api=1&destination=" +
-                  encodeURIComponent(selected.latitude + "," + selected.longitude);
+                  encodeURIComponent(
+                    selected.latitude + "," + selected.longitude
+                  );
                 window.open(url, "_blank", "noopener,noreferrer");
               }}
             >
               <LocationIcon />
               Chỉ đường
             </button>
-            <button type="button" className="secondary-button" onClick={() => ratingDialogRef.current?.showModal()}>
+
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={openRating}
+            >
               <StarIcon />
-              Đánh giá
+              {selectedPersonalRating ? "Sửa đánh giá" : "Đã đi"}
             </button>
           </div>
 
           <section className="detail-section">
-            <span className="eyebrow">Vì sao hợp</span>
+            <span className="eyebrow">Hợp với</span>
             <div className="context-grid">
-              {selected.scenarios.slice(0, 4).map((item, index) => (
+              {selected.scenarios.slice(0, 4).map((item) => (
                 <div key={item}>
                   <span>{scenarioEmoji[item]}</span>
                   <strong>{scenarioLabels[item]}</strong>
-                  <b>{Math.max(3.6, selected.groupRating - index * 0.2).toFixed(1)}</b>
+                  <b>
+                    {selectedPersonalRating?.contexts.includes(item)
+                      ? "Bạn chọn"
+                      : "Phù hợp"}
+                  </b>
                 </div>
               ))}
             </div>
           </section>
 
           <section className="detail-section">
-            <span className="eyebrow">Nhóm bạn nói gì</span>
-            <div className="group-proof">
-              <div className="avatar-stack"><span>L</span><span>M</span><span>K</span></div>
-              <strong>{selected.revisit}</strong>
-            </div>
-            <blockquote>“{selected.note}”</blockquote>
+            <span className="eyebrow">Trải nghiệm của bạn</span>
+
+            {selectedPersonalRating ? (
+              <div className="personal-summary">
+                <div>
+                  <strong>★ {selectedPersonalRating.stars.toFixed(1)}</strong>
+                  <span>
+                    {revisitLabel(selectedPersonalRating.revisit)}
+                  </span>
+                </div>
+                <div>
+                  <strong>
+                    {selectedVisit
+                      ? formatVisitedAt(selectedVisit.visitedAt)
+                      : formatVisitedAt(selectedPersonalRating.visitedAt)}
+                  </strong>
+                  <span>Lần gần nhất</span>
+                </div>
+                {selectedPersonalRating.note ? (
+                  <blockquote>
+                    “{selectedPersonalRating.note}”
+                  </blockquote>
+                ) : null}
+              </div>
+            ) : (
+              <div className="personal-empty">
+                <strong>Chưa có đánh giá cá nhân.</strong>
+                <span>
+                  Sau khi đi, một rating ngắn sẽ làm gợi ý sau này chính xác hơn.
+                </span>
+                <button type="button" onClick={openRating}>
+                  Thêm trải nghiệm
+                </button>
+              </div>
+            )}
           </section>
 
           <section className="detail-section">
             <span className="eyebrow">Cần biết</span>
             <dl className="fact-grid">
-              <div><dt>Giá tham khảo</dt><dd>{selected.averageForTwo}</dd></div>
-              <div><dt>Khoảng giá</dt><dd>{priceText(selected.priceLabel)}</dd></div>
-              <div><dt>Không gian</dt><dd>{selected.noise}</dd></div>
-              <div><dt>Đông đúc</dt><dd>{selected.crowd}</dd></div>
-              <div><dt>Đi đẹp nhất</dt><dd>{selected.bestTime}</dd></div>
-              <div><dt>Khoảng cách</dt><dd>{distanceLabel(selected.distanceKm)}</dd></div>
+              <div>
+                <dt>Giá tham khảo</dt>
+                <dd>{selected.averageForTwo}</dd>
+              </div>
+              <div>
+                <dt>Khoảng giá</dt>
+                <dd>{priceText(selected.priceLabel)}</dd>
+              </div>
+              <div>
+                <dt>Không gian</dt>
+                <dd>{selected.noise}</dd>
+              </div>
+              <div>
+                <dt>Đông đúc</dt>
+                <dd>{selected.crowd}</dd>
+              </div>
+              <div>
+                <dt>Đi đẹp nhất</dt>
+                <dd>{selected.bestTime}</dd>
+              </div>
+              <div>
+                <dt>Khoảng cách</dt>
+                <dd>{distanceLabel(selected.distanceKm)}</dd>
+              </div>
             </dl>
+
+            <blockquote>“{selected.note}”</blockquote>
           </section>
         </div>
       </aside>
@@ -634,62 +985,106 @@ export function MapExplorer() {
       {notice ? (
         <div className="toast" role="status">
           <span>{notice}</span>
-          <button type="button" onClick={() => setNotice(null)} aria-label="Đóng">
+          <button
+            type="button"
+            onClick={() => setNotice(null)}
+            aria-label="Đóng"
+            className="icon-button"
+          >
             <CloseIcon />
           </button>
         </div>
       ) : null}
 
       <dialog className="app-dialog" ref={addDialogRef}>
-        <form method="dialog" className="dialog-card" onSubmit={submitNewPlace}>
+        <form className="dialog-card" onSubmit={submitNewPlace}>
           <div className="dialog-header">
             <div>
-              <span className="eyebrow">Địa điểm mới</span>
+              <span className="eyebrow">Địa điểm cá nhân</span>
               <h2>Thêm một chỗ</h2>
             </div>
-            <button className="icon-button" type="button" onClick={() => addDialogRef.current?.close()} aria-label="Đóng">
+            <button
+              className="icon-button"
+              type="button"
+              onClick={() => addDialogRef.current?.close()}
+              aria-label="Đóng"
+            >
               <CloseIcon />
             </button>
           </div>
+
           <p className="dialog-copy">
-            Pin sẽ được đặt tại <strong>tâm bản đồ hiện tại</strong>. Chỉ cần tên và điều bạn biết; hệ thống tự gợi ý hoàn cảnh.
+            Pin được đặt tại <strong>tâm bản đồ hiện tại</strong>. Chỉ cần
+            tên và điều bạn biết; app tự gợi ý hoàn cảnh.
           </p>
+
           <label className="field">
             <span>Tên địa điểm</span>
-            <input name="name" required minLength={2} maxLength={80} autoComplete="off" placeholder="Ví dụ: Hidden Garden" />
+            <input
+              name="name"
+              required
+              minLength={2}
+              maxLength={80}
+              autoComplete="off"
+              placeholder="Ví dụ: Hidden Garden"
+            />
           </label>
+
           <label className="field">
             <span>Bạn biết gì về chỗ này?</span>
-            <textarea name="note" maxLength={300} rows={4} placeholder="Cafe khá yên, đi tối đẹp, hợp date…" />
+            <textarea
+              name="note"
+              maxLength={300}
+              rows={4}
+              placeholder="Cafe khá yên, đi tối đẹp, hợp date…"
+            />
           </label>
+
           <div className="security-note">
-            Không nhận HTML. Nội dung được giới hạn độ dài và xử lý dưới dạng text thuần.
+            Dữ liệu này được lưu bằng IndexedDB trên chính thiết bị của bạn.
+            Vị trí hiện tại của bạn không được lưu cùng dữ liệu.
           </div>
-          <button className="primary-button primary-button--wide" type="submit">
+
+          <button
+            className="primary-button primary-button--wide"
+            type="submit"
+          >
             <PlusIcon />
-            Thêm địa điểm
+            Lưu địa điểm
           </button>
         </form>
       </dialog>
 
       <dialog className="app-dialog" ref={ratingDialogRef}>
-        <form method="dialog" className="dialog-card" onSubmit={submitRating}>
+        <form className="dialog-card" onSubmit={submitRating}>
           <div className="dialog-header">
             <div>
-              <span className="eyebrow">10 giây là đủ</span>
-              <h2>Đánh giá {selected.name}</h2>
+              <span className="eyebrow">Trải nghiệm cá nhân</span>
+              <h2>{selected.name}</h2>
             </div>
-            <button className="icon-button" type="button" onClick={() => ratingDialogRef.current?.close()} aria-label="Đóng">
+            <button
+              className="icon-button"
+              type="button"
+              onClick={() => ratingDialogRef.current?.close()}
+              aria-label="Đóng"
+            >
               <CloseIcon />
             </button>
           </div>
 
-          <div className="rating-stars" aria-label={"Đánh giá " + ratingStars + " sao"}>
+          <div
+            className="rating-stars"
+            aria-label={"Đánh giá " + ratingStars + " sao"}
+          >
             {[1, 2, 3, 4, 5].map((star) => (
               <button
                 key={star}
                 type="button"
-                className={ratingStars >= star ? "rating-star rating-star--active" : "rating-star"}
+                className={
+                  ratingStars >= star
+                    ? "rating-star rating-star--active"
+                    : "rating-star"
+                }
                 onClick={() => setRatingStars(star)}
                 aria-label={star + " sao"}
               >
@@ -701,13 +1096,19 @@ export function MapExplorer() {
           <fieldset className="dialog-fieldset">
             <legend>Hợp với</legend>
             <div className="scenario-row scenario-row--wrap">
-              {(scenarios.filter((item) => item !== "all") as Scenario[]).map((item) => (
+              {(
+                scenarios.filter(
+                  (item): item is Scenario => item !== "all"
+                )
+              ).map((item) => (
                 <button
                   type="button"
                   key={item}
                   className={
                     "scenario-chip" +
-                    (ratingContexts.includes(item) ? " scenario-chip--active" : "")
+                    (ratingContexts.includes(item)
+                      ? " scenario-chip--active"
+                      : "")
                   }
                   onClick={() => toggleRatingContext(item)}
                 >
@@ -720,15 +1121,19 @@ export function MapExplorer() {
           <fieldset className="dialog-fieldset">
             <legend>Có quay lại không?</legend>
             <div className="segmented">
-              {([
-                ["yes", "Có"],
-                ["maybe", "Có thể"],
-                ["no", "Không"]
-              ] as const).map(([value, label]) => (
+              {(
+                [
+                  ["yes", "Có"],
+                  ["maybe", "Có thể"],
+                  ["no", "Không"]
+                ] as const
+              ).map(([value, label]) => (
                 <button
                   type="button"
                   key={value}
-                  className={ratingRevisit === value ? "is-active" : ""}
+                  className={
+                    ratingRevisit === value ? "is-active" : ""
+                  }
                   onClick={() => setRatingRevisit(value)}
                 >
                   {label}
@@ -738,12 +1143,29 @@ export function MapExplorer() {
           </fieldset>
 
           <label className="field">
-            <span>Một điều nên biết? <small>Tùy chọn</small></span>
-            <textarea name="ratingNote" maxLength={240} rows={3} placeholder="Đi tối đẹp hơn, cuối tuần hơi đông…" />
+            <span>
+              Một điều nên nhớ? <small>Tùy chọn</small>
+            </span>
+            <textarea
+              value={ratingNote}
+              onChange={(event) =>
+                setRatingNote(event.target.value.slice(0, 240))
+              }
+              rows={3}
+              placeholder="Đi tối đẹp hơn, cuối tuần hơi đông…"
+            />
           </label>
 
-          <button className="primary-button primary-button--wide" type="submit">
-            Gửi đánh giá
+          <div className="security-note">
+            Rating và lịch sử được lưu cục bộ trên thiết bị. Chưa có tài
+            khoản hoặc đồng bộ cloud ở giai đoạn này.
+          </div>
+
+          <button
+            className="primary-button primary-button--wide"
+            type="submit"
+          >
+            Lưu trải nghiệm
           </button>
         </form>
       </dialog>
