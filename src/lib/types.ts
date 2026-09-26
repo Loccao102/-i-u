@@ -28,6 +28,9 @@ export type Place = {
   scenarios: Scenario[];
   note: string;
   accent: string;
+  source?: "personal" | "provider";
+  providerId?: string;
+  address?: string;
 };
 
 export type UserLocation = {
@@ -55,10 +58,32 @@ export type VisitRecord = {
   ratingStars: number | null;
 };
 
+export type Collection = {
+  id: string;
+  name: string;
+  description: string;
+  placeIds: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type PersonalSnapshot = {
-  version: 1;
+  version: 2;
   customPlaces: Place[];
   savedIds: string[];
   ratings: Record<string, PersonalRating>;
   visits: VisitRecord[];
+  collections: Collection[];
+};
+
+export type PoiSearchResult = {
+  provider: "openstreetmap";
+  providerId: string;
+  name: string;
+  displayName: string;
+  kind: string;
+  latitude: number;
+  longitude: number;
+  scenarios: Scenario[];
+  accent: string;
 };
