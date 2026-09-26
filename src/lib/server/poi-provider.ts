@@ -27,9 +27,15 @@ function colorForKind(kind: string) {
 
 function scenarioForKind(kind: string, name: string): Scenario[] {
   const suggested = suggestScenarios(kind + " " + name);
-  if (kind === "Restaurant") return Array.from(new Set(["food", ...suggested]));
-  if (kind === "Cafe") return Array.from(new Set(["coffee", ...suggested]));
-  if (kind === "Activity") return Array.from(new Set(["fun", ...suggested]));
+  if (kind === "Restaurant") {
+    return Array.from(new Set<Scenario>(["food", ...suggested]));
+  }
+  if (kind === "Cafe") {
+    return Array.from(new Set<Scenario>(["coffee", ...suggested]));
+  }
+  if (kind === "Activity") {
+    return Array.from(new Set<Scenario>(["fun", ...suggested]));
+  }
   return suggested;
 }
 
