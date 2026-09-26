@@ -100,7 +100,8 @@ export function filterPlaces(
     .sort(
       (a, b) =>
         b.match - a.match ||
-        b.groupRating - a.groupRating ||
+        (b.personalRating ?? b.publicRating) -
+          (a.personalRating ?? a.publicRating) ||
         a.distanceKm - b.distanceKm
     );
 }
