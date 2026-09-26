@@ -620,6 +620,7 @@ export function MapExplorer() {
 
     setViewportLoading(true);
     setViewportBounds(bounds);
+    setViewportPersonalIds(null);
 
     try {
       const [viewportResult] = await Promise.all([
