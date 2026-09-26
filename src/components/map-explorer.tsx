@@ -25,17 +25,24 @@ import {
 } from "./icons";
 import { personalApi } from "@/lib/personal-api";
 import { places as seedPlaces, scenarioLabels } from "@/lib/places";
-import { filterPlaces, recommendForCollection } from "@/lib/search";
+import {
+  filterPlaces,
+  pickSurprisePlace,
+  recommendForCollection
+} from "@/lib/search";
 import type {
   Collection,
+  MapBounds,
   PersonalBackup,
   PersonalRating,
   Place,
   PoiSearchResult,
   RatingDraft,
+  RecommendationContext,
   Scenario,
   UserLocation,
-  VisitRecord
+  VisitRecord,
+  WeatherContext
 } from "@/lib/types";
 import {
   cleanPlainText,
@@ -102,6 +109,51 @@ function placeIcon(place: Pick<Place, "kind">) {
   return "☕";
 }
 
+function placeInsideBounds(place: Place, bounds: MapBounds) {
+  const latitudeOk =
+    place.latitude >= bounds.south && place.latitude <= bounds.north;
+  const longitudeOk =
+    bounds.west <= bounds.east
+      ? place.longitude >= bounds.west && place.longitude <= bounds.east
+      : place.longitude >= bounds.west || place.longitude <= bounds.east;
+
+  return latitudeOk && longitudeOk;
+}
+
+function weatherLabel(weather: WeatherContext | null) {
+  if (!weather) return null;
+  const labels: Record<WeatherContext["condition"], string> = {
+    clear: "Trời đẹp",
+    cloudy: "Nhiều mây",
+    fog: "Có sương",
+    rain: "Có mưa",
+    storm: "Dông",
+    snow: "Tuyết"
+  };
+  return labels[weather.condition];
+}
+
+function weatherEmoji(weather: WeatherContext | null) {
+  if (!weather) return "◌";
+  const labels: Record<WeatherContext["condition"], string> = {
+    clear: "☀",
+    cloudy: "☁",
+    fog: "≋",
+    rain: "☂",
+    storm: "ϟ",
+    snow: "❄"
+  };
+  return labels[weather.condition];
+}
+
+function daypartLabel(hour: number) {
+  if (hour >= 5 && hour < 11) return "Sáng";
+  if (hour >= 11 && hour < 14) return "Trưa";
+  if (hour >= 14 && hour < 18) return "Chiều";
+  if (hour >= 18 && hour < 22) return "Tối";
+  return "Muộn";
+}
+
 export function MapExplorer() {
   const [customPlaces, setCustomPlaces] = useState<Place[]>([]);
   const [saved, setSaved] = useState(() => new Set<string>());
@@ -124,6 +176,13 @@ export function MapExplorer() {
   const [providerLoading, setProviderLoading] = useState(false);
   const [serverDistances, setServerDistances] = useState<Record<string, number>>({});
   const [backupLoading, setBackupLoading] = useState(false);
+  const [viewportBounds, setViewportBounds] = useState<MapBounds | null>(null);
+  const [viewportPersonalIds, setViewportPersonalIds] =
+    useState<Set<string> | null>(null);
+  const [viewportLoading, setViewportLoading] = useState(false);
+  const [weather, setWeather] = useState<WeatherContext | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+  const [clock, setClock] = useState(() => new Date());
 
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [locationStatus, setLocationStatus] = useState<
@@ -181,6 +240,23 @@ export function MapExplorer() {
   useEffect(() => {
     void loadSnapshot();
   }, [loadSnapshot]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(new Date()), 5 * 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const refreshWeather = useCallback(async (point: UserLocation) => {
+    setWeatherLoading(true);
+    try {
+      const result = await personalApi.weather(point);
+      setWeather(result.weather);
+    } catch {
+      setWeather(null);
+    } finally {
+      setWeatherLoading(false);
+    }
+  }, []);
 
   const allPlaces = useMemo(
     () => [...customPlaces, ...seedPlaces],
