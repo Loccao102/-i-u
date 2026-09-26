@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await readJsonObject(request);
     const place = parsePlace(body);
-    upsertPlace(profile.ownerKey, place);
+    await upsertPlace(profile.ownerKey, place);
     return profileJson(profile, place, { status: 201 });
   } catch (error) {
     return errorJson(profile, error, "Không thể thêm địa điểm.");
