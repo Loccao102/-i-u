@@ -1,9 +1,11 @@
+import { scoreTasteMatch } from "./taste";
 import type {
   Collection,
   PersonalRating,
   Place,
   RecommendationContext,
   Scenario,
+  TasteProfile,
   UserLocation,
   VisitRecord
 } from "./types";
@@ -227,7 +229,8 @@ function personalScore(
   distanceKm: number,
   signals?: PersonalSignals,
   stats?: ReadonlyMap<string, { count: number; latestAt: number }>,
-  context?: RecommendationContext
+  context?: RecommendationContext,
+  tasteProfile?: TasteProfile
 ) {
   let score = 44;
   const reasons: string[] = [];
@@ -253,9 +256,15 @@ function personalScore(
   score += weatherSignal.score;
   reasons.push(...weatherSignal.reasons);
 
+  if (tasteProfile) {
+    const tasteSignal = scoreTasteMatch(place, tasteProfile);
+    score += tasteSignal.score;
+    reasons.push(...tasteSignal.reasons);
+  }
+
   const rating = signals?.ratings[place.id];
   if (rating) {
-    score += rating.stars * 4.5;
+    score += (rating.stars - 3) * 5;
     reasons.push(`Bạn từng chấm ${rating.stars}/5`);
 
     if (rating.revisit === "yes") {
@@ -275,7 +284,7 @@ function personalScore(
       score += 7;
     }
   } else if (place.publicRating > 0) {
-    score += place.publicRating * 1.5;
+    score += (place.publicRating - 3) * 1.5;
   }
 
   if (signals?.savedIds.has(place.id)) {
@@ -318,7 +327,8 @@ export function filterPlaces(
   userLocation: UserLocation | null,
   signals?: PersonalSignals,
   serverDistances?: Readonly<Record<string, number>>,
-  context?: RecommendationContext
+  context?: RecommendationContext,
+  tasteProfile?: TasteProfile
 ) {
   const normalized = normalize(query);
   const detected = detectScenarios(query);
@@ -379,7 +389,8 @@ export function filterPlaces(
         computedDistance,
         signals,
         stats ?? undefined,
-        context
+        context,
+        tasteProfile
       );
 
       return {
