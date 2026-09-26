@@ -5,11 +5,13 @@ import { getSupabaseAdmin } from "./supabase";
 import type {
   BackupImportResult,
   Collection,
+  MapBounds,
   NearbyPlaceResult,
   PersonalRating,
   PersonalSnapshot,
   Place,
   Scenario,
+  ViewportPlaceResult,
   VisitRecord
 } from "../types";
 
@@ -664,4 +666,31 @@ export async function mergePersonalBackup(
     collections: collectionRows.length,
     collectionPlaces: collectionPlaceRows.length
   };
+}
+
+
+export async function listViewportPersonalPlaces(
+  ownerKey: string,
+  bounds: MapBounds,
+  limit = 500
+): Promise<ViewportPlaceResult[]> {
+  const { data, error } = await getSupabaseAdmin().rpc(
+    "viewport_personal_places",
+    {
+      p_owner_key: ownerKey,
+      p_west: bounds.west,
+      p_south: bounds.south,
+      p_east: bounds.east,
+      p_north: bounds.north,
+      p_limit: Math.max(1, Math.min(limit, 1000))
+    }
+  );
+
+  dbError(error, "Viewport personal places");
+
+  return (data ?? []).map((row) => ({
+    placeId: String(row.id),
+    latitude: Number(row.latitude),
+    longitude: Number(row.longitude)
+  }));
 }

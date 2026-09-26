@@ -1,6 +1,7 @@
 import type {
   BackupImportResult,
   Collection,
+  MapBounds,
   NearbyPlaceResult,
   PersonalBackup,
   PersonalRating,
@@ -10,7 +11,9 @@ import type {
   RatingDraft,
   Scenario,
   UserLocation,
-  VisitRecord
+  ViewportPlaceResult,
+  VisitRecord,
+  WeatherContext
 } from "./types";
 
 async function api<T>(
@@ -133,12 +136,19 @@ export const personalApi = {
 
   searchPoi: (
     query: string,
-    location: UserLocation | null
+    location: UserLocation | null,
+    bounds?: MapBounds | null
   ) => {
     const params = new URLSearchParams({ q: query });
     if (location) {
       params.set("lat", String(location.latitude));
       params.set("lon", String(location.longitude));
+    }
+    if (bounds) {
+      params.set("west", String(bounds.west));
+      params.set("south", String(bounds.south));
+      params.set("east", String(bounds.east));
+      params.set("north", String(bounds.north));
     }
     return api<{ results: PoiSearchResult[] }>(
       "/api/poi/search?" + params.toString()
@@ -188,6 +198,30 @@ export const personalApi = {
 
     return api<{ results: NearbyPlaceResult[] }>(
       "/api/personal/nearby?" + params.toString()
+    );
+  },
+
+  viewport: (bounds: MapBounds) => {
+    const params = new URLSearchParams({
+      west: String(bounds.west),
+      south: String(bounds.south),
+      east: String(bounds.east),
+      north: String(bounds.north)
+    });
+
+    return api<{ results: ViewportPlaceResult[] }>(
+      "/api/personal/viewport?" + params.toString()
+    );
+  },
+
+  weather: (location: UserLocation) => {
+    const params = new URLSearchParams({
+      lat: String(location.latitude),
+      lon: String(location.longitude)
+    });
+
+    return api<{ weather: WeatherContext }>(
+      "/api/context/weather?" + params.toString()
     );
   },
 

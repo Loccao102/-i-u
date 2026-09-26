@@ -25,17 +25,24 @@ import {
 } from "./icons";
 import { personalApi } from "@/lib/personal-api";
 import { places as seedPlaces, scenarioLabels } from "@/lib/places";
-import { filterPlaces, recommendForCollection } from "@/lib/search";
+import {
+  filterPlaces,
+  pickSurprisePlace,
+  recommendForCollection
+} from "@/lib/search";
 import type {
   Collection,
+  MapBounds,
   PersonalBackup,
   PersonalRating,
   Place,
   PoiSearchResult,
   RatingDraft,
+  RecommendationContext,
   Scenario,
   UserLocation,
-  VisitRecord
+  VisitRecord,
+  WeatherContext
 } from "@/lib/types";
 import {
   cleanPlainText,
@@ -102,6 +109,51 @@ function placeIcon(place: Pick<Place, "kind">) {
   return "☕";
 }
 
+function placeInsideBounds(place: Place, bounds: MapBounds) {
+  const latitudeOk =
+    place.latitude >= bounds.south && place.latitude <= bounds.north;
+  const longitudeOk =
+    bounds.west <= bounds.east
+      ? place.longitude >= bounds.west && place.longitude <= bounds.east
+      : place.longitude >= bounds.west || place.longitude <= bounds.east;
+
+  return latitudeOk && longitudeOk;
+}
+
+function weatherLabel(weather: WeatherContext | null) {
+  if (!weather) return null;
+  const labels: Record<WeatherContext["condition"], string> = {
+    clear: "Trời đẹp",
+    cloudy: "Nhiều mây",
+    fog: "Có sương",
+    rain: "Có mưa",
+    storm: "Dông",
+    snow: "Tuyết"
+  };
+  return labels[weather.condition];
+}
+
+function weatherEmoji(weather: WeatherContext | null) {
+  if (!weather) return "◌";
+  const labels: Record<WeatherContext["condition"], string> = {
+    clear: "☀",
+    cloudy: "☁",
+    fog: "≋",
+    rain: "☂",
+    storm: "ϟ",
+    snow: "❄"
+  };
+  return labels[weather.condition];
+}
+
+function daypartLabel(hour: number) {
+  if (hour >= 5 && hour < 11) return "Sáng";
+  if (hour >= 11 && hour < 14) return "Trưa";
+  if (hour >= 14 && hour < 18) return "Chiều";
+  if (hour >= 18 && hour < 22) return "Tối";
+  return "Muộn";
+}
+
 export function MapExplorer() {
   const [customPlaces, setCustomPlaces] = useState<Place[]>([]);
   const [saved, setSaved] = useState(() => new Set<string>());
@@ -124,6 +176,13 @@ export function MapExplorer() {
   const [providerLoading, setProviderLoading] = useState(false);
   const [serverDistances, setServerDistances] = useState<Record<string, number>>({});
   const [backupLoading, setBackupLoading] = useState(false);
+  const [viewportBounds, setViewportBounds] = useState<MapBounds | null>(null);
+  const [viewportPersonalIds, setViewportPersonalIds] =
+    useState<Set<string> | null>(null);
+  const [viewportLoading, setViewportLoading] = useState(false);
+  const [weather, setWeather] = useState<WeatherContext | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+  const [clock, setClock] = useState(() => new Date());
 
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [locationStatus, setLocationStatus] = useState<
@@ -182,6 +241,23 @@ export function MapExplorer() {
     void loadSnapshot();
   }, [loadSnapshot]);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(new Date()), 5 * 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const refreshWeather = useCallback(async (point: UserLocation) => {
+    setWeatherLoading(true);
+    try {
+      const result = await personalApi.weather(point);
+      setWeather(result.weather);
+    } catch {
+      setWeather(null);
+    } finally {
+      setWeatherLoading(false);
+    }
+  }, []);
+
   const allPlaces = useMemo(
     () => [...customPlaces, ...seedPlaces],
     [customPlaces]
@@ -216,15 +292,34 @@ export function MapExplorer() {
   const selectedCollection =
     collections.find((item) => item.id === selectedCollectionId) ?? null;
 
+  const recommendationContext = useMemo<RecommendationContext>(
+    () => ({
+      localHour: clock.getHours(),
+      isWeekend: clock.getDay() === 0 || clock.getDay() === 6,
+      weather
+    }),
+    [clock, weather]
+  );
+
   const visiblePlaces = useMemo(() => {
-    const filtered = filterPlaces(
+    const contextual = filterPlaces(
       allPlaces,
       query,
       scenario,
       userLocation,
       { savedIds: saved, ratings, visits },
-      serverDistances
+      serverDistances,
+      recommendationContext
     );
+
+    const filtered = viewportBounds
+      ? contextual.filter((place) => {
+          if (customIds.has(place.id) && viewportPersonalIds) {
+            return viewportPersonalIds.has(place.id);
+          }
+          return placeInsideBounds(place, viewportBounds);
+        })
+      : contextual;
 
     if (view === "saved") {
       return filtered.filter((place) => saved.has(place.id));
@@ -258,7 +353,11 @@ export function MapExplorer() {
     view,
     selectedCollection,
     recentVisitByPlace,
-    serverDistances
+    serverDistances,
+    recommendationContext,
+    viewportBounds,
+    viewportPersonalIds,
+    customIds
   ]);
 
   const rankedAll = useMemo(
@@ -269,9 +368,18 @@ export function MapExplorer() {
         "all",
         userLocation,
         { savedIds: saved, ratings, visits },
-        serverDistances
+        serverDistances,
+        recommendationContext
       ),
-    [allPlaces, userLocation, saved, ratings, visits, serverDistances]
+    [
+      allPlaces,
+      userLocation,
+      saved,
+      ratings,
+      visits,
+      serverDistances,
+      recommendationContext
+    ]
   );
 
   const collectionSuggestions = useMemo(() => {
@@ -334,6 +442,15 @@ export function MapExplorer() {
       mapRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const center = mapRef.current.getCenter();
+    void refreshWeather({
+      latitude: center.lat,
+      longitude: center.lng
+    });
+  }, [mapReady, refreshWeather]);
 
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
@@ -421,6 +538,8 @@ export function MapExplorer() {
           "GPS chỉ dùng trong phiên hiện tại và không được ghi vào Supabase."
         );
 
+        void refreshWeather(next);
+
         void personalApi
           .nearby(next, 500)
           .then(({ results }) => {
@@ -456,7 +575,10 @@ export function MapExplorer() {
     }
   }
 
-  async function runPoiSearch(event?: FormEvent) {
+  async function runPoiSearch(
+    event?: FormEvent,
+    boundsOverride?: MapBounds | null
+  ) {
     event?.preventDefault();
     const cleaned = cleanPlainText(query, 120);
     if (cleaned.length < 2) {
@@ -466,7 +588,11 @@ export function MapExplorer() {
 
     setProviderLoading(true);
     try {
-      const result = await personalApi.searchPoi(cleaned, userLocation);
+      const result = await personalApi.searchPoi(
+        cleaned,
+        userLocation,
+        boundsOverride === undefined ? viewportBounds : boundsOverride
+      );
       setProviderResults(result.results);
       if (result.results.length === 0) {
         setNotice("Không tìm thấy POI ngoài cho từ khóa này.");
@@ -478,6 +604,85 @@ export function MapExplorer() {
     } finally {
       setProviderLoading(false);
     }
+  }
+
+  async function searchCurrentArea() {
+    if (!mapRef.current) return;
+
+    const raw = mapRef.current.getBounds();
+    const bounds: MapBounds = {
+      west: raw.getWest(),
+      south: raw.getSouth(),
+      east: raw.getEast(),
+      north: raw.getNorth()
+    };
+    const center = mapRef.current.getCenter();
+
+    setViewportLoading(true);
+    setViewportBounds(bounds);
+    setViewportPersonalIds(null);
+
+    try {
+      const [viewportResult] = await Promise.all([
+        personalApi.viewport(bounds),
+        refreshWeather({
+          latitude: center.lat,
+          longitude: center.lng
+        })
+      ]);
+
+      setViewportPersonalIds(
+        new Set(viewportResult.results.map((item) => item.placeId))
+      );
+
+      const cleaned = cleanPlainText(query, 120);
+      if (cleaned.length >= 2) {
+        await runPoiSearch(undefined, bounds);
+      } else {
+        setProviderResults([]);
+      }
+
+      setNotice("Đã lọc theo vùng bản đồ đang nhìn.");
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "Không thể tìm trong khu vực này."
+      );
+    } finally {
+      setViewportLoading(false);
+    }
+  }
+
+  function clearViewportFilter() {
+    setViewportBounds(null);
+    setViewportPersonalIds(null);
+    setProviderResults([]);
+    setNotice("Đã bỏ giới hạn khu vực bản đồ.");
+  }
+
+  function surpriseMe() {
+    const picked = pickSurprisePlace(
+      visiblePlaces.length > 0 ? visiblePlaces : rankedAll,
+      { savedIds: saved, ratings, visits }
+    );
+
+    if (!picked) {
+      setNotice("Chưa có địa điểm phù hợp để chọn bất ngờ.");
+      return;
+    }
+
+    setSelectedId(picked.id);
+    mapRef.current?.flyTo({
+      center: [picked.longitude, picked.latitude],
+      zoom: 14,
+      duration: 700,
+      essential: true
+    });
+
+    const reason =
+      picked.recommendationReasons?.[0] ?? "phù hợp với gu hiện tại";
+    setNotice("🎯 " + picked.name + " · " + reason);
   }
 
   async function importPoi(result: PoiSearchResult) {
@@ -1162,18 +1367,60 @@ export function MapExplorer() {
         <div ref={mapNodeRef} className="map-canvas" />
         <div className="map-floating-top">
           <span>
-            {view === "discover"
-              ? "Ranking học từ rating + lịch sử + Saved"
-              : view === "collections"
-                ? "Bộ sưu tập cá nhân"
-                : view === "history"
-                  ? "Lịch sử đã đi"
-                  : "Địa điểm đã lưu"}
+            {viewportBounds
+              ? "Đang lọc khu vực bản đồ"
+              : view === "discover"
+                ? "Ranking theo gu + bối cảnh hiện tại"
+                : view === "collections"
+                  ? "Bộ sưu tập cá nhân"
+                  : view === "history"
+                    ? "Lịch sử đã đi"
+                    : "Địa điểm đã lưu"}
           </span>
-          <button type="button" onClick={() => void runPoiSearch()}>
-            Tìm khu vực này
+          <button
+            type="button"
+            className="surprise-button"
+            onClick={surpriseMe}
+          >
+            ✨ Bất ngờ
+          </button>
+          {viewportBounds ? (
+            <button
+              type="button"
+              className="map-secondary-action"
+              onClick={clearViewportFilter}
+            >
+              Bỏ vùng
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => void searchCurrentArea()}
+            disabled={viewportLoading}
+          >
+            {viewportLoading ? "Đang tìm…" : "Tìm khu vực này"}
           </button>
         </div>
+
+        <div className="weather-pill">
+          <span>{weatherEmoji(weather)}</span>
+          <strong>
+            {weatherLoading
+              ? "Đang xem thời tiết…"
+              : weather
+                ? weatherLabel(weather) +
+                  " · " +
+                  Math.round(weather.temperatureC) +
+                  "°C"
+                : daypartLabel(recommendationContext.localHour)}
+          </strong>
+          {weather ? (
+            <small>
+              {daypartLabel(recommendationContext.localHour)} · Open-Meteo
+            </small>
+          ) : null}
+        </div>
+
         <div className="privacy-pill">
           <span className="privacy-dot" />
           {userLocation

@@ -41,6 +41,10 @@ export function errorJson(
     POI_PROVIDER_UNAVAILABLE: {
       status: 503,
       message: "Nguồn tìm kiếm địa điểm đang tạm thời không khả dụng."
+    },
+    WEATHER_PROVIDER_UNAVAILABLE: {
+      status: 503,
+      message: "Nguồn thời tiết đang tạm thời không khả dụng."
     }
   };
 

@@ -41,10 +41,41 @@ export async function GET(request: NextRequest) {
       180
     );
 
+    const west = optionalCoordinate(
+      request.nextUrl.searchParams.get("west"),
+      -180,
+      180
+    );
+    const south = optionalCoordinate(
+      request.nextUrl.searchParams.get("south"),
+      -90,
+      90
+    );
+    const east = optionalCoordinate(
+      request.nextUrl.searchParams.get("east"),
+      -180,
+      180
+    );
+    const north = optionalCoordinate(
+      request.nextUrl.searchParams.get("north"),
+      -90,
+      90
+    );
+
+    const bounds =
+      west !== undefined &&
+      south !== undefined &&
+      east !== undefined &&
+      north !== undefined &&
+      south < north
+        ? { west, south, east, north }
+        : undefined;
+
     const results = await searchPoi({
       query,
       latitude,
-      longitude
+      longitude,
+      bounds
     });
 
     return profileJson(profile, { results });

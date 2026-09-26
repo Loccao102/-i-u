@@ -2,6 +2,7 @@ import type {
   Collection,
   PersonalRating,
   Place,
+  RecommendationContext,
   Scenario,
   UserLocation,
   VisitRecord
@@ -71,13 +72,162 @@ function visitStats(visits: ReadonlyArray<VisitRecord>) {
   return result;
 }
 
+function placeContextText(place: Place) {
+  return normalize(
+    [
+      place.kind,
+      place.description,
+      place.note,
+      place.bestTime,
+      place.address ?? "",
+      ...place.tags
+    ].join(" ")
+  );
+}
+
+function timeContextScore(
+  place: Place,
+  context: RecommendationContext | undefined
+) {
+  if (!context) return { score: 0, reasons: [] as string[] };
+
+  const hour = context.localHour;
+  const text = placeContextText(place);
+  let score = 0;
+  const reasons: string[] = [];
+
+  const morning = hour >= 5 && hour < 11;
+  const lunch = hour >= 11 && hour < 14;
+  const afternoon = hour >= 14 && hour < 18;
+  const evening = hour >= 18 && hour < 22;
+  const late = hour >= 22 || hour < 5;
+
+  if (morning) {
+    if (place.scenarios.includes("coffee")) score += 5;
+    if (place.scenarios.includes("food")) score += 2;
+    if (/sáng|morning|breakfast/.test(text)) {
+      score += 6;
+      reasons.push("Hợp buổi sáng");
+    }
+  } else if (lunch) {
+    if (place.scenarios.includes("food")) score += 5;
+    if (/trưa|lunch/.test(text)) {
+      score += 5;
+      reasons.push("Hợp giờ trưa");
+    }
+  } else if (afternoon) {
+    if (place.scenarios.includes("coffee")) score += 4;
+    if (place.scenarios.includes("fun")) score += 3;
+    if (/chiều|afternoon/.test(text)) {
+      score += 4;
+      reasons.push("Hợp buổi chiều");
+    }
+  } else if (evening) {
+    if (
+      place.scenarios.some((item) =>
+        ["date", "chill", "food", "fun"].includes(item)
+      )
+    ) {
+      score += 4;
+    }
+    if (/tối|evening|19:|20:|21:/.test(text)) {
+      score += 6;
+      reasons.push("Hợp đi tối nay");
+    }
+  } else if (late) {
+    if (place.scenarios.includes("chill")) score += 4;
+    if (/bar|drink/.test(normalize(place.kind))) score += 6;
+    if (/muộn|late|22:|23:|00:/.test(text)) {
+      score += 6;
+      reasons.push("Hợp đi muộn");
+    }
+  }
+
+  if (context.isWeekend) {
+    if (
+      place.scenarios.includes("friends") ||
+      place.scenarios.includes("fun")
+    ) {
+      score += 3;
+      reasons.push("Hợp cuối tuần");
+    }
+    if (place.crowd === "Đông") score -= 2;
+  }
+
+  return { score, reasons };
+}
+
+function weatherContextScore(
+  place: Place,
+  context: RecommendationContext | undefined
+) {
+  const weather = context?.weather;
+  if (!weather) return { score: 0, reasons: [] as string[] };
+
+  const text = placeContextText(place);
+  const indoorLike =
+    /indoor|trong nhà|có mái|có mái che|trời mưa|mưa|covered/.test(text);
+  const outdoorLike =
+    /outdoor|ngoài trời|rooftop|sân vườn|view hồ|view đẹp|terrace/.test(text);
+
+  let score = 0;
+  const reasons: string[] = [];
+
+  if (weather.condition === "rain" || weather.condition === "storm") {
+    if (indoorLike) {
+      score += 10;
+      reasons.push("Hợp trời mưa");
+    } else if (
+      place.kind === "Cafe" ||
+      place.kind === "Restaurant" ||
+      place.kind === "Activity"
+    ) {
+      score += 3;
+      reasons.push("Dễ đi khi trời mưa");
+    }
+
+    if (outdoorLike && !indoorLike) score -= 6;
+  }
+
+  if (weather.condition === "clear" && outdoorLike) {
+    score += 6;
+    reasons.push("Trời đẹp hợp không gian mở");
+  }
+
+  if (weather.temperatureC >= 32) {
+    if (
+      !outdoorLike &&
+      (place.kind === "Cafe" || place.kind === "Restaurant")
+    ) {
+      score += 3;
+      reasons.push("Hợp tránh nóng");
+    } else if (outdoorLike) {
+      score -= 2;
+    }
+  }
+
+  if (!weather.isDay) {
+    if (
+      place.scenarios.includes("date") ||
+      place.scenarios.includes("chill") ||
+      /bar|drink/.test(normalize(place.kind))
+    ) {
+      score += 3;
+      reasons.push("Hợp buổi tối");
+    }
+  }
+
+  return { score, reasons };
+}
+
 function personalScore(
   place: Place,
   selectedScenario: Scenario | "all",
   detected: Scenario[],
   distanceKm: number,
   signals?: PersonalSignals,
-  stats?: ReadonlyMap<string, { count: number; latestAt: number }>
+  stats?: ReadonlyMap<string, { count: number; latestAt: number }>,
+  context?: RecommendationContext
 ) {
   let score = 44;
   const reasons: string[] = [];
@@ -94,6 +244,14 @@ function personalScore(
     score += 10;
     reasons.push("Khớp điều bạn đang tìm");
   }
+
+  const timeSignal = timeContextScore(place, context);
+  score += timeSignal.score;
+  reasons.push(...timeSignal.reasons);
+
+  const weatherSignal = weatherContextScore(place, context);
+  score += weatherSignal.score;
+  reasons.push(...weatherSignal.reasons);
 
   const rating = signals?.ratings[place.id];
   if (rating) {
@@ -149,7 +307,7 @@ function personalScore(
 
   return {
     score: Math.max(1, Math.min(99, Math.round(score))),
-    reasons: Array.from(new Set(reasons)).slice(0, 4)
+    reasons: Array.from(new Set(reasons)).slice(0, 5)
   };
 }
 
@@ -159,7 +317,8 @@ export function filterPlaces(
   scenario: Scenario | "all",
   userLocation: UserLocation | null,
   signals?: PersonalSignals,
-  serverDistances?: Readonly<Record<string, number>>
+  serverDistances?: Readonly<Record<string, number>>,
+  context?: RecommendationContext
 ) {
   const normalized = normalize(query);
   const detected = detectScenarios(query);
@@ -219,7 +378,8 @@ export function filterPlaces(
         detected,
         computedDistance,
         signals,
-        stats ?? undefined
+        stats ?? undefined,
+        context
       );
 
       return {
@@ -241,6 +401,38 @@ export function filterPlaces(
           (a.personalRating ?? a.publicRating) ||
         a.distanceKm - b.distanceKm
     );
+}
+
+export function pickSurprisePlace(
+  source: Place[],
+  signals: PersonalSignals
+): Place | null {
+  const accepted = source.filter(
+    (place) => signals.ratings[place.id]?.revisit !== "no"
+  );
+  const candidates = (accepted.length > 0 ? accepted : source).slice(0, 12);
+  if (candidates.length === 0) return null;
+
+  const stats = visitStats(signals.visits);
+  const weighted = candidates.map((place) => {
+    const count = stats.get(place.id)?.count ?? 0;
+    const novelty = count === 0 ? 18 : Math.max(0, 6 - count * 2);
+    const unsavedBonus = signals.savedIds.has(place.id) ? 0 : 3;
+    return {
+      place,
+      weight: Math.max(1, place.match - 45 + novelty + unsavedBonus)
+    };
+  });
+
+  const total = weighted.reduce((sum, item) => sum + item.weight, 0);
+  let target = Math.random() * total;
+
+  for (const item of weighted) {
+    target -= item.weight;
+    if (target <= 0) return item.place;
+  }
+
+  return weighted[weighted.length - 1]!.place;
 }
 
 export function recommendForCollection(
