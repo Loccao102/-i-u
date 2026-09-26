@@ -1040,3 +1040,95 @@ textarea:focus-visible {
     max-width: calc(100% - 75px);
   }
 }
+
+
+.personal-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #dce9e1;
+  border-radius: 999px;
+  padding: 9px 11px;
+  background: #f4faf6;
+  color: #4f6e5d;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.personal-mode-badge--error {
+  border-color: #f1d7d3;
+  background: #fff5f3;
+  color: #9b4f48;
+}
+
+.personal-mode-badge--error .privacy-dot {
+  background: #d66b61;
+}
+
+.personal-summary {
+  margin-top: 11px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.personal-summary > div {
+  min-width: 0;
+  border-radius: 14px;
+  padding: 11px 12px;
+  background: var(--surface-soft);
+  display: grid;
+  gap: 3px;
+}
+
+.personal-summary strong {
+  font-size: 13px;
+}
+
+.personal-summary span {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.personal-summary blockquote {
+  grid-column: 1 / -1;
+  margin-top: 0;
+}
+
+.personal-empty {
+  margin-top: 11px;
+  border-radius: 14px;
+  padding: 13px;
+  background: var(--surface-soft);
+  display: grid;
+  gap: 6px;
+}
+
+.personal-empty strong {
+  font-size: 12px;
+}
+
+.personal-empty span {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.personal-empty button {
+  justify-self: start;
+  border: 0;
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: var(--surface);
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+@media (max-width: 900px) {
+  .personal-mode-badge {
+    display: none;
+  }
+}
