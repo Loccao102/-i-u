@@ -1,64 +1,116 @@
 # Security and privacy baseline
 
-ĐiĐâu is personal-first. The initial product stores non-sensitive personal map data locally and does not require an account.
+ĐiĐâu is currently personal-first and uses a temporary server-side SQLite store.
 
-## Local personal data
+## Anonymous profile boundary
 
-The browser may persist these items in IndexedDB:
+There is no account/login system yet.
 
-- places the user manually adds;
-- Saved place ids;
-- personal ratings and short notes;
-- visit history.
+The server creates a cryptographically random 256-bit anonymous token and stores it in a cookie configured as:
 
-The IndexedDB payload is validated and bounded when read back. User-generated text is rendered as React text, never injected HTML.
+- `HttpOnly`;
+- `SameSite=Strict`;
+- `Secure` in production;
+- one-year expiry.
 
-This local storage is a convenience layer, not a secure vault. Do not store passwords, access tokens, private keys, government identifiers, payment data, or other high-sensitivity secrets in it.
+The raw token is not stored in SQLite. A SHA-256 derivative is used as `owner_key` and every personal repository query is scoped by that key.
+
+This protects one anonymous browser profile from accidentally reading another profile's rows through the app. It does **not** provide identity recovery, multi-device sync, password authentication or protection if the browser cookie itself is stolen.
+
+## SQLite
+
+SQLite stores:
+
+- user-added/imported places;
+- Saved links;
+- ratings;
+- check-ins / visit history;
+- collections;
+- collection-place links.
+
+SQLite does not store the user's live GPS position.
+
+The database defaults to:
+
+`.data/di-dau.sqlite`
+
+and can be moved with `SQLITE_PATH`.
+
+SQLite files, WAL and SHM files are ignored by Git.
 
 ## Location
 
-- Exact browser location is requested only after a user clicks **Vị trí của tôi**.
-- Current coordinates stay in React memory only.
-- Coordinates are not written to IndexedDB, localStorage, cookies, logs, analytics, or the repository.
-- Personal saved places have their own place coordinates; they are not treated as the user's live/current location.
+- geolocation is requested only after a user clicks **Vị trí của tôi**;
+- current coordinates stay in React memory;
+- exact current coordinates are not written to SQLite, localStorage, cookies or analytics;
+- coordinates can be sent transiently to the server to bias a POI search;
+- server code must not log those query parameters.
 
-## Secrets and providers
+Saved place coordinates are place data, not current/live user location.
 
-- Never put private provider keys in `NEXT_PUBLIC_*`.
-- `NEXT_PUBLIC_MAP_STYLE_URL` is allowed only for a public map style URL.
-- Paid POI search/geocoding/AI keys must stay server-side behind controlled route handlers.
-- Provider responses must be normalized before reaching UI components.
-- Do not proxy arbitrary client-provided URLs from the server.
+## State-changing APIs
+
+Mutations:
+
+- use JSON;
+- enforce same-origin when an Origin header is present;
+- use `SameSite=Strict` profile cookies;
+- validate and bound text, coordinates, enums and arrays before database writes;
+- scope every write by `owner_key`.
+
+When real authentication is added, add explicit CSRF tokens if the authentication design or cross-site use requires them.
+
+## POI provider
+
+OpenStreetMap/Nominatim is currently a development/MVP provider.
+
+Provider access is server-side:
+
+- client code does not call Nominatim directly;
+- requests use a descriptive User-Agent;
+- server requests are throttled to roughly one request per second;
+- results are cached briefly in memory;
+- responses are normalized before import.
+
+For a public/high-volume launch, replace the public Nominatim endpoint with an approved commercial provider or a self-hosted search service and comply with the provider's usage policy.
+
+## Secrets
+
+- never put private API keys in `NEXT_PUBLIC_*`;
+- server provider secrets belong in server-only environment variables;
+- do not return provider secrets through API responses;
+- do not proxy arbitrary client-provided URLs.
 
 ## User-generated content
 
-- Text is length-limited and stripped of angle brackets before persistence.
-- No `dangerouslySetInnerHTML` is used for personal content.
-- Future image uploads must use signed object-storage uploads, server-side MIME validation, byte-size limits, metadata stripping, and image re-encoding.
+- text is length limited;
+- angle brackets are removed by shared plain-text sanitization;
+- UI renders content as React text nodes;
+- no personal content uses `dangerouslySetInnerHTML`.
 
-## Authentication and sync
+Future image uploads must use:
 
-Authentication is deliberately postponed until the personal core is useful.
+- signed uploads;
+- MIME and byte-size validation;
+- metadata stripping;
+- image decoding/re-encoding;
+- non-public object storage by default.
 
-When optional cloud sync is added, use:
+## Deletion behavior
 
-- server-managed sessions in `HttpOnly; Secure; SameSite=Lax` cookies;
-- CSRF protection for state-changing requests;
-- authorization on every user-owned object;
-- opaque identifiers;
-- revocable sessions and session/device history;
-- rate limits for login, imports, ratings, search, and place creation;
-- explicit account deletion/export flows.
+Deleting a personal place transactionally removes that profile's:
 
-Do not replace the local-first model with a fake client-only authentication system.
+- collection links;
+- Saved link;
+- rating;
+- visits;
+- personal place row.
 
-## Groups
-
-Groups are a later capability, not a core dependency. Before group data ships, every server query must verify membership and resource ownership. A client-supplied `group_id` must never be trusted by itself.
+Deleting a collection only deletes the collection and its links.
 
 ## HTTP hardening
 
-The Next.js configuration enables:
+Next.js enables:
 
 - CSP;
 - frame denial;
@@ -66,10 +118,17 @@ The Next.js configuration enables:
 - no-referrer;
 - cross-origin opener isolation;
 - camera and microphone disabled by policy;
-- geolocation restricted to this origin.
+- geolocation restricted to the same origin.
 
-The current CSP permits inline framework/runtime styles/scripts where required by Next.js and MapLibre. Before a public launch, move toward nonce-based CSP so `unsafe-inline` can be reduced.
+Before broad public launch, move CSP toward nonce-based scripts/styles to reduce `unsafe-inline`.
 
-## Dependency policy
+## Future account/sync security
 
-The project intentionally uses very few runtime packages. Dependabot is enabled. Dependency additions should be justified and should not be used for trivial UI helpers.
+When cloud accounts are introduced:
+
+- use server-managed sessions in `HttpOnly; Secure; SameSite=Lax/Strict` cookies;
+- add revocable sessions/device history;
+- add rate limits around login, provider search and mutations;
+- enforce object ownership server-side;
+- provide export/delete flows;
+- do not treat the current anonymous cookie as an authenticated account.
