@@ -192,3 +192,17 @@ export type NextPlaceSuggestion = {
   transitionLabel: string;
   reason: string;
 };
+
+
+export type TasteProfile = {
+  sampleSize: number;
+  confidence: number;
+  scenarioScores: Partial<Record<Scenario, number>>;
+  priceScores: Record<Place["priceLabel"], number>;
+  noiseScores: Record<Place["noise"], number>;
+  crowdScores: Record<Place["crowd"], number>;
+  topScenarios: Scenario[];
+  preferredPrice: Place["priceLabel"] | null;
+  preferredNoise: Place["noise"] | null;
+  preferredCrowd: Place["crowd"] | null;
+};
