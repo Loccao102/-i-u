@@ -27,6 +27,10 @@ import { personalApi } from "@/lib/personal-api";
 import { buildEveningPlan, suggestWhatNext } from "@/lib/planner";
 import { places as seedPlaces, scenarioLabels } from "@/lib/places";
 import {
+  deriveTasteProfile,
+  tasteProfileSummary
+} from "@/lib/taste";
+import {
   filterPlaces,
   pickSurprisePlace,
   recommendForCollection
@@ -286,6 +290,11 @@ export function MapExplorer() {
     [customPlaces]
   );
 
+  const tasteProfile = useMemo(
+    () => deriveTasteProfile(allPlaces, ratings, visits),
+    [allPlaces, ratings, visits]
+  );
+
   const customIds = useMemo(
     () => new Set(customPlaces.map((place) => place.id)),
     [customPlaces]
@@ -332,7 +341,8 @@ export function MapExplorer() {
       userLocation,
       { savedIds: saved, ratings, visits },
       serverDistances,
-      recommendationContext
+      recommendationContext,
+      tasteProfile
     );
 
     const filtered = viewportBounds
@@ -380,7 +390,8 @@ export function MapExplorer() {
     recommendationContext,
     viewportBounds,
     viewportPersonalIds,
-    customIds
+    customIds,
+    tasteProfile
   ]);
 
   const rankedAll = useMemo(
@@ -392,7 +403,8 @@ export function MapExplorer() {
         userLocation,
         { savedIds: saved, ratings, visits },
         serverDistances,
-        recommendationContext
+        recommendationContext,
+        tasteProfile
       ),
     [
       allPlaces,
@@ -401,7 +413,8 @@ export function MapExplorer() {
       ratings,
       visits,
       serverDistances,
-      recommendationContext
+      recommendationContext,
+      tasteProfile
     ]
   );
 
@@ -1398,6 +1411,17 @@ export function MapExplorer() {
             <span className="sort-label">Phù hợp nhất</span>
           )}
         </div>
+
+        {view === "discover" && tasteProfile.sampleSize >= 2 ? (
+          <div className="taste-strip">
+            <span>Gu đang học</span>
+            <strong>{tasteProfileSummary(tasteProfile)}</strong>
+            <small>
+              {tasteProfile.sampleSize} nơi ·{" "}
+              {Math.round(tasteProfile.confidence * 100)}% confidence
+            </small>
+          </div>
+        ) : null}
 
         {providerResults.length > 0 ? (
           <div className="provider-results">
