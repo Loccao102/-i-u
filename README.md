@@ -6,116 +6,110 @@
 
 > **Mình nên đi đâu bây giờ?**
 
-The core is deliberately useful for one person before accounts or groups are introduced.
+The core is useful for one person first. Accounts and Groups remain optional later layers.
 
 ## Current personal core
 
-The web app now implements:
+- map-first discovery;
+- context search: Date / Bạn bè / Ăn uống / Cafe / Vui chơi / Chill;
+- Saved;
+- personal ratings;
+- visit history and check-in;
+- edit/delete personal places;
+- collections;
+- OpenStreetMap/Nominatim search and import;
+- smarter personal ranking;
+- responsive web UI.
 
-1. **Edit / delete personal places**
-   - places added manually or imported from a provider can be edited;
-   - delete also removes related Saved, rating, history and collection links.
+## Persistence: Supabase PostgreSQL + PostGIS
 
-2. **Collections**
-   - create, rename, describe and delete collections;
-   - add/remove any place from a collection;
-   - deleting a collection never deletes the place itself.
+SQLite has been removed.
 
-3. **Real POI search / import**
-   - search OpenStreetMap/Nominatim through a server route;
-   - optional current location can bias the search;
-   - imported places are normalized before they enter personal data;
-   - provider calls and rate limiting stay server-side.
-
-4. **Richer place detail**
-   - address when available;
-   - source;
-   - price level;
-   - best time;
-   - opening note;
-   - personal rating/history;
-   - Saved and collection membership.
-
-5. **Personal ranking**
-   - context match;
-   - personal rating;
-   - revisit intent;
-   - visit count/recency;
-   - Saved;
-   - distance;
-   - public rating only as fallback.
-
-6. **Check-in**
-   - record a visit without requiring a rating;
-   - rating can be added later;
-   - history is independent from Saved.
-
-Other core behavior:
-
-- MapLibre map;
-- Date / Bạn bè / Ăn uống / Cafe / Vui chơi / Chill contexts;
-- local filtering while typing;
-- explicit **Vị trí của tôi** opt-in;
-- current GPS position is never stored.
-
-## Temporary persistence: SQLite
-
-Personal data is stored server-side in SQLite using Node's built-in `node:sqlite`.
-
-Default database:
+Persistent personal data now goes through server-side Supabase:
 
 ```text
-.data/di-dau.sqlite
+Browser
+  ↓
+Next.js Route Handlers
+  ↓
+server-only Supabase admin client
+  ↓
+Supabase PostgreSQL + PostGIS
 ```
 
-Override with:
+The browser never receives the Supabase secret key.
+
+PostGIS is enabled in a dedicated `extensions` schema. Personal places have a generated `geography(Point, 4326)` column plus a GIST index so future nearby/viewport queries do not require a schema migration.
+
+## Anonymous personal identity
+
+Auth is still intentionally postponed.
+
+Each browser gets a random anonymous profile cookie:
+
+- `HttpOnly`;
+- `SameSite=Strict`;
+- `Secure` in production.
+
+The raw token is not stored in Supabase. A SHA-256 derivative is used as `owner_key`, and every server repository query scopes rows by that owner key.
+
+This gives the current personal MVP a stable isolated identity without forcing sign-up.
+
+## Supabase security model
+
+Tables have RLS enabled but expose no policies to `anon` or `authenticated`.
+
+The Next.js server uses a **Supabase secret key** only on the backend. The server performs owner scoping before every query.
+
+Do not create a `NEXT_PUBLIC_SUPABASE_SECRET_KEY`.
+
+Required environment variables:
 
 ```bash
-SQLITE_PATH=/absolute/path/to/di-dau.sqlite
+SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+SUPABASE_SECRET_KEY=sb_secret_...
 ```
 
-SQLite contains:
+Map styling remains public:
 
-- personal/imported places;
-- Saved;
-- ratings;
-- visit history;
-- collections and collection-place links.
+```bash
+NEXT_PUBLIC_MAP_STYLE_URL=https://demotiles.maplibre.org/style.json
+```
 
-The user's live/current GPS coordinate is never written to SQLite.
+## Apply the database migration
 
-### Anonymous profile isolation
-
-There is no account system yet.
-
-Each browser receives a cryptographically random anonymous token in an:
+The schema is versioned at:
 
 ```text
-HttpOnly
-SameSite=Strict
-Secure in production
+supabase/migrations/0001_personal_core.sql
 ```
 
-cookie.
+Apply it through the Supabase SQL Editor, Supabase CLI, or the connected Supabase tooling.
 
-SQLite rows are scoped by a SHA-256 owner key derived from that token. One browser profile therefore cannot query another profile's rows through normal application APIs.
+See [docs/SUPABASE.md](docs/SUPABASE.md).
 
-This is a temporary personal identity boundary, not a replacement for real authentication.
+## Vercel
 
-## SQLite deployment limitation
+This persistence model is Vercel-ready:
 
-SQLite is appropriate for:
+- no local writable database file;
+- no dependence on instance-local state;
+- Supabase is shared durable storage;
+- secret credentials stay in Vercel server environment variables;
+- current GPS remains transient.
 
-- local development;
-- a single personal server;
-- a single-instance VPS;
-- a container with a persistent volume.
+Before deploying, add `SUPABASE_URL` and `SUPABASE_SECRET_KEY` to the Vercel project environment.
 
-It is **not** the target architecture for horizontally scaled/serverless deployments.
+## Privacy
 
-Before deploying multiple stateless instances, migrate personal persistence to PostgreSQL/PostGIS or another shared durable database.
+Current/live GPS:
 
-See [docs/SQLITE.md](docs/SQLITE.md).
+- is requested only after an explicit user action;
+- stays in React memory;
+- may be sent transiently to the Next.js POI search route;
+- is not inserted into Supabase.
+
+Stored place coordinates represent saved places, not the user's live location.
 
 ## Stack
 
@@ -123,50 +117,31 @@ See [docs/SQLITE.md](docs/SQLITE.md).
 - React 19
 - TypeScript
 - MapLibre GL JS
-- Node `node:sqlite`
+- Supabase PostgreSQL
+- PostGIS
+- `@supabase/supabase-js`
 - plain CSS
-
-No ORM or client database library is required at this stage.
 
 ## Run locally
 
-Node 22+ is required.
-
 ```bash
 npm install
+cp .env.example .env.local
 npm run dev
 ```
 
-Open:
+Then open:
 
 ```text
 http://localhost:3000
 ```
 
-Optional:
+## Next
 
-```bash
-cp .env.example .env.local
-```
-
-## Privacy
-
-- GPS is requested only after an explicit click.
-- GPS stays in React memory only.
-- GPS may be sent transiently to the server to bias a POI search, but is not persisted.
-- provider/API secrets must never use `NEXT_PUBLIC_*`.
-- all state-changing APIs require same-origin JSON requests.
-
-See [docs/SECURITY.md](docs/SECURITY.md).
-
-## Next core slices
-
-After this 1→6 milestone:
-
-1. import/edit better opening hours and pricing data;
-2. duplicate-place detection when importing providers;
+1. duplicate-place detection for provider imports;
+2. server-side nearby query using the PostGIS RPC already included;
 3. collection-based recommendations;
-4. ranking explanation: “why this place is recommended”;
-5. export/import backup;
-6. optional account + cloud sync;
-7. only then add Groups and group voting.
+4. ranking explanation;
+5. export/import;
+6. Supabase Auth when multi-device identity becomes useful;
+7. Groups and group voting after the personal loop is mature.
