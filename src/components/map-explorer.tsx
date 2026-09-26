@@ -1366,18 +1366,60 @@ export function MapExplorer() {
         <div ref={mapNodeRef} className="map-canvas" />
         <div className="map-floating-top">
           <span>
-            {view === "discover"
-              ? "Ranking học từ rating + lịch sử + Saved"
-              : view === "collections"
-                ? "Bộ sưu tập cá nhân"
-                : view === "history"
-                  ? "Lịch sử đã đi"
-                  : "Địa điểm đã lưu"}
+            {viewportBounds
+              ? "Đang lọc khu vực bản đồ"
+              : view === "discover"
+                ? "Ranking theo gu + bối cảnh hiện tại"
+                : view === "collections"
+                  ? "Bộ sưu tập cá nhân"
+                  : view === "history"
+                    ? "Lịch sử đã đi"
+                    : "Địa điểm đã lưu"}
           </span>
-          <button type="button" onClick={() => void runPoiSearch()}>
-            Tìm khu vực này
+          <button
+            type="button"
+            className="surprise-button"
+            onClick={surpriseMe}
+          >
+            ✨ Bất ngờ
+          </button>
+          {viewportBounds ? (
+            <button
+              type="button"
+              className="map-secondary-action"
+              onClick={clearViewportFilter}
+            >
+              Bỏ vùng
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => void searchCurrentArea()}
+            disabled={viewportLoading}
+          >
+            {viewportLoading ? "Đang tìm…" : "Tìm khu vực này"}
           </button>
         </div>
+
+        <div className="weather-pill">
+          <span>{weatherEmoji(weather)}</span>
+          <strong>
+            {weatherLoading
+              ? "Đang xem thời tiết…"
+              : weather
+                ? weatherLabel(weather) +
+                  " · " +
+                  Math.round(weather.temperatureC) +
+                  "°C"
+                : daypartLabel(recommendationContext.localHour)}
+          </strong>
+          {weather ? (
+            <small>
+              {daypartLabel(recommendationContext.localHour)} · Open-Meteo
+            </small>
+          ) : null}
+        </div>
+
         <div className="privacy-pill">
           <span className="privacy-dot" />
           {userLocation
