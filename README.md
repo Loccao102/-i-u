@@ -18,7 +18,11 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - edit/delete personal places;
 - collections;
 - OpenStreetMap/Nominatim search and import;
-- smarter personal ranking;
+- smarter personal ranking with visible recommendation reasons;
+- collection-based recommendations;
+- duplicate-safe provider imports;
+- PostGIS-backed nearby distance lookup for persisted places;
+- JSON export/import backup with merge semantics;
 - responsive web UI.
 
 ## Persistence: Supabase PostgreSQL + PostGIS
@@ -138,10 +142,9 @@ http://localhost:3000
 
 ## Next
 
-1. duplicate-place detection for provider imports;
-2. server-side nearby query using the PostGIS RPC already included;
-3. collection-based recommendations;
-4. ranking explanation;
-5. export/import;
-6. Supabase Auth when multi-device identity becomes useful;
-7. Groups and group voting after the personal loop is mature.
+1. use PostGIS for viewport/bounding-box discovery, not only nearby distance;
+2. enrich provider imports with better opening-hours/price metadata;
+3. add lightweight "Surprise me" from personal ranking;
+4. add time/weather-aware signals when the base loop has enough usage data;
+5. Supabase Auth only when account recovery/multi-device sync is worth the friction;
+6. Groups and group voting after the personal loop is mature.
