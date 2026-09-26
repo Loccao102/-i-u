@@ -256,7 +256,8 @@ export function MapExplorer() {
   );
 
   const selected =
-    allPlaces.find((place) => place.id === selectedId) ??
+    visiblePlaces.find((place) => place.id === selectedId) ??
+    rankedAll.find((place) => place.id === selectedId) ??
     visiblePlaces[0] ??
     rankedAll[0] ??
     seedPlaces[0]!;
