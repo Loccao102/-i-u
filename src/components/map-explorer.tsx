@@ -775,12 +775,15 @@ export function MapExplorer() {
     }
   }
 
-  async function toggleCollectionPlace(collection: Collection) {
-    const included = !collection.placeIds.includes(selected.id);
+  async function toggleCollectionPlace(
+    collection: Collection,
+    placeId = selected.id
+  ) {
+    const included = !collection.placeIds.includes(placeId);
     try {
       await personalApi.setCollectionPlace(
         collection.id,
-        selected.id,
+        placeId,
         included
       );
       await loadSnapshot();
@@ -1066,7 +1069,9 @@ export function MapExplorer() {
                 <button
                   type="button"
                   aria-label={"Thêm " + place.name + " vào bộ sưu tập"}
-                  onClick={() => void toggleCollectionPlace(selectedCollection)}
+                  onClick={() =>
+                    void toggleCollectionPlace(selectedCollection, place.id)
+                  }
                 >
                   +
                 </button>
