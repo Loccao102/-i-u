@@ -184,3 +184,11 @@ export type EveningPlan = {
   withinBudget: boolean;
   summary: string;
 };
+
+
+export type NextPlaceSuggestion = {
+  place: Place;
+  distanceKm: number;
+  transitionLabel: string;
+  reason: string;
+};
