@@ -1872,7 +1872,7 @@ export function MapExplorer() {
           <fieldset className="dialog-fieldset">
             <legend>Mood</legend>
             <div className="scenario-row scenario-row--wrap">
-              {(["date", "friends", "fun", "chill", "food"] as Scenario[]).map(
+              {(["date", "friends", "fun", "chill", "food", "coffee"] as Scenario[]).map(
                 (item) => (
                   <button
                     type="button"
