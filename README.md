@@ -22,6 +22,10 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - collection-based recommendations;
 - duplicate-safe provider imports;
 - PostGIS-backed nearby distance lookup for persisted places;
+- PostGIS viewport search for the map area currently on screen;
+- **Surprise Me** weighted toward strong matches and places you have not over-visited;
+- time-aware ranking (morning / lunch / afternoon / evening / late);
+- weather-aware ranking with visible explanation;
 - JSON export/import backup with merge semantics;
 - responsive web UI.
 
@@ -61,7 +65,7 @@ This gives the current personal MVP a stable isolated identity without forcing s
 
 ## Supabase security model
 
-Tables have RLS enabled but expose no policies to `anon` or `authenticated`.
+Tables have RLS enabled with explicit deny-all policies for `anon` and `authenticated`.
 
 The Next.js server uses a **Supabase secret key** only on the backend. The server performs owner scoping before every query.
 
@@ -79,6 +83,14 @@ Map styling remains public:
 ```bash
 NEXT_PUBLIC_MAP_STYLE_URL=https://demotiles.maplibre.org/style.json
 ```
+
+Weather context uses Open-Meteo server-side. For the current personal/non-commercial phase, no key is required. If the app becomes commercial, configure:
+
+```bash
+OPEN_METEO_API_KEY=...
+```
+
+The server then switches to Open-Meteo's customer endpoint. Weather data is attributed in the map UI.
 
 ## Apply the database migration
 
@@ -142,9 +154,9 @@ http://localhost:3000
 
 ## Next
 
-1. use PostGIS for viewport/bounding-box discovery, not only nearby distance;
-2. enrich provider imports with better opening-hours/price metadata;
-3. add lightweight "Surprise me" from personal ranking;
-4. add time/weather-aware signals when the base loop has enough usage data;
+1. enrich provider imports with better opening-hours/price metadata;
+2. add a small plan builder: dinner → activity → cafe;
+3. learn stronger taste weights from repeated ratings instead of fixed scoring constants;
+4. add weather forecast awareness for planned outings, not only current conditions;
 5. Supabase Auth only when account recovery/multi-device sync is worth the friction;
 6. Groups and group voting after the personal loop is mature.
