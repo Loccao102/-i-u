@@ -25,9 +25,10 @@ import {
 } from "./icons";
 import { personalApi } from "@/lib/personal-api";
 import { places as seedPlaces, scenarioLabels } from "@/lib/places";
-import { filterPlaces } from "@/lib/search";
+import { filterPlaces, recommendForCollection } from "@/lib/search";
 import type {
   Collection,
+  PersonalBackup,
   PersonalRating,
   Place,
   PoiSearchResult,
@@ -121,6 +122,8 @@ export function MapExplorer() {
 
   const [providerResults, setProviderResults] = useState<PoiSearchResult[]>([]);
   const [providerLoading, setProviderLoading] = useState(false);
+  const [serverDistances, setServerDistances] = useState<Record<string, number>>({});
+  const [backupLoading, setBackupLoading] = useState(false);
 
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [locationStatus, setLocationStatus] = useState<
@@ -154,6 +157,7 @@ export function MapExplorer() {
   const editDialogRef = useRef<HTMLDialogElement | null>(null);
   const ratingDialogRef = useRef<HTMLDialogElement | null>(null);
   const collectionDialogRef = useRef<HTMLDialogElement | null>(null);
+  const backupInputRef = useRef<HTMLInputElement | null>(null);
 
   const loadSnapshot = useCallback(async () => {
     try {
@@ -208,7 +212,8 @@ export function MapExplorer() {
       query,
       scenario,
       userLocation,
-      { savedIds: saved, ratings, visits }
+      { savedIds: saved, ratings, visits },
+      serverDistances
     );
 
     if (view === "saved") {
@@ -242,18 +247,32 @@ export function MapExplorer() {
     visits,
     view,
     selectedCollection,
-    recentVisitByPlace
+    recentVisitByPlace,
+    serverDistances
   ]);
 
   const rankedAll = useMemo(
     () =>
-      filterPlaces(allPlaces, "", "all", userLocation, {
-        savedIds: saved,
-        ratings,
-        visits
-      }),
-    [allPlaces, userLocation, saved, ratings, visits]
+      filterPlaces(
+        allPlaces,
+        "",
+        "all",
+        userLocation,
+        { savedIds: saved, ratings, visits },
+        serverDistances
+      ),
+    [allPlaces, userLocation, saved, ratings, visits, serverDistances]
   );
+
+  const collectionSuggestions = useMemo(() => {
+    if (!selectedCollection) return [];
+    return recommendForCollection(
+      selectedCollection,
+      rankedAll,
+      { savedIds: saved, ratings, visits },
+      4
+    );
+  }, [selectedCollection, rankedAll, saved, ratings, visits]);
 
   const selected =
     visiblePlaces.find((place) => place.id === selectedId) ??
@@ -389,8 +408,21 @@ export function MapExplorer() {
           duration: 700
         });
         setNotice(
-          "GPS chỉ dùng trong phiên hiện tại và không được ghi vào SQLite."
+          "GPS chỉ dùng trong phiên hiện tại và không được ghi vào Supabase."
         );
+
+        void personalApi
+          .nearby(next, 500)
+          .then(({ results }) => {
+            setServerDistances(
+              Object.fromEntries(
+                results.map((item) => [item.placeId, item.distanceKm])
+              )
+            );
+          })
+          .catch(() => {
+            setServerDistances({});
+          });
       },
       () => {
         setLocationStatus("denied");
@@ -440,15 +472,73 @@ export function MapExplorer() {
 
   async function importPoi(result: PoiSearchResult) {
     try {
-      const place = await personalApi.importPoi(result);
+      const imported = await personalApi.importPoi(result);
       await loadSnapshot();
-      setSelectedId(place.id);
+      setSelectedId(imported.place.id);
       setProviderResults((current) =>
         current.filter((item) => item.providerId !== result.providerId)
       );
-      setNotice("Đã nhập địa điểm vào Supabase cá nhân.");
+      setNotice(
+        imported.duplicate
+          ? "Địa điểm này đã có trong dữ liệu cá nhân."
+          : "Đã nhập địa điểm vào Supabase cá nhân."
+      );
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Không thể nhập POI.");
+    }
+  }
+
+  async function exportBackup() {
+    setBackupLoading(true);
+    try {
+      const backup = await personalApi.exportBackup();
+      const blob = new Blob([JSON.stringify(backup, null, 2)], {
+        type: "application/json"
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download =
+        "di-dau-backup-" + new Date().toISOString().slice(0, 10) + ".json";
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setNotice("Đã xuất bản sao lưu cá nhân.");
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "Không thể xuất backup."
+      );
+    } finally {
+      setBackupLoading(false);
+    }
+  }
+
+  async function importBackupFile(file: File) {
+    if (file.size > 5 * 1024 * 1024) {
+      setNotice("File backup quá lớn. Giới hạn hiện tại là 5 MB.");
+      return;
+    }
+
+    setBackupLoading(true);
+    try {
+      const parsed: unknown = JSON.parse(await file.text());
+      const result = await personalApi.importBackup(parsed as PersonalBackup);
+      await loadSnapshot();
+      setNotice(
+        "Đã merge backup: " +
+          result.places +
+          " địa điểm, " +
+          result.ratings +
+          " rating, " +
+          result.collections +
+          " bộ sưu tập."
+      );
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "Không thể nhập backup."
+      );
+    } finally {
+      if (backupInputRef.current) backupInputRef.current.value = "";
+      setBackupLoading(false);
     }
   }
 
