@@ -16,10 +16,10 @@ export type Place = {
   distanceKm: number;
   priceLabel: "$" | "$$" | "$$$";
   averageForTwo: string;
-  rating: number;
-  groupRating: number;
+  publicRating: number;
+  personalRating?: number;
   match: number;
-  revisit: string;
+  communityNote: string;
   openUntil: string;
   bestTime: string;
   noise: "Yên" | "Vừa" | "Sôi động";
@@ -40,4 +40,25 @@ export type RatingDraft = {
   revisit: "yes" | "maybe" | "no";
   contexts: Scenario[];
   note: string;
+};
+
+export type PersonalRating = RatingDraft & {
+  placeId: string;
+  visitedAt: string;
+  updatedAt: string;
+};
+
+export type VisitRecord = {
+  id: string;
+  placeId: string;
+  visitedAt: string;
+  ratingStars: number | null;
+};
+
+export type PersonalSnapshot = {
+  version: 1;
+  customPlaces: Place[];
+  savedIds: string[];
+  ratings: Record<string, PersonalRating>;
+  visits: VisitRecord[];
 };
