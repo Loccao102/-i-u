@@ -256,12 +256,6 @@ function personalScore(
   score += weatherSignal.score;
   reasons.push(...weatherSignal.reasons);
 
-  if (tasteProfile) {
-    const tasteSignal = scoreTasteMatch(place, tasteProfile);
-    score += tasteSignal.score;
-    reasons.push(...tasteSignal.reasons);
-  }
-
   const rating = signals?.ratings[place.id];
   if (rating) {
     score += (rating.stars - 3) * 5;
@@ -285,6 +279,12 @@ function personalScore(
     }
   } else if (place.publicRating > 0) {
     score += (place.publicRating - 3) * 1.5;
+  }
+
+  if (tasteProfile) {
+    const tasteSignal = scoreTasteMatch(place, tasteProfile);
+    score += tasteSignal.score;
+    reasons.push(...tasteSignal.reasons);
   }
 
   if (signals?.savedIds.has(place.id)) {
