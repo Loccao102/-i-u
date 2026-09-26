@@ -136,8 +136,8 @@ function listRatings(ownerKey: string) {
   return result;
 }
 
-function listVisits(ownerKey: string) {
-  return getDatabase()
+function listVisits(ownerKey: string): VisitRecord[] {
+  const rows = getDatabase()
     .prepare(
       `SELECT id, place_id, visited_at, rating_stars
        FROM visits
@@ -145,7 +145,19 @@ function listVisits(ownerKey: string) {
        ORDER BY visited_at DESC
        LIMIT 5000`
     )
-    .all(ownerKey) as unknown as VisitRecord[];
+    .all(ownerKey) as unknown as Array<{
+    id: string;
+    place_id: string;
+    visited_at: string;
+    rating_stars: number | null;
+  }>;
+
+  return rows.map((row) => ({
+    id: row.id,
+    placeId: row.place_id,
+    visitedAt: row.visited_at,
+    ratingStars: row.rating_stars
+  }));
 }
 
 function listCollections(ownerKey: string): Collection[] {
