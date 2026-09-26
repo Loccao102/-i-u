@@ -28,16 +28,17 @@ async function api<T>(
     cache: "no-store"
   });
 
-  const data = (await response.json()) as
-    | T
-    | { error?: string };
+  const data: unknown = await response.json();
 
   if (!response.ok) {
-    throw new Error(
-      "error" in data && data.error
-        ? data.error
-        : "Yêu cầu không hoàn tất."
-    );
+    const message =
+      data &&
+      typeof data === "object" &&
+      "error" in data &&
+      typeof (data as { error?: unknown }).error === "string"
+        ? (data as { error: string }).error
+        : "Yêu cầu không hoàn tất.";
+    throw new Error(message);
   }
 
   return data as T;
