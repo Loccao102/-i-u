@@ -55,7 +55,7 @@ PostGIS is installed in a dedicated `extensions` schema, not `public`.
 
 `personal_places.location` is generated from longitude/latitude and indexed with GIST.
 
-The included `nearby_personal_places` RPC is executable only by `service_role`.
+The included `nearby_personal_places` and `viewport_personal_places` RPCs are executable only by `service_role` and run as `SECURITY INVOKER`.
 
 ## Delete integrity
 
@@ -80,6 +80,8 @@ Live browser GPS:
 - should not be intentionally logged.
 
 Saved-place coordinates are place data, not live user position.
+
+Map viewport bounds are also transient. They may be sent to the server to run PostGIS viewport queries and to constrain POI search, but are not persisted.
 
 ## State-changing APIs
 
@@ -111,3 +113,15 @@ When accounts become useful:
 - add user-owned RLS policies;
 - preserve explicit export/delete flows;
 - keep elevated secret-key clients separate from user-session clients.
+
+
+## Weather context
+
+Current weather is fetched server-side from Open-Meteo using either:
+
+- the free endpoint when no key is configured; or
+- the paid customer endpoint when `OPEN_METEO_API_KEY` is present.
+
+Coordinates used for weather are transient and are not stored by ĐiĐâu.
+
+The app displays Open-Meteo attribution in the map UI. The free endpoint is only appropriate for the current personal/non-commercial phase; commercial use should configure a licensed Open-Meteo plan.
