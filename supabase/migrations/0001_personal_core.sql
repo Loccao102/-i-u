@@ -130,7 +130,7 @@ create or replace function public.delete_personal_place(
 )
 returns boolean
 language plpgsql
-security definer
+security invoker
 set search_path = ''
 as $$
 declare
@@ -175,7 +175,7 @@ returns table (
 )
 language sql
 stable
-security definer
+security invoker
 set search_path = ''
 as $$
   select
