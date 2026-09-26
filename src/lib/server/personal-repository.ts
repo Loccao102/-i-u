@@ -3,7 +3,9 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { getSupabaseAdmin } from "./supabase";
 import type {
+  BackupImportResult,
   Collection,
+  NearbyPlaceResult,
   PersonalRating,
   PersonalSnapshot,
   Place,
@@ -472,4 +474,194 @@ export async function setCollectionPlace(
   dbError(touchError, "Touch collection");
 
   return true;
+}
+
+
+export async function findProviderPlace(
+  ownerKey: string,
+  providerId: string
+): Promise<Place | null> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("personal_places")
+    .select(
+      "id,name,kind,description,latitude,longitude,distance_km,price_label,average_for_two,public_rating,match_score,community_note,open_until,best_time,noise,crowd,tags,scenarios,note,accent,source,provider_id,address"
+    )
+    .eq("owner_key", ownerKey)
+    .eq("source", "PROVIDER")
+    .eq("provider_id", providerId)
+    .maybeSingle();
+
+  dbError(error, "Find provider place");
+  return data ? mapPlace(data as PlaceRow) : null;
+}
+
+export async function importProviderPlace(
+  ownerKey: string,
+  place: Place
+): Promise<{ place: Place; duplicate: boolean }> {
+  if (place.source !== "provider" || !place.providerId) {
+    throw new Error("INVALID_PROVIDER_PLACE");
+  }
+
+  const existing = await findProviderPlace(ownerKey, place.providerId);
+  if (existing) {
+    return { place: existing, duplicate: true };
+  }
+
+  try {
+    await upsertPlace(ownerKey, place);
+    return { place, duplicate: false };
+  } catch (error) {
+    const raced = await findProviderPlace(ownerKey, place.providerId);
+    if (raced) {
+      return { place: raced, duplicate: true };
+    }
+    throw error;
+  }
+}
+
+export async function listNearbyPersonalPlaceDistances(
+  ownerKey: string,
+  latitude: number,
+  longitude: number,
+  limit = 100
+): Promise<NearbyPlaceResult[]> {
+  const { data, error } = await getSupabaseAdmin().rpc(
+    "nearby_personal_places",
+    {
+      p_owner_key: ownerKey,
+      p_lat: latitude,
+      p_long: longitude,
+      p_limit: Math.max(1, Math.min(limit, 500))
+    }
+  );
+
+  dbError(error, "Nearby personal places");
+
+  return (data ?? []).map((row) => ({
+    placeId: String(row.id),
+    distanceKm: Number(row.distance_meters) / 1000
+  }));
+}
+
+export async function mergePersonalBackup(
+  ownerKey: string,
+  snapshot: PersonalSnapshot
+): Promise<BackupImportResult> {
+  const client = getSupabaseAdmin();
+  const idRemap = new Map<string, string>();
+
+  let places = 0;
+  for (const place of snapshot.customPlaces) {
+    if (place.source === "provider" && place.providerId) {
+      const imported = await importProviderPlace(ownerKey, place);
+      idRemap.set(place.id, imported.place.id);
+      if (!imported.duplicate) places += 1;
+    } else {
+      await upsertPlace(ownerKey, place);
+      idRemap.set(place.id, place.id);
+      places += 1;
+    }
+  }
+
+  const mapPlaceId = (placeId: string) => idRemap.get(placeId) ?? placeId;
+  const now = new Date().toISOString();
+
+  const savedRows = Array.from(
+    new Set(snapshot.savedIds.map(mapPlaceId))
+  ).map((placeId) => ({
+    owner_key: ownerKey,
+    place_id: placeId,
+    created_at: now
+  }));
+
+  if (savedRows.length > 0) {
+    const { error } = await client
+      .from("saved_places")
+      .upsert(savedRows, {
+        onConflict: "owner_key,place_id",
+        ignoreDuplicates: true
+      });
+    dbError(error, "Import saved places");
+  }
+
+  const ratingRows = Object.values(snapshot.ratings).map((rating) => ({
+    owner_key: ownerKey,
+    place_id: mapPlaceId(rating.placeId),
+    stars: rating.stars,
+    revisit: rating.revisit,
+    contexts: rating.contexts,
+    note: rating.note,
+    visited_at: rating.visitedAt,
+    updated_at: rating.updatedAt
+  }));
+
+  if (ratingRows.length > 0) {
+    const { error } = await client
+      .from("personal_ratings")
+      .upsert(ratingRows, { onConflict: "owner_key,place_id" });
+    dbError(error, "Import ratings");
+  }
+
+  const visitRows = snapshot.visits.map((visit) => ({
+    owner_key: ownerKey,
+    id: visit.id,
+    place_id: mapPlaceId(visit.placeId),
+    visited_at: visit.visitedAt,
+    rating_stars: visit.ratingStars
+  }));
+
+  if (visitRows.length > 0) {
+    const { error } = await client
+      .from("visits")
+      .upsert(visitRows, {
+        onConflict: "owner_key,id",
+        ignoreDuplicates: true
+      });
+    dbError(error, "Import visits");
+  }
+
+  const collectionRows = snapshot.collections.map((collection) => ({
+    owner_key: ownerKey,
+    id: collection.id,
+    name: collection.name,
+    description: collection.description,
+    created_at: collection.createdAt,
+    updated_at: collection.updatedAt
+  }));
+
+  if (collectionRows.length > 0) {
+    const { error } = await client
+      .from("collections")
+      .upsert(collectionRows, { onConflict: "owner_key,id" });
+    dbError(error, "Import collections");
+  }
+
+  const collectionPlaceRows = snapshot.collections.flatMap((collection) =>
+    collection.placeIds.map((placeId) => ({
+      owner_key: ownerKey,
+      collection_id: collection.id,
+      place_id: mapPlaceId(placeId),
+      created_at: now
+    }))
+  );
+
+  if (collectionPlaceRows.length > 0) {
+    const { error } = await client
+      .from("collection_places")
+      .upsert(collectionPlaceRows, {
+        onConflict: "owner_key,collection_id,place_id",
+        ignoreDuplicates: true
+      });
+    dbError(error, "Import collection places");
+  }
+
+  return {
+    places,
+    saved: savedRows.length,
+    ratings: ratingRows.length,
+    visits: visitRows.length,
+    collections: collectionRows.length,
+    collectionPlaces: collectionPlaceRows.length
+  };
 }
