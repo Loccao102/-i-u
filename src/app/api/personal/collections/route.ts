@@ -12,10 +12,8 @@ export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
   const profile = resolveAnonymousProfile(request);
-  return profileJson(
-    profile,
-    { collections: await getPersonalSnapshot(profile.ownerKey).collections }
-  );
+  const snapshot = await getPersonalSnapshot(profile.ownerKey);
+  return profileJson(profile, { collections: snapshot.collections });
 }
 
 export async function POST(request: NextRequest) {
