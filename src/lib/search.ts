@@ -73,7 +73,8 @@ function personalScore(
   selectedScenario: Scenario | "all",
   detected: Scenario[],
   distanceKm: number,
-  signals?: PersonalSignals
+  signals?: PersonalSignals,
+  stats?: ReadonlyMap<string, { count: number; latestAt: number }>
 ) {
   let score = 44;
 
@@ -99,14 +100,12 @@ function personalScore(
 
   if (signals?.savedIds.has(place.id)) score += 4;
 
-  if (signals) {
-    const stats = visitStats(signals.visits).get(place.id);
-    if (stats) {
-      score += Math.min(6, stats.count * 1.5);
-      const ageDays =
-        (Date.now() - stats.latestAt) / (1000 * 60 * 60 * 24);
-      if (ageDays < 30) score += 3;
-    }
+  const placeStats = stats?.get(place.id);
+  if (placeStats) {
+    score += Math.min(6, placeStats.count * 1.5);
+    const ageDays =
+      (Date.now() - placeStats.latestAt) / (1000 * 60 * 60 * 24);
+    if (ageDays < 30) score += 3;
   }
 
   if (Number.isFinite(distanceKm)) {
@@ -176,7 +175,8 @@ export function filterPlaces(
         scenario,
         detected,
         computedDistance,
-        signals
+        signals,
+        stats ?? undefined
       );
 
       return {
