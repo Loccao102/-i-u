@@ -762,9 +762,16 @@ export function MapExplorer() {
 
     if (activePlan.stops.length === 1) {
       const only = activePlan.stops[0]!.place;
-      const url =
-        "https://www.google.com/maps/search/?api=1&query=" +
-        encodeURIComponent(only.latitude + "," + only.longitude);
+      const url = userLocation
+        ? "https://www.google.com/maps/dir/?api=1&origin=" +
+          encodeURIComponent(
+            userLocation.latitude + "," + userLocation.longitude
+          ) +
+          "&destination=" +
+          encodeURIComponent(only.latitude + "," + only.longitude) +
+          "&travelmode=driving"
+        : "https://www.google.com/maps/search/?api=1&query=" +
+          encodeURIComponent(only.latitude + "," + only.longitude);
       window.open(url, "_blank", "noopener,noreferrer");
       return;
     }
@@ -2003,6 +2010,7 @@ export function MapExplorer() {
                           duration: 650,
                           essential: true
                         });
+                        planDialogRef.current?.close();
                       }}
                     >
                       <span className="plan-stop__top">
