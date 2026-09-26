@@ -24,7 +24,7 @@ import {
   StarIcon
 } from "./icons";
 import { personalApi } from "@/lib/personal-api";
-import { buildEveningPlan } from "@/lib/planner";
+import { buildEveningPlan, suggestWhatNext } from "@/lib/planner";
 import { places as seedPlaces, scenarioLabels } from "@/lib/places";
 import {
   filterPlaces,
@@ -424,6 +424,35 @@ export function MapExplorer() {
 
   const selectedPersonalRating = ratings[selected.id] ?? null;
   const selectedVisit = recentVisitByPlace.get(selected.id) ?? null;
+  const selectedVisitTime = selectedVisit
+    ? new Date(selectedVisit.visitedAt).getTime()
+    : Number.NaN;
+  const selectedVisitedRecently =
+    Number.isFinite(selectedVisitTime) &&
+    clock.getTime() - selectedVisitTime >= 0 &&
+    clock.getTime() - selectedVisitTime <= 8 * 60 * 60 * 1000;
+
+  const whatNextSuggestions = useMemo(
+    () =>
+      selectedVisitedRecently
+        ? suggestWhatNext({
+            current: selected,
+            places: rankedAll,
+            signals: { savedIds: saved, ratings, visits },
+            maxDistanceKm: 4,
+            limit: 3
+          })
+        : [],
+    [
+      selectedVisitedRecently,
+      selected,
+      rankedAll,
+      saved,
+      ratings,
+      visits
+    ]
+  );
+
   const isPersonalPlace = customIds.has(selected.id);
 
   useEffect(() => {
@@ -930,7 +959,24 @@ export function MapExplorer() {
     try {
       await personalApi.checkIn(selected.id);
       await loadSnapshot();
-      setNotice("Đã check-in. Bạn có thể đánh giá sau.");
+
+      const next = suggestWhatNext({
+        current: selected,
+        places: rankedAll,
+        signals: { savedIds: saved, ratings, visits },
+        maxDistanceKm: 4,
+        limit: 1
+      })[0];
+
+      setNotice(
+        next
+          ? "Đã check-in · Đi tiếp: " +
+              next.place.name +
+              " (" +
+              distanceLabel(next.distanceKm) +
+              ")"
+          : "Đã check-in. Bạn có thể đánh giá sau."
+      );
     } catch (error) {
       setNotice(
         error instanceof Error ? error.message : "Không thể check-in."
@@ -1413,6 +1459,37 @@ export function MapExplorer() {
           </div>
         ) : null}
 
+        {selectedVisitedRecently && whatNextSuggestions[0] ? (
+          <div className="what-next-strip">
+            <div>
+              <span className="eyebrow">Đi đâu tiếp?</span>
+              <small>Từ {selected.name}</small>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const next = whatNextSuggestions[0]!;
+                setSelectedId(next.place.id);
+                mapRef.current?.flyTo({
+                  center: [
+                    next.place.longitude,
+                    next.place.latitude
+                  ],
+                  zoom: 14,
+                  duration: 650,
+                  essential: true
+                });
+              }}
+            >
+              <strong>{whatNextSuggestions[0].place.name}</strong>
+              <span>
+                {whatNextSuggestions[0].transitionLabel} ·{" "}
+                {distanceLabel(whatNextSuggestions[0].distanceKm)}
+              </span>
+            </button>
+          </div>
+        ) : null}
+
         <div className="place-list">
           {visiblePlaces.length === 0 ? (
             <div className="empty-state">
@@ -1698,6 +1775,41 @@ export function MapExplorer() {
               </div>
             )}
           </section>
+
+          {selectedVisitedRecently && whatNextSuggestions.length > 0 ? (
+            <section className="detail-section">
+              <span className="eyebrow">Đi đâu tiếp?</span>
+              <div className="what-next-list">
+                {whatNextSuggestions.map((item) => (
+                  <button
+                    type="button"
+                    key={item.place.id}
+                    onClick={() => {
+                      setSelectedId(item.place.id);
+                      mapRef.current?.flyTo({
+                        center: [
+                          item.place.longitude,
+                          item.place.latitude
+                        ],
+                        zoom: 14,
+                        duration: 650,
+                        essential: true
+                      });
+                    }}
+                  >
+                    <span className="what-next-list__top">
+                      <strong>{item.place.name}</strong>
+                      <b>{item.place.match}%</b>
+                    </span>
+                    <span>
+                      {item.transitionLabel} · {distanceLabel(item.distanceKm)}
+                    </span>
+                    <small>{item.reason}</small>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           <section className="detail-section">
             <span className="eyebrow">Bộ sưu tập</span>
