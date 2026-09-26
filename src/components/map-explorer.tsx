@@ -24,6 +24,7 @@ import {
   StarIcon
 } from "./icons";
 import { personalApi } from "@/lib/personal-api";
+import { buildEveningPlan } from "@/lib/planner";
 import { places as seedPlaces, scenarioLabels } from "@/lib/places";
 import {
   filterPlaces,
@@ -32,6 +33,7 @@ import {
 } from "@/lib/search";
 import type {
   Collection,
+  EveningPlan,
   MapBounds,
   PersonalBackup,
   PersonalRating,
@@ -184,6 +186,14 @@ export function MapExplorer() {
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [clock, setClock] = useState(() => new Date());
 
+  const [planScenario, setPlanScenario] = useState<Scenario>("date");
+  const [planBudget, setPlanBudget] = useState(700_000);
+  const [planDistance, setPlanDistance] = useState(5);
+  const [planDuration, setPlanDuration] = useState<2 | 3 | 4>(4);
+  const [planStartTime, setPlanStartTime] = useState("19:00");
+  const [planVariant, setPlanVariant] = useState(0);
+  const [activePlan, setActivePlan] = useState<EveningPlan | null>(null);
+
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [locationStatus, setLocationStatus] = useState<
     "idle" | "loading" | "ready" | "denied"
@@ -216,6 +226,7 @@ export function MapExplorer() {
   const editDialogRef = useRef<HTMLDialogElement | null>(null);
   const ratingDialogRef = useRef<HTMLDialogElement | null>(null);
   const collectionDialogRef = useRef<HTMLDialogElement | null>(null);
+  const planDialogRef = useRef<HTMLDialogElement | null>(null);
   const backupInputRef = useRef<HTMLInputElement | null>(null);
 
   const loadSnapshot = useCallback(async () => {
@@ -683,6 +694,100 @@ export function MapExplorer() {
     const reason =
       picked.recommendationReasons?.[0] ?? "phù hợp với gu hiện tại";
     setNotice("🎯 " + picked.name + " · " + reason);
+  }
+
+  function plannerOrigin(): UserLocation {
+    if (userLocation) return userLocation;
+    const center = mapRef.current?.getCenter();
+    return center
+      ? { latitude: center.lat, longitude: center.lng }
+      : { latitude: defaultCenter[1], longitude: defaultCenter[0] };
+  }
+
+  function generatePlan(nextVariant = planVariant) {
+    const source =
+      view === "discover" && visiblePlaces.length > 0
+        ? visiblePlaces
+        : rankedAll;
+
+    const result = buildEveningPlan({
+      places: source,
+      preferences: {
+        scenario: planScenario,
+        budgetForTwo: planBudget,
+        maxDistanceKm: planDistance,
+        durationHours: planDuration,
+        startTime: planStartTime
+      },
+      signals: { savedIds: saved, ratings, visits },
+      origin: plannerOrigin(),
+      variant: nextVariant
+    });
+
+    setPlanVariant(nextVariant);
+    setActivePlan(result);
+
+    if (!result) {
+      setNotice(
+        "Chưa đủ địa điểm phù hợp. Thử tăng bán kính hoặc đổi mood."
+      );
+    }
+  }
+
+  function openPlanBuilder() {
+    setPlanScenario(scenario === "all" ? "date" : scenario);
+    setPlanVariant(0);
+    setActivePlan(null);
+    planDialogRef.current?.showModal();
+  }
+
+  function openPlanRoute() {
+    if (!activePlan || activePlan.stops.length === 0) return;
+
+    if (activePlan.stops.length === 1) {
+      const only = activePlan.stops[0]!.place;
+      const url =
+        "https://www.google.com/maps/search/?api=1&query=" +
+        encodeURIComponent(only.latitude + "," + only.longitude);
+      window.open(url, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    const origin = userLocation
+      ? userLocation.latitude + "," + userLocation.longitude
+      : activePlan.stops[0]!.place.latitude +
+        "," +
+        activePlan.stops[0]!.place.longitude;
+
+    const last = activePlan.stops[activePlan.stops.length - 1]!.place;
+    const waypointStops = userLocation
+      ? activePlan.stops.slice(0, -1)
+      : activePlan.stops.slice(1, -1);
+
+    const params = new URLSearchParams({
+      api: "1",
+      origin,
+      destination: last.latitude + "," + last.longitude,
+      travelmode: "driving"
+    });
+
+    if (waypointStops.length > 0) {
+      params.set(
+        "waypoints",
+        waypointStops
+          .map(
+            (stop) =>
+              stop.place.latitude + "," + stop.place.longitude
+          )
+          .join("|")
+      );
+    }
+
+    window.open(
+      "https://www.google.com/maps/dir/?" + params.toString(),
+      "_blank",
+      "noopener,noreferrer"
+    );
   }
 
   async function importPoi(result: PoiSearchResult) {
