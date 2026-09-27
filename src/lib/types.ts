@@ -53,6 +53,21 @@ export type PersonalRating = RatingDraft & {
   updatedAt: string;
 };
 
+export type RecommendationFeedbackReason =
+  | "not_taste"
+  | "not_now"
+  | "too_far"
+  | "too_expensive";
+
+export type RecommendationFeedback = {
+  placeId: string;
+  reason: RecommendationFeedbackReason;
+  scenario: Scenario | null;
+  distanceKm: number | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type VisitRecord = {
   id: string;
   placeId: string;
@@ -70,10 +85,11 @@ export type Collection = {
 };
 
 export type PersonalSnapshot = {
-  version: 2;
+  version: 3;
   customPlaces: Place[];
   savedIds: string[];
   ratings: Record<string, PersonalRating>;
+  recommendationFeedbacks: Record<string, RecommendationFeedback>;
   visits: VisitRecord[];
   collections: Collection[];
 };
@@ -114,6 +130,7 @@ export type BackupImportResult = {
   places: number;
   saved: number;
   ratings: number;
+  recommendationFeedbacks: number;
   visits: number;
   collections: number;
   collectionPlaces: number;
