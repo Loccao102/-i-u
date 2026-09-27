@@ -39,6 +39,7 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - **Surprise Me** weighted toward strong matches and places you have not over-visited;
 - **Khám phá hôm nay** with profile-persisted daily place and route history: the place stays stable when the same daily candidate is available, prefers never-visited options and avoids recent daily picks across sessions;
 - a compact 7-day discovery insight shows active discovery days, unique suggested places and generated routes;
+- weekly discovery recap highlights the route mood that appears most often and suggests a highly rated place to revisit after at least 7 days;
 - daily routes use a date seed for variety, avoid place keys used by routes in the previous 7 days when possible, and still respect personal taste, budget, distance, hourly weather forecast and scheduled opening-hours guardrails;
 - time-aware ranking (morning / lunch / afternoon / evening / late);
 - weather-aware ranking with visible explanation;
@@ -219,8 +220,8 @@ http://localhost:3000
 
 ## Next
 
-1. add a lightweight weekly discovery recap with revisit prompts and favorite discovery patterns;
-2. improve provider-derived price signals so fewer places start with unknown cost;
+1. improve provider-derived price signals so fewer places start with unknown cost;
+2. add optional weekly discovery notifications only after the personal loop proves useful;
 3. Supabase Auth only when account recovery/multi-device sync is worth the friction;
 4. Groups and group voting after the personal loop is mature.
 
