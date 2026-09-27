@@ -6,6 +6,7 @@ import type {
   NextPlaceSuggestion,
   PersonalRating,
   Place,
+  PlannerCostProfile,
   RecommendationFeedback,
   PlanStage,
   Scenario,
@@ -20,6 +21,7 @@ type PlannerSignals = {
   ratings: Readonly<Record<string, PersonalRating>>;
   feedbacks?: Readonly<Record<string, RecommendationFeedback>>;
   visits: ReadonlyArray<VisitRecord>;
+  costProfile?: PlannerCostProfile;
 };
 
 const stageLabels: Record<PlanStage, string> = {
@@ -39,6 +41,15 @@ function normalize(value: string) {
 }
 
 function parseMoney(value: string) {
+  const plain = /^\s*([\d.,]+)\s*(?:₫|đ|vnd)?\s*$/i.exec(value);
+  if (plain) {
+    const digits = plain[1]!.replace(/[.,]/g, "");
+    const number = Number(digits);
+    if (Number.isFinite(number) && number >= 10_000) {
+      return Math.round(number);
+    }
+  }
+
   const range = /(\d+(?:[.,]\d+)?)\s*[-–—]\s*(\d+(?:[.,]\d+)?)\s*(k|nghìn|ngàn|triệu|tr)\b/i.exec(
     value
   );
@@ -77,8 +88,69 @@ function parseMoney(value: string) {
   );
 }
 
-export function estimateCostForTwo(place: Place) {
-  return parseMoney(place.averageForTwo) ?? fallbackCost[place.priceLabel];
+function costStage(place: Place): PlanStage {
+  const kind = normalize(place.kind);
+  if (place.scenarios.includes("food") || kind.includes("restaurant")) {
+    return "food";
+  }
+  if (place.scenarios.includes("fun") || kind.includes("activity")) {
+    return "activity";
+  }
+  return "coffee";
+}
+
+function median(values: number[]) {
+  if (values.length === 0) return null;
+  const ordered = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(ordered.length / 2);
+  return ordered.length % 2 === 0
+    ? Math.round((ordered[middle - 1]! + ordered[middle]!) / 2)
+    : ordered[middle]!;
+}
+
+export function derivePlannerCostProfile(
+  places: ReadonlyArray<Place>
+): PlannerCostProfile {
+  const all: number[] = [];
+  const grouped: Record<PlanStage, number[]> = {
+    food: [],
+    activity: [],
+    coffee: []
+  };
+
+  for (const place of places) {
+    const explicit = parseMoney(place.averageForTwo);
+    if (explicit === null) continue;
+
+    all.push(explicit);
+    grouped[costStage(place)].push(explicit);
+  }
+
+  const byStage: PlannerCostProfile["byStage"] = {};
+  for (const stage of ["food", "activity", "coffee"] as PlanStage[]) {
+    const value = median(grouped[stage]);
+    if (value !== null) byStage[stage] = value;
+  }
+
+  return {
+    sampleSize: all.length,
+    overallMedian: median(all),
+    byStage
+  };
+}
+
+export function estimateCostForTwo(
+  place: Place,
+  costProfile?: PlannerCostProfile
+) {
+  const explicit = parseMoney(place.averageForTwo);
+  if (explicit !== null) return explicit;
+
+  const learned =
+    costProfile?.byStage[costStage(place)] ??
+    costProfile?.overallMedian;
+
+  return learned ?? fallbackCost[place.priceLabel];
 }
 
 function stagesFor(
@@ -314,7 +386,7 @@ function candidateScore(input: {
     return null;
   }
 
-  const cost = estimateCostForTwo(place);
+  const cost = estimateCostForTwo(place, signals.costProfile);
   if (cost > stageBudget) return null;
 
   const routePenalty = legDistance * (previous ? 6.5 : 3.2);
@@ -381,7 +453,7 @@ function buildWithGuardrails(input: {
       .filter((place) => !used.has(place.id))
       .filter((place) => matchesStage(place, stage))
       .map((place) => {
-        const cost = estimateCostForTwo(place);
+        const cost = estimateCostForTwo(place, signals.costProfile);
         const travelKm = previous
           ? haversineKm(
               {
@@ -609,14 +681,7 @@ export function buildEveningPlan(input: {
 }
 
 function inferStage(place: Place): PlanStage {
-  const kind = normalize(place.kind);
-  if (place.scenarios.includes("food") || kind.includes("restaurant")) {
-    return "food";
-  }
-  if (place.scenarios.includes("fun") || kind.includes("activity")) {
-    return "activity";
-  }
-  return "coffee";
+  return costStage(place);
 }
 
 function nextStageOrder(current: Place, localHour?: number): PlanStage[] {
@@ -685,7 +750,7 @@ export function suggestWhatNext(input: {
 
       if (distanceKm > maxDistanceKm) return null;
 
-      const estimatedCostForTwo = estimateCostForTwo(place);
+      const estimatedCostForTwo = estimateCostForTwo(place, signals.costProfile);
       if (estimatedCostForTwo > maxCostForTwo) return null;
 
       const stage = inferStage(place);

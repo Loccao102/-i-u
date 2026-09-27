@@ -1823,6 +1823,52 @@ textarea:focus-visible {
   gap: 0 10px;
 }
 
+.plan-cost-learning {
+  margin: 10px 0;
+  border: 1px solid #e3e5df;
+  border-radius: 14px;
+  padding: 10px 11px;
+  background: #fbfbf8;
+  display: grid;
+  gap: 7px;
+}
+
+.plan-cost-learning > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.plan-cost-learning strong {
+  font-size: 11px;
+}
+
+.plan-cost-learning__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.plan-cost-learning__chips span {
+  border-radius: 999px;
+  padding: 5px 7px;
+  background: #edf4ee;
+  color: #496752;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.plan-cost-learning small,
+.plan-cost-learning--empty span {
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.plan-cost-learning--empty {
+  border-style: dashed;
+  background: #fafafa;
+}
+
 .plan-weather-card {
   margin-top: 10px;
   border: 1px solid #dfe6ed;

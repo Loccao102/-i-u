@@ -227,6 +227,13 @@ export type ViewportPlaceResult = {
 
 export type PlanStage = "food" | "activity" | "coffee";
 
+
+export type PlannerCostProfile = {
+  sampleSize: number;
+  overallMedian: number | null;
+  byStage: Partial<Record<PlanStage, number>>;
+};
+
 export type EveningPlanPreferences = {
   scenario: Scenario;
   budgetForTwo: number;

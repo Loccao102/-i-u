@@ -44,6 +44,8 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - hard planner guardrails for total budget, requested duration, maximum leg distance and scheduled opening hours, with partial-plan fallback instead of silently breaking constraints;
 - plan availability verification checks both arrival and near-end time; known-closed places are rejected while unknown hours are surfaced explicitly;
 - per-stop start/end time, travel time and estimated cost;
+- editable real-world "chi phí 2 người" on personal/saved places;
+- learned budget medians by outing type (food / activity / cafe-chill) for places without explicit prices, with fixed price tiers only as the final fallback;
 - multi-stop Google Maps route handoff;
 - **What next?** recommendations after a recent check-in, using transition type, time of day, distance, travel time, cost and current personal ranking;
 - persisted **active plan lifecycle**: start → resume after reload → complete/skip each stop → auto-finish;
@@ -215,8 +217,8 @@ http://localhost:3000
 
 ## Next
 
-1. improve real-world price/budget estimates from personal history and explicit user input;
-2. add richer provider category presets for more types of outings;
+1. add richer provider category presets for more types of outings;
+2. add lightweight daily-discovery history/insights beyond device-local anti-repeat;
 3. Supabase Auth only when account recovery/multi-device sync is worth the friction;
 4. Groups and group voting after the personal loop is mature.
 
