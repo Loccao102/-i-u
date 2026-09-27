@@ -96,7 +96,7 @@ export async function GET() {
         .limit(1),
       client
         .from("personal_planner_metrics")
-        .select("day,generated_count,started_count,completed_count,replayed_count")
+        .select("day,generated_count,initial_generated_count,rerolled_count,generation_failed_count,started_count,completed_count,replayed_count,canceled_count")
         .limit(1)
     ]);
 
