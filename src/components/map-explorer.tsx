@@ -32,6 +32,7 @@ import {
   buildEveningPlan,
   derivePlannerCostProfile,
   estimateCostForTwo,
+  plannerRoutingCandidates,
   suggestWhatNext,
   toActivePlanSnapshot
 } from "@/lib/planner";
@@ -1790,17 +1791,48 @@ export function MapExplorer() {
           )
         : source;
 
+    const preferences = {
+      scenario: scenarioOverride,
+      budgetForTwo: planBudget,
+      maxDistanceKm: planDistance,
+      durationHours: planDuration,
+      startTime: startTimeOverride,
+      startAt: targetAt.toISOString()
+    } as const;
+
+    let travelMatrix = undefined;
+    const routingSource =
+      preferredSource.length > 0 ? preferredSource : source;
+    const routingCandidates = plannerRoutingCandidates(
+      routingSource,
+      preferences,
+      6
+    );
+
+    if (routingCandidates.length > 0) {
+      try {
+        const routing = await personalApi.routeMatrix([
+          {
+            key: "__origin__",
+            latitude: origin.latitude,
+            longitude: origin.longitude
+          },
+          ...routingCandidates.map((place) => ({
+            key: place.id,
+            latitude: place.latitude,
+            longitude: place.longitude
+          }))
+        ]);
+        travelMatrix = routing.matrix ?? undefined;
+      } catch {
+        travelMatrix = undefined;
+      }
+    }
+
     const build = (places: Place[]) =>
       buildEveningPlan({
         places,
-        preferences: {
-          scenario: scenarioOverride,
-          budgetForTwo: planBudget,
-          maxDistanceKm: planDistance,
-          durationHours: planDuration,
-          startTime: startTimeOverride,
-          startAt: targetAt.toISOString()
-        },
+        preferences,
         signals: {
           savedIds: saved,
           ratings,
@@ -1809,7 +1841,8 @@ export function MapExplorer() {
           costProfile: plannerCostProfile
         },
         origin,
-        variant: nextVariant
+        variant: nextVariant,
+        travelMatrix
       });
 
     let result = build(preferredSource);
@@ -4684,6 +4717,29 @@ export function MapExplorer() {
                   Thời lượng ước tính vượt khung đã chọn. Hãy giảm bán kính hoặc đổi phương án.
                 </div>
               ) : null}
+
+              <div
+                className={
+                  "plan-routing-status" +
+                  (activePlan.roadRoutedLegs > 0
+                    ? " plan-routing-status--road"
+                    : "")
+                }
+              >
+                <strong>
+                  {activePlan.roadRoutedLegs > 0
+                    ? "✓ Road routing"
+                    : "≈ Travel estimate"}
+                </strong>
+                <span>
+                  {activePlan.roadRoutedLegs > 0
+                    ? activePlan.roadRoutedLegs +
+                      "/" +
+                      activePlan.stops.length +
+                      " chặng có khoảng cách đường thực tế · xe máy"
+                    : "Geoapify routing chưa khả dụng; đang dùng khoảng cách thẳng + travel-time heuristic."}
+                </span>
+              </div>
 
               {activePlan.unknownOpeningHoursCount > 0 ? (
                 <div className="plan-warning plan-warning--neutral">
