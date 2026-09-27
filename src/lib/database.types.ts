@@ -591,6 +591,10 @@ export type Database = {
           name: string
         }[]
       }
+      start_active_personal_plan: {
+        Args: { p_id: string; p_owner_key: string; p_plan: Json }
+        Returns: Json
+      }
       viewport_personal_places: {
         Args: {
           p_east: number
