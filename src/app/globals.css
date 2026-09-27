@@ -3499,3 +3499,11 @@ textarea:focus-visible {
   font-size: 8px;
   line-height: 1.4;
 }
+
+
+.cost-estimate-note {
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 600;
+  line-height: 1.35;
+}

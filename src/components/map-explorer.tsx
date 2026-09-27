@@ -24,6 +24,7 @@ import {
   StarIcon
 } from "./icons";
 import { personalApi } from "@/lib/personal-api";
+import { costBadgeLabel } from "@/lib/cost-estimation";
 import {
   buildEveningPlan,
   derivePlannerCostProfile,
@@ -83,6 +84,8 @@ const emptyPlace: Place = {
   distanceKm: 0,
   priceLabel: "$",
   averageForTwo: "Chưa có dữ liệu",
+  costSource: "unknown",
+  costConfidence: 0,
   publicRating: 0,
   match: 0,
   communityNote: "",
@@ -294,17 +297,27 @@ function parkingLabel(
     : "Có thông tin bãi đỗ xe";
 }
 
-function priceText(place: Pick<Place, "priceLabel" | "averageForTwo">) {
+function priceText(
+  place: Pick<
+    Place,
+    "priceLabel" | "averageForTwo" | "costSource" | "costConfidence"
+  >
+) {
   if (place.averageForTwo === "Chưa có dữ liệu") return "Chưa rõ";
+
+  if (place.costSource === "provider_estimate") {
+    return "Ước tính theo loại địa điểm";
+  }
+
   if (place.priceLabel.length === 1) return "Tiết kiệm";
   if (place.priceLabel.length === 2) return "Vừa phải";
   return "Cao";
 }
 
-function priceBadge(place: Pick<Place, "priceLabel" | "averageForTwo">) {
-  return place.averageForTwo === "Chưa có dữ liệu"
-    ? "Giá chưa rõ"
-    : place.priceLabel;
+function priceBadge(
+  place: Pick<Place, "priceLabel" | "averageForTwo" | "costSource">
+) {
+  return costBadgeLabel(place);
 }
 
 function readableScenario(value: Scenario | "all") {
@@ -2348,6 +2361,8 @@ export function MapExplorer() {
       distanceKm: 0,
       priceLabel: "$",
       averageForTwo: enteredCost || "Chưa có dữ liệu",
+      costSource: enteredCost ? "user" : "unknown",
+      costConfidence: enteredCost ? 100 : 0,
       publicRating: 0,
       match: 75,
       communityNote: "Địa điểm cá nhân",
@@ -2396,6 +2411,12 @@ export function MapExplorer() {
     if (!isPersonalPlace) return;
 
     try {
+      const editedCost = cleanPlainText(editAverageForTwo, 100);
+      const averageForTwo = editedCost || "Chưa có dữ liệu";
+      const costUnchanged =
+        averageForTwo === selected.averageForTwo &&
+        selected.costSource === "provider_estimate";
+
       const updated: Place = {
         ...selected,
         name: cleanPlainText(editName, 100),
@@ -2403,8 +2424,19 @@ export function MapExplorer() {
         description: cleanPlainText(editNote, 500) || selected.description,
         address: cleanPlainText(editAddress, 260) || undefined,
         priceLabel: editPrice,
-        averageForTwo:
-          cleanPlainText(editAverageForTwo, 100) || "Chưa có dữ liệu",
+        averageForTwo,
+        costSource:
+          averageForTwo === "Chưa có dữ liệu"
+            ? "unknown"
+            : costUnchanged
+              ? "provider_estimate"
+              : "user",
+        costConfidence:
+          averageForTwo === "Chưa có dữ liệu"
+            ? 0
+            : costUnchanged
+              ? selected.costConfidence ?? 40
+              : 100,
         bestTime: cleanPlainText(editBestTime, 100) || "Chưa có dữ liệu",
         openUntil: cleanPlainText(editOpenUntil, 60) || "Chưa rõ",
         scenarios: suggestScenarios(editNote || selected.kind),
@@ -3868,7 +3900,17 @@ export function MapExplorer() {
           <section className="detail-section">
             <span className="eyebrow">Cần biết</span>
             <dl className="fact-grid">
-              <div><dt>Giá tham khảo</dt><dd>{selected.averageForTwo}</dd></div>
+              <div>
+                <dt>Chi phí 2 người</dt>
+                <dd>
+                  {selected.averageForTwo}
+                  {selected.costSource === "provider_estimate" ? (
+                    <small className="cost-estimate-note">
+                      {" "}· ước tính sơ bộ, chưa phải giá niêm yết
+                    </small>
+                  ) : null}
+                </dd>
+              </div>
               <div><dt>Khoảng giá</dt><dd>{priceText(selected)}</dd></div>
               <div><dt>Không gian</dt><dd>{selected.noise}</dd></div>
               <div><dt>Đông đúc</dt><dd>{selected.crowd}</dd></div>
@@ -4094,7 +4136,9 @@ export function MapExplorer() {
               maxLength={100}
               placeholder="Ví dụ: 350k hoặc 300-450k"
             />
-            <small>Giá bạn nhập sẽ được ưu tiên; planner dùng các mẫu này để học budget cho nơi chưa có giá.</small>
+            <small>
+              Giá bạn nhập sẽ được coi là dữ liệu thật và ưu tiên hơn ước tính theo category. Planner chỉ học budget từ giá thật bạn nhập.
+            </small>
           </label>
           <label className="field"><span>Thời gian đẹp nhất</span><input value={editBestTime} onChange={(e) => setEditBestTime(e.target.value)} maxLength={100} /></label>
           <label className="field"><span>Ghi chú</span><textarea value={editNote} onChange={(e) => setEditNote(e.target.value)} rows={4} maxLength={500} /></label>

@@ -48,6 +48,9 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - plan availability verification checks both arrival and near-end time; known-closed places are rejected while unknown hours are surfaced explicitly;
 - per-stop start/end time, travel time and estimated cost;
 - editable real-world "chi phí 2 người" on personal/saved places;
+- provider-derived cost estimates for common food / cafe / bar / activity / culture / sport / outdoor categories, clearly labeled as estimates rather than live prices;
+- cost provenance + confidence stored per place so provider estimates never train the personal spending profile as if they were real user-entered prices;
+- planner blends provider estimates with learned user medians when enough real spending data exists, while real user-entered cost always wins;
 - learned budget medians by outing type (food / activity / cafe-chill) for places without explicit prices, with fixed price tiers only as the final fallback;
 - multi-stop Google Maps route handoff;
 - **What next?** recommendations after a recent check-in, using transition type, time of day, distance, travel time, cost and current personal ranking;
@@ -160,10 +163,11 @@ Discovery is viewport-bounded, cached server-side, rate-limited, and never runs 
 
 ## Apply the database migration
 
-The schema is versioned in `supabase/migrations/`. Apply the baseline and every incremental migration in order. The daily-discovery history table is added by:
+The schema is versioned in `supabase/migrations/`. Apply the baseline and every incremental migration in order. Recent personal-core migrations include:
 
 ```text
 supabase/migrations/20260927063759_daily_discovery_history.sql
+supabase/migrations/20260927065815_provider_cost_estimates.sql
 ```
 
 Apply migrations through the Supabase SQL Editor, Supabase CLI, or the connected Supabase tooling.
@@ -220,10 +224,11 @@ http://localhost:3000
 
 ## Next
 
-1. improve provider-derived price signals so fewer places start with unknown cost;
+1. validate provider cost heuristics with real user-entered prices and tune category baselines;
 2. add optional weekly discovery notifications only after the personal loop proves useful;
-3. Supabase Auth only when account recovery/multi-device sync is worth the friction;
-4. Groups and group voting after the personal loop is mature.
+3. add lightweight itinerary sharing before full Groups;
+4. Supabase Auth only when account recovery/multi-device sync is worth the friction;
+5. Groups and group voting after the personal loop is mature.
 
 
 ## Manual Vercel deployment

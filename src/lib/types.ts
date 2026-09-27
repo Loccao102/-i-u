@@ -6,6 +6,8 @@ export type Scenario =
   | "fun"
   | "chill";
 
+export type CostSource = "unknown" | "user" | "provider_estimate";
+
 export type Place = {
   id: string;
   name: string;
@@ -16,6 +18,8 @@ export type Place = {
   distanceKm: number;
   priceLabel: "$" | "$$" | "$$$";
   averageForTwo: string;
+  costSource?: CostSource;
+  costConfidence?: number;
   publicRating: number;
   personalRating?: number;
   match: number;
@@ -141,6 +145,7 @@ export type PoiSearchResult = {
   accent: string;
   address?: string;
   openingHours?: string;
+  providerCategories?: string[];
 };
 
 

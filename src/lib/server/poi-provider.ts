@@ -457,7 +457,8 @@ function geoapifyFeatureToPoi(
     scenarios: scenarioForKind(kind, name),
     accent: colorForKind(kind),
     address: address || undefined,
-    openingHours: geoapifyOpeningHours(properties)
+    openingHours: geoapifyOpeningHours(properties),
+    providerCategories: categories
   };
 }
 
@@ -782,7 +783,8 @@ export async function searchPoi(input: {
         openingHours:
           typeof extra.opening_hours === "string"
             ? cleanPlainText(extra.opening_hours, 120)
-            : undefined
+            : undefined,
+        providerCategories: [category, type].filter(Boolean)
       };
     })
     .filter((item): item is PoiSearchResult => item !== null);
@@ -975,7 +977,8 @@ out center 80;
         openingHours:
           typeof tags.opening_hours === "string"
             ? cleanPlainText(tags.opening_hours, 120)
-            : undefined
+            : undefined,
+        providerCategories: category.split(/\s+/).filter(Boolean)
       };
     })
     .filter((item): item is PoiSearchResult => item !== null)

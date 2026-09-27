@@ -1,3 +1,7 @@
+import {
+  estimateProviderCost,
+  formatProviderCostEstimate
+} from "./cost-estimation";
 import type { Place, PoiSearchResult, Scenario } from "./types";
 
 export const scenarioLabels: Record<Scenario, string> = {
@@ -11,6 +15,7 @@ export const scenarioLabels: Record<Scenario, string> = {
 
 export function placeFromPoiResult(result: PoiSearchResult): Place {
   const scenarios = result.scenarios;
+  const cost = estimateProviderCost(result);
 
   return {
     id: "provider:" + result.providerId,
@@ -20,8 +25,12 @@ export function placeFromPoiResult(result: PoiSearchResult): Place {
     latitude: result.latitude,
     longitude: result.longitude,
     distanceKm: 0,
-    priceLabel: "$",
-    averageForTwo: "Chưa có dữ liệu",
+    priceLabel: cost?.priceLabel ?? "$",
+    averageForTwo: cost
+      ? formatProviderCostEstimate(cost.amountForTwo)
+      : "Chưa có dữ liệu",
+    costSource: cost ? "provider_estimate" : "unknown",
+    costConfidence: cost?.confidence ?? 0,
     publicRating: 0,
     match: 72,
     communityNote:
