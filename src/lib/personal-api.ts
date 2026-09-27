@@ -11,6 +11,7 @@ import type {
   PersonalRating,
   RecommendationFeedback,
   RecommendationFeedbackReason,
+  ProviderPlaceDetails,
   PlaceMedia,
   PlaceUserPhoto,
   PersonalSnapshot,
@@ -268,6 +269,14 @@ export const personalApi = {
     );
   },
 
+  getProviderPlaceDetails: (providerId: string) => {
+    const params = new URLSearchParams({ providerId });
+    return api<{
+      details: ProviderPlaceDetails | null;
+      configured: boolean;
+    }>("/api/poi/details?" + params.toString());
+  },
+
   searchPoi: (
     query: string,
     location: UserLocation | null,
@@ -294,7 +303,10 @@ export const personalApi = {
       ...placeFromPoiResult(result),
       id: crypto.randomUUID(),
       match: 78,
-      communityNote: "Nhập từ OpenStreetMap"
+      communityNote:
+        result.provider === "geoapify"
+          ? "Nhập từ Geoapify"
+          : "Nhập từ OpenStreetMap"
     };
 
     return api<{ place: Place; duplicate: boolean }>(
@@ -312,7 +324,9 @@ export const personalApi = {
           ...place,
           id: crypto.randomUUID(),
           match: Math.max(72, place.match),
-          communityNote: "Nhập từ OpenStreetMap"
+          communityNote: place.providerId?.startsWith("geoapify:")
+            ? "Nhập từ Geoapify"
+            : "Nhập từ OpenStreetMap"
         }
       }
     ),

@@ -50,6 +50,7 @@ import type {
   PersonalRating,
   RecommendationFeedback,
   RecommendationFeedbackReason,
+  ProviderPlaceDetails,
   Place,
   PlaceMedia,
   PoiSearchResult,
@@ -127,6 +128,47 @@ function moneyLabel(value: number) {
     );
   }
   return Math.round(value / 1000) + "k";
+}
+
+function parkingLabel(
+  parking: ProviderPlaceDetails["parking"]
+) {
+  if (!parking) return null;
+
+  const typeLabels: Record<string, string> = {
+    surface: "Bãi đỗ ngoài trời",
+    underground: "Hầm đỗ xe",
+    "multi-storey": "Nhà để xe nhiều tầng",
+    lane: "Đỗ ven đường",
+    carports: "Mái che đỗ xe",
+    rooftop: "Bãi đỗ trên mái"
+  };
+
+  const accessLabels: Record<string, string> = {
+    customers: "Cho khách",
+    private: "Riêng tư",
+    permit: "Cần giấy phép",
+    designated: "Theo khu chỉ định",
+    permissive: "Được phép"
+  };
+
+  const parts = [
+    parking.type ? typeLabels[parking.type] ?? parking.type : null,
+    parking.fee === true
+      ? "Có phí"
+      : parking.fee === false
+        ? "Miễn phí"
+        : null,
+    parking.access
+      ? accessLabels[parking.access] ?? parking.access
+      : null,
+    parking.capacity ? parking.capacity + " chỗ" : null,
+    parking.supervised === true ? "Có giám sát" : null
+  ].filter((item): item is string => Boolean(item));
+
+  return parts.length > 0
+    ? parts.join(" · ")
+    : "Có thông tin bãi đỗ xe";
 }
 
 function priceText(place: Pick<Place, "priceLabel" | "averageForTwo">) {
@@ -258,6 +300,10 @@ export function MapExplorer() {
   const [discoveryLoading, setDiscoveryLoading] = useState(false);
   const [placeMedia, setPlaceMedia] = useState<PlaceMedia | null>(null);
   const [mediaLoading, setMediaLoading] = useState(false);
+  const [providerDetails, setProviderDetails] =
+    useState<ProviderPlaceDetails | null>(null);
+  const [providerDetailsLoading, setProviderDetailsLoading] =
+    useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [placeCovers, setPlaceCovers] = useState<Record<string, string>>({});
   const [shortlist, setShortlist] = useState<Place[]>([]);
@@ -627,7 +673,14 @@ export function MapExplorer() {
   const selectedPersonalRating = hasSelectedPlace
     ? ratings[selected.id] ?? null
     : null;
-  const selectedOpening = openingStatus(selected.openUntil, clock);
+  const selectedOpening = openingStatus(
+    providerDetails &&
+      providerDetails.providerId === selected.providerId &&
+      providerDetails.openingHours
+      ? providerDetails.openingHours
+      : selected.openUntil,
+    clock
+  );
   const selectedFeedback = hasSelectedPlace
     ? recommendationFeedbacks[selected.id]
     : undefined;
@@ -725,6 +778,41 @@ export function MapExplorer() {
       active = false;
     };
   }, [selected.id, isPersonalPlace]);
+
+  useEffect(() => {
+    let active = true;
+    const providerId = selected.providerId;
+
+    if (
+      !hasSelectedPlace ||
+      !providerId?.startsWith("geoapify:")
+    ) {
+      setProviderDetails(null);
+      setProviderDetailsLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    setProviderDetailsLoading(true);
+    setProviderDetails(null);
+
+    void personalApi
+      .getProviderPlaceDetails(providerId)
+      .then((result) => {
+        if (active) setProviderDetails(result.details);
+      })
+      .catch(() => {
+        if (active) setProviderDetails(null);
+      })
+      .finally(() => {
+        if (active) setProviderDetailsLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selected.providerId, hasSelectedPlace]);
 
   useEffect(() => {
     let active = true;
@@ -2624,6 +2712,112 @@ export function MapExplorer() {
 
           {selected.address ? (
             <p className="place-address">{selected.address}</p>
+          ) : null}
+
+          {providerDetailsLoading &&
+          selected.providerId?.startsWith("geoapify:") ? (
+            <section className="provider-detail-card provider-detail-card--loading">
+              <span className="eyebrow">Thông tin địa điểm</span>
+              <strong>Đang tải dữ liệu thực tế…</strong>
+            </section>
+          ) : providerDetails ? (
+            <section className="provider-detail-card">
+              <div className="provider-detail-card__head">
+                <div>
+                  <span className="eyebrow">Thông tin địa điểm</span>
+                  <strong>
+                    {providerDetails.brand ?? selected.name}
+                  </strong>
+                </div>
+                <span className="provider-source-badge">Geoapify</span>
+              </div>
+
+              {providerDetails.description ? (
+                <p className="provider-detail-description">
+                  {providerDetails.description}
+                </p>
+              ) : null}
+
+              {providerDetails.categories.length > 0 ||
+              providerDetails.facilities.length > 0 ? (
+                <div className="provider-detail-chips">
+                  {providerDetails.categories.map((item) => (
+                    <i key={"category-" + item}>{item}</i>
+                  ))}
+                  {providerDetails.facilities.map((item) => (
+                    <i
+                      className="provider-detail-chip--facility"
+                      key={"facility-" + item}
+                    >
+                      {item}
+                    </i>
+                  ))}
+                </div>
+              ) : null}
+
+              {providerDetails.openingHours ||
+              providerDetails.parking ||
+              providerDetails.wheelchairNote ? (
+                <dl className="provider-fact-grid">
+                  {providerDetails.openingHours ? (
+                    <div>
+                      <dt>Giờ mở cửa</dt>
+                      <dd>{providerDetails.openingHours}</dd>
+                    </div>
+                  ) : null}
+                  {providerDetails.parking ? (
+                    <div>
+                      <dt>Đỗ xe</dt>
+                      <dd>{parkingLabel(providerDetails.parking)}</dd>
+                    </div>
+                  ) : null}
+                  {providerDetails.wheelchairNote ? (
+                    <div>
+                      <dt>Tiếp cận</dt>
+                      <dd>{providerDetails.wheelchairNote}</dd>
+                    </div>
+                  ) : null}
+                </dl>
+              ) : null}
+
+              <div className="provider-detail-links">
+                {providerDetails.website ? (
+                  <a
+                    href={providerDetails.website}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Website
+                  </a>
+                ) : null}
+                {providerDetails.phone ? (
+                  <a href={"tel:" + providerDetails.phone}>
+                    Gọi điện
+                  </a>
+                ) : null}
+                {providerDetails.email ? (
+                  <a href={"mailto:" + providerDetails.email}>
+                    Email
+                  </a>
+                ) : null}
+                <a
+                  href={
+                    "https://www.google.com/maps/search/?api=1&query=" +
+                    encodeURIComponent(
+                      selected.latitude + "," + selected.longitude
+                    )
+                  }
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Xem Google Maps
+                </a>
+              </div>
+
+              <small className="provider-detail-note">
+                Dữ liệu nhà cung cấp có thể chưa đầy đủ hoặc thay đổi theo thời gian.
+              </small>
+            </section>
           ) : null}
 
           {isPersonalPlace ? (

@@ -109,6 +109,28 @@ export type PoiSearchResult = {
 };
 
 
+export type ProviderPlaceDetails = {
+  provider: "geoapify";
+  providerId: string;
+  description: string | null;
+  brand: string | null;
+  website: string | null;
+  phone: string | null;
+  email: string | null;
+  openingHours: string | null;
+  categories: string[];
+  facilities: string[];
+  wheelchairNote: string | null;
+  parking: {
+    type: string | null;
+    fee: boolean | null;
+    access: string | null;
+    capacity: string | null;
+    supervised: boolean | null;
+  } | null;
+};
+
+
 export type NearbyPlaceResult = {
   placeId: string;
   distanceKm: number;
