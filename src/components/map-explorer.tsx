@@ -965,8 +965,18 @@ export function MapExplorer() {
     if (!runningPlan) return;
 
     try {
-      const result = await personalApi.activePlan.advance(action);
+      const result = await personalApi.activePlan.advance(
+        action,
+        runningPlan.currentStopIndex
+      );
       setRunningPlan(result.activePlan);
+
+      if (result.stale) {
+        setNotice(
+          "Plan đã thay đổi ở tab khác. Đã đồng bộ về chặng hiện tại."
+        );
+        return;
+      }
 
       if (result.recordedVisit) {
         const snapshot = await personalApi.snapshot();
