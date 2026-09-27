@@ -171,17 +171,26 @@ export type EveningPlanStop = {
   stage: PlanStage;
   stageLabel: string;
   startTime: string;
+  endTime: string;
+  durationMinutes: number;
   estimatedCostForTwo: number;
   travelKmFromPrevious: number;
+  travelMinutesFromPrevious: number;
   reason: string;
 };
 
 export type EveningPlan = {
   stops: EveningPlanStop[];
   totalEstimatedCostForTwo: number;
+  budgetRemainingForTwo: number;
   routeKm: number;
+  maxLegKm: number;
+  totalDurationMinutes: number;
   averageMatch: number;
   withinBudget: boolean;
+  withinDuration: boolean;
+  complete: boolean;
+  missingStages: PlanStage[];
   summary: string;
 };
 
@@ -189,6 +198,8 @@ export type EveningPlan = {
 export type NextPlaceSuggestion = {
   place: Place;
   distanceKm: number;
+  estimatedTravelMinutes: number;
+  estimatedCostForTwo: number;
   transitionLabel: string;
   reason: string;
 };
