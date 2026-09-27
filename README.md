@@ -59,6 +59,7 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - persisted **active plan lifecycle**: start → resume after reload → complete/skip each stop → auto-finish;
 - completed plan history is archived atomically when the final stop is completed/skipped, keeping mood, route snapshot, completed/skipped stops, cost, duration and completion time;
 - completed-plan outcome learning uses only actually completed stops as positive evidence, applies a small recency-weighted scenario/place bonus, never treats skipped stops as dislike, and caps the total influence so explicit feedback and current context remain stronger;
+- explicit post-plan feedback (1–5★, repeat intent, optional note) separates “finished the route” from “actually enjoyed it”; low feedback suppresses completion-based bonuses instead of inventing per-place dislikes;
 - History view now shows recent completed outings alongside per-place visits;
 - one active plan per anonymous profile, while completed plans are stored separately for outcome learning;
 - completing a stop records a visit only when there is no recent duplicate check-in;
@@ -178,6 +179,7 @@ supabase/migrations/20260927072104_completed_plan_history_update_grant.sql
 supabase/migrations/20260927072239_archive_completed_plan_atomically.sql
 supabase/migrations/20260927072447_completed_plan_owner_scope.sql
 supabase/migrations/20260927072518_archive_completed_plan_owner_scope.sql
+supabase/migrations/20260927073327_completed_plan_feedback.sql
 ```
 
 Apply migrations through the Supabase SQL Editor, Supabase CLI, or the connected Supabase tooling.
@@ -234,12 +236,11 @@ http://localhost:3000
 
 ## Next
 
-1. add a lightweight post-plan outcome prompt so completion history can distinguish "finished" from "actually enjoyed";
+1. add route-quality diagnostics for plans that repeatedly need heuristic routing, unknown opening hours or relaxed constraints;
 2. validate provider cost heuristics against accumulated user corrections and tune category baselines;
-3. add route-quality diagnostics for plans that repeatedly need heuristic routing or missing opening-hours fallbacks;
-4. add lightweight itinerary sharing before full Groups;
-5. Supabase Auth only when account recovery/multi-device sync is worth the friction;
-6. Groups and group voting after the personal loop is mature.
+3. add lightweight itinerary sharing before full Groups;
+4. Supabase Auth only when account recovery/multi-device sync is worth the friction;
+5. Groups and group voting after the personal loop is mature.
 
 
 ## Manual Vercel deployment
