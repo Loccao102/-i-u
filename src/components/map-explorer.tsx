@@ -39,6 +39,7 @@ import {
 } from "@/lib/planner";
 import { placeFromPoiResult, scenarioLabels } from "@/lib/places";
 import { derivePlanOutcomeProfile } from "@/lib/plan-outcomes";
+import { deriveDataRepairPrompts } from "@/lib/data-quality";
 import { analyzePlanQuality } from "@/lib/plan-quality";
 import { openingStatus } from "@/lib/opening-hours";
 import {
@@ -711,6 +712,28 @@ export function MapExplorer() {
     () => (activePlan ? analyzePlanQuality(activePlan) : null),
     [activePlan]
   );
+
+  const dataRepairPrompts = useMemo(
+    () =>
+      deriveDataRepairPrompts(
+        customPlaces,
+        saved,
+        completedPlans,
+        clock.getTime()
+      ),
+    [customPlaces, saved, completedPlans, clock]
+  );
+
+  const activePlanRepairPrompts = useMemo(() => {
+    if (!activePlan || !activePlanQuality || activePlanQuality.level === "high") {
+      return [];
+    }
+
+    const ids = new Set(activePlan.stops.map((stop) => stop.place.id));
+    return dataRepairPrompts
+      .filter((item) => ids.has(item.placeId))
+      .slice(0, 3);
+  }, [activePlan, activePlanQuality, dataRepairPrompts]);
 
   const recentDailyActivity = useMemo(
     () => recentDailyDiscoveries(dailyDiscoveries, clock, 7),
@@ -2565,19 +2588,74 @@ export function MapExplorer() {
     }
   }
 
-  function openEditPlace() {
-    setEditName(selected.name);
-    setEditNote(selected.note);
-    setEditAddress(selected.address ?? "");
-    setEditPrice(selected.priceLabel);
+  function openPlaceEditor(place: Place) {
+    setSelectedId(place.id);
+    setEditName(place.name);
+    setEditNote(place.note);
+    setEditAddress(place.address ?? "");
+    setEditPrice(place.priceLabel);
     setEditAverageForTwo(
-      selected.averageForTwo === "Chưa có dữ liệu"
+      place.averageForTwo === "Chưa có dữ liệu"
         ? ""
-        : selected.averageForTwo
+        : place.averageForTwo
     );
-    setEditBestTime(selected.bestTime);
-    setEditOpenUntil(selected.openUntil);
+    setEditBestTime(place.bestTime);
+    setEditOpenUntil(place.openUntil);
     editDialogRef.current?.showModal();
+  }
+
+  function openEditPlace() {
+    openPlaceEditor(selected);
+  }
+
+  async function refreshPlaceOpeningHours(placeId: string) {
+    const place = customPlaces.find((item) => item.id === placeId);
+    if (!place) return;
+
+    const providerId = place.providerId;
+    if (!providerId?.startsWith("geoapify:")) {
+      openPlaceEditor(place);
+      setNotice(
+        "Địa điểm này không có Geoapify details; hãy nhập giờ mở cửa thủ công."
+      );
+      return;
+    }
+
+    try {
+      const result = await personalApi.getProviderPlaceDetails(providerId);
+      const openingHours = result.details.openingHours?.trim();
+
+      if (!openingHours) {
+        openPlaceEditor(place);
+        setNotice(
+          "Geoapify chưa có giờ mở cửa cho địa điểm này. Bạn có thể nhập thủ công."
+        );
+        return;
+      }
+
+      await personalApi.updatePlace(place.id, {
+        ...place,
+        openUntil: openingHours
+      });
+      await loadSnapshot();
+      setSelectedId(place.id);
+      setNotice("Đã cập nhật giờ mở cửa từ Geoapify.");
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "Không thể làm mới giờ mở cửa."
+      );
+    }
+  }
+
+  function repairPlaceCost(placeId: string) {
+    const place = customPlaces.find((item) => item.id === placeId);
+    if (!place) return;
+    openPlaceEditor(place);
+    setNotice(
+      "Nhập “Chi phí 2 người” gần thực tế nhất để tăng độ tin cậy cho planner."
+    );
   }
 
   async function submitEditPlace(event: FormEvent<HTMLFormElement>) {
@@ -4928,6 +5006,25 @@ export function MapExplorer() {
             </div>
           )}
 
+          {dataRepairPrompts.length > 0 ? (
+            <section className="data-repair-backlog">
+              <div>
+                <span className="eyebrow">Dữ liệu cần bổ sung</span>
+                <strong>
+                  {dataRepairPrompts.length} nơi đã lưu còn thiếu dữ liệu quan trọng
+                </strong>
+              </div>
+              <small>
+                {dataRepairPrompts[0]?.recurring
+                  ? dataRepairPrompts[0].name +
+                    " đã lặp lại trong " +
+                    dataRepairPrompts[0].planAppearances +
+                    " plan."
+                  : "Planner sẽ ưu tiên nhắc các nơi xuất hiện nhiều trong lịch sử."}
+              </small>
+            </section>
+          ) : null}
+
           <button
             className="primary-button primary-button--wide"
             type="button"
@@ -4999,6 +5096,51 @@ export function MapExplorer() {
                         Các dữ liệu quan trọng của phương án đều đã được xác minh ở mức tốt.
                       </small>
                     )}
+                  </div>
+                </section>
+              ) : null}
+
+              {activePlanRepairPrompts.length > 0 ? (
+                <section className="plan-data-repair">
+                  <div className="plan-data-repair__head">
+                    <div>
+                      <span className="eyebrow">Tăng độ tin cậy</span>
+                      <strong>
+                        Sửa dữ liệu của {activePlanRepairPrompts.length} nơi trong plan
+                      </strong>
+                    </div>
+                    <small>Ưu tiên nơi đã dùng nhiều lần</small>
+                  </div>
+
+                  <div className="plan-data-repair__list">
+                    {activePlanRepairPrompts.map((prompt) => (
+                      <div key={prompt.placeId}>
+                        <div>
+                          <strong>{prompt.name}</strong>
+                          <small>{prompt.reason}</small>
+                        </div>
+                        <div className="plan-data-repair__actions">
+                          {prompt.issues.includes("opening_hours") ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void refreshPlaceOpeningHours(prompt.placeId)
+                              }
+                            >
+                              Giờ mở cửa
+                            </button>
+                          ) : null}
+                          {prompt.issues.includes("cost") ? (
+                            <button
+                              type="button"
+                              onClick={() => repairPlaceCost(prompt.placeId)}
+                            >
+                              Sửa giá
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </section>
               ) : null}
