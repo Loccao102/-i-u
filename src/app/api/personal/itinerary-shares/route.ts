@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import {
   createItineraryShare,
+  listOwnedItineraryShares,
   revokeItineraryShare
 } from "@/lib/server/itinerary-share";
 import { errorJson, profileJson } from "@/lib/server/http";
@@ -33,6 +34,21 @@ function parseSourcePlanId(value: unknown) {
     return value;
   }
   throw new Error("INVALID_BODY");
+}
+
+export async function GET(request: NextRequest) {
+  const profile = resolveAnonymousProfile(request);
+
+  try {
+    const shares = await listOwnedItineraryShares(profile.ownerKey);
+    return profileJson(profile, { shares });
+  } catch (error) {
+    return errorJson(
+      profile,
+      error,
+      "Không thể tải các link itinerary đã chia sẻ."
+    );
+  }
 }
 
 export async function POST(request: NextRequest) {
