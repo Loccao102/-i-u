@@ -8,6 +8,8 @@ import type {
   NearbyPlaceResult,
   PersonalBackup,
   PersonalRating,
+  PlaceMedia,
+  PlaceUserPhoto,
   PersonalSnapshot,
   Place,
   PoiSearchResult,
@@ -71,6 +73,55 @@ export const personalApi = {
   deletePlace: (placeId: string) =>
     api<{ deleted: true }>(
       "/api/personal/places/" + encodeURIComponent(placeId),
+      { method: "DELETE" }
+    ),
+
+  getPlaceMedia: (placeId: string) =>
+    api<PlaceMedia>(
+      "/api/personal/places/" +
+        encodeURIComponent(placeId) +
+        "/media"
+    ),
+
+  uploadPlacePhoto: async (
+    placeId: string,
+    file: File,
+    caption = ""
+  ): Promise<PlaceUserPhoto> => {
+    const form = new FormData();
+    form.set("file", file);
+    form.set("caption", caption);
+
+    const response = await fetch(
+      "/api/personal/places/" +
+        encodeURIComponent(placeId) +
+        "/media",
+      {
+        method: "POST",
+        body: form,
+        credentials: "same-origin",
+        cache: "no-store"
+      }
+    );
+
+    const data: unknown = await response.json();
+    if (!response.ok) {
+      const message =
+        data &&
+        typeof data === "object" &&
+        "error" in data &&
+        typeof (data as { error?: unknown }).error === "string"
+          ? (data as { error: string }).error
+          : "Không thể tải ảnh lên.";
+      throw new Error(message);
+    }
+
+    return data as PlaceUserPhoto;
+  },
+
+  deletePlacePhoto: (photoId: string) =>
+    api<{ deleted: true }>(
+      "/api/personal/photos/" + encodeURIComponent(photoId),
       { method: "DELETE" }
     ),
 
