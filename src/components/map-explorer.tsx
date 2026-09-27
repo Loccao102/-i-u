@@ -126,8 +126,19 @@ function moneyLabel(value: number) {
   return Math.round(value / 1000) + "k";
 }
 
-function priceText(price: Place["priceLabel"]) {
-  return price === "$" ? "Tiết kiệm" : price === "$$" ? "Vừa phải" : "Cao";
+function priceText(place: Pick<Place, "priceLabel" | "averageForTwo">) {
+  if (place.averageForTwo === "Chưa có dữ liệu") return "Chưa rõ";
+  return place.priceLabel === "$"
+    ? "Tiết kiệm"
+    : place.priceLabel === "$"
+      ? "Vừa phải"
+      : "Cao";
+}
+
+function priceBadge(place: Pick<Place, "priceLabel" | "averageForTwo">) {
+  return place.averageForTwo === "Chưa có dữ liệu"
+    ? "Giá chưa rõ"
+    : place.priceLabel;
 }
 
 function readableScenario(value: Scenario | "all") {
@@ -1083,6 +1094,8 @@ export function MapExplorer() {
         ...activePlan,
         stops: persistedStops
       };
+
+      await loadSnapshot();
 
       const result = await personalApi.activePlan.start(
         toActivePlanSnapshot(persistedPlan)
@@ -2041,7 +2054,7 @@ export function MapExplorer() {
                       <span>·</span>
                       <span>{distanceLabel(place.distanceKm)}</span>
                       <span>·</span>
-                      <span>{place.priceLabel}</span>
+                      <span>{priceBadge(place)}</span>
                     </span>
                     <span className="tag-line">
                       {visit ? <i>Đã đi {formatVisitedAt(visit.visitedAt)}</i> : null}
@@ -2140,6 +2153,15 @@ export function MapExplorer() {
             ? "GPS chỉ sống trong phiên"
             : "Supabase không lưu GPS hiện tại"}
         </div>
+
+        <a
+          className="osm-attribution"
+          href="https://www.openstreetmap.org/copyright"
+          target="_blank"
+          rel="noreferrer"
+        >
+          © OpenStreetMap contributors
+        </a>
       </section>
 
       <aside className="detail-pane" aria-label="Chi tiết địa điểm">
@@ -2228,7 +2250,7 @@ export function MapExplorer() {
             <span>·</span>
             <span>{distanceLabel(selected.distanceKm)}</span>
             <span>·</span>
-            <span>{selected.priceLabel}</span>
+            <span>{priceBadge(selected)}</span>
           </div>
 
           {selected.address ? (
@@ -2513,7 +2535,7 @@ export function MapExplorer() {
             <span className="eyebrow">Cần biết</span>
             <dl className="fact-grid">
               <div><dt>Giá tham khảo</dt><dd>{selected.averageForTwo}</dd></div>
-              <div><dt>Khoảng giá</dt><dd>{priceText(selected.priceLabel)}</dd></div>
+              <div><dt>Khoảng giá</dt><dd>{priceText(selected)}</dd></div>
               <div><dt>Không gian</dt><dd>{selected.noise}</dd></div>
               <div><dt>Đông đúc</dt><dd>{selected.crowd}</dd></div>
               <div><dt>Đi đẹp nhất</dt><dd>{selected.bestTime}</dd></div>
