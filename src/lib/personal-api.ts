@@ -17,6 +17,7 @@ import type {
   PersonalSnapshot,
   Place,
   PoiDiscoveryFilters,
+  PoiDiscoveryPage,
   PoiSearchResult,
   RatingDraft,
   UserLocation,
@@ -259,7 +260,8 @@ export const personalApi = {
 
   discoverPoi: (
     bounds: MapBounds,
-    filters?: PoiDiscoveryFilters
+    filters?: PoiDiscoveryFilters,
+    offset = 0
   ) => {
     const params = new URLSearchParams({
       west: String(bounds.west),
@@ -273,8 +275,9 @@ export const personalApi = {
       params.set("amenity", filters.amenity);
       params.set("radiusKm", String(filters.radiusKm));
     }
+    params.set("offset", String(offset));
 
-    return api<{ results: PoiSearchResult[] }>(
+    return api<PoiDiscoveryPage>(
       "/api/poi/discover?" + params.toString()
     );
   },
