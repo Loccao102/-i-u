@@ -1694,6 +1694,45 @@ textarea:focus-visible {
   overflow-y: auto;
 }
 
+.daily-insights {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.daily-insights > div {
+  min-width: 0;
+  border: 1px solid #e7e7e1;
+  border-radius: 13px;
+  padding: 9px;
+  background: #fafaf7;
+  display: grid;
+  gap: 2px;
+}
+
+.daily-insights span {
+  color: #7b7f77;
+  font-size: 8px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.daily-insights strong {
+  color: #343833;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.daily-insights small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+}
+
 .daily-place-card,
 .daily-route-card {
   margin-top: 12px;
@@ -1798,6 +1837,18 @@ textarea:focus-visible {
 }
 
 @media (max-width: 600px) {
+  .daily-insights {
+    gap: 5px;
+  }
+
+  .daily-insights > div {
+    padding: 8px 6px;
+  }
+
+  .daily-insights strong {
+    font-size: 15px;
+  }
+
   .daily-route-card {
     align-items: stretch;
     flex-direction: column;
