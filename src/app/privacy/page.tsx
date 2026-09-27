@@ -6,7 +6,9 @@ export default function PrivacyPage() {
       <h1>Quyền riêng tư</h1>
       <p>
         ĐiĐâu là ứng dụng personal-first. Hồ sơ hiện tại được nhận diện bằng
-        cookie ẩn danh HttpOnly; token thô không được lưu trong cơ sở dữ liệu.
+        cookie ẩn danh HttpOnly. Token profile thô không được lưu trong cơ sở
+        dữ liệu; mã chuyển profile chỉ lưu ciphertext đã mã hóa và bị xóa khi
+        được sử dụng.
       </p>
 
       <h2>Vị trí</h2>
@@ -39,6 +41,16 @@ export default function PrivacyPage() {
           Chính sách quyền riêng tư của Google
         </a>
         .
+      </p>
+
+      <h2>Link itinerary được chia sẻ</h2>
+      <p>
+        Khi bạn chủ động chia sẻ một itinerary, ĐiĐâu tạo một snapshot
+        read-only có URL riêng. Snapshot chỉ chứa thông tin route cần để xem
+        itinerary như tên địa điểm, tọa độ, timeline, chi phí ước tính và
+        phương thức di chuyển; không chứa owner key, rating, feedback cá nhân
+        hoặc ghi chú profile. Ai có link đều có thể xem cho tới khi link bị
+        thu hồi.
       </p>
 
       <h2>Dữ liệu cá nhân</h2>
