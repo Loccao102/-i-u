@@ -46,6 +46,7 @@ import type {
   ActivePersonalPlan,
   ActivePlanStopSnapshot,
   Collection,
+  DailyDiscoveryRecord,
   EveningPlan,
   MapBounds,
   PersonalBackup,
@@ -151,13 +152,6 @@ const discoveryRadiusOptions: Array<{
   { value: 10, label: "Trong 10 km" }
 ];
 
-type DailyDiscoveryHistoryEntry = {
-  date: string;
-  placeKey: string;
-};
-
-const dailyDiscoveryStorageKey = "di-dau-daily-discovery-v1";
-
 function localDateKey(date: Date) {
   return [
     date.getFullYear(),
@@ -179,38 +173,41 @@ function dailyHash(value: string) {
   return hash >>> 0;
 }
 
-function readDailyDiscoveryHistory(): DailyDiscoveryHistoryEntry[] {
-  try {
-    const raw = window.localStorage.getItem(dailyDiscoveryStorageKey);
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
+function recentDailyDiscoveries(
+  entries: ReadonlyArray<DailyDiscoveryRecord>,
+  now: Date,
+  days: number
+) {
+  const start = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() - Math.max(0, days - 1)
+  );
+  const minDay = localDateKey(start);
+  const maxDay = localDateKey(now);
 
-    return parsed
-      .filter(
-        (item): item is DailyDiscoveryHistoryEntry =>
-          Boolean(
-            item &&
-              typeof item === "object" &&
-              "date" in item &&
-              "placeKey" in item &&
-              typeof (item as { date?: unknown }).date === "string" &&
-              typeof (item as { placeKey?: unknown }).placeKey === "string"
-          )
-      )
-      .slice(0, 21);
-  } catch {
-    return [];
-  }
+  return entries.filter(
+    (item) => item.day >= minDay && item.day <= maxDay
+  );
 }
 
-function writeDailyDiscoveryHistory(
-  entries: DailyDiscoveryHistoryEntry[]
+function mergeDailyDiscovery(
+  current: ReadonlyArray<DailyDiscoveryRecord>,
+  record: DailyDiscoveryRecord
 ) {
-  window.localStorage.setItem(
-    dailyDiscoveryStorageKey,
-    JSON.stringify(entries.slice(0, 21))
-  );
+  return [
+    record,
+    ...current.filter(
+      (item) =>
+        !(item.day === record.day && item.kind === record.kind)
+    )
+  ]
+    .sort(
+      (a, b) =>
+        b.day.localeCompare(a.day) ||
+        b.updatedAt.localeCompare(a.updatedAt)
+    )
+    .slice(0, 60);
 }
 
 function suggestedDailyRouteStartTime(now: Date) {
@@ -463,6 +460,8 @@ export function MapExplorer() {
   const [placeCovers, setPlaceCovers] = useState<Record<string, string>>({});
   const [shortlist, setShortlist] = useState<Place[]>([]);
   const [dailyPlace, setDailyPlace] = useState<Place | null>(null);
+  const [dailyDiscoveries, setDailyDiscoveries] =
+    useState<DailyDiscoveryRecord[]>([]);
   const [serverDistances, setServerDistances] = useState<Record<string, number>>({});
   const [backupLoading, setBackupLoading] = useState(false);
   const [viewportBounds, setViewportBounds] = useState<MapBounds | null>(null);
@@ -536,6 +535,7 @@ export function MapExplorer() {
       setRecommendationFeedbacks(snapshot.recommendationFeedbacks);
       setVisits(snapshot.visits);
       setCollections(snapshot.collections);
+      setDailyDiscoveries(snapshot.dailyDiscoveries ?? []);
       setRunningPlan(activeResult.activePlan);
       setDataStatus("ready");
     } catch (error) {
@@ -660,6 +660,25 @@ export function MapExplorer() {
     () => derivePlannerCostProfile(customPlaces),
     [customPlaces]
   );
+
+  const recentDailyActivity = useMemo(
+    () => recentDailyDiscoveries(dailyDiscoveries, clock, 7),
+    [dailyDiscoveries, clock]
+  );
+
+  const dailyInsights = useMemo(() => {
+    const days = new Set(
+      recentDailyActivity.map((item) => item.day)
+    ).size;
+    const uniquePlaces = new Set(
+      recentDailyActivity.flatMap((item) => item.placeKeys)
+    ).size;
+    const routes = recentDailyActivity.filter(
+      (item) => item.kind === "route"
+    ).length;
+
+    return { days, uniquePlaces, routes };
+  }, [recentDailyActivity]);
 
   const tasteProfile = useMemo(
     () =>
@@ -1433,10 +1452,11 @@ export function MapExplorer() {
     setNotice("🎯 " + picked.name + " · " + reason);
   }
 
-  function openDailyDiscovery() {
+  async function openDailyDiscovery() {
     const today = localDateKey(clock);
-    const history = readDailyDiscoveryHistory();
-    const todaysEntry = history.find((item) => item.date === today);
+    const todaysEntry = dailyDiscoveries.find(
+      (item) => item.kind === "place" && item.day === today
+    );
 
     const cafeOrFood = rankedAll.filter(
       (place) =>
@@ -1447,17 +1467,20 @@ export function MapExplorer() {
     const source = cafeOrFood.length >= 3 ? cafeOrFood : rankedAll;
 
     let picked: Place | null = todaysEntry
-      ? source.find(
-          (place) => dailyPlaceKey(place) === todaysEntry.placeKey
+      ? source.find((place) =>
+          todaysEntry.placeKeys.includes(dailyPlaceKey(place))
         ) ?? null
       : null;
 
     if (!picked) {
       const avoidPlaceKeys = new Set(
-        history
-          .filter((item) => item.date !== today)
+        dailyDiscoveries
+          .filter(
+            (item) =>
+              item.kind === "place" && item.day !== today
+          )
           .slice(0, 14)
-          .map((item) => item.placeKey)
+          .flatMap((item) => item.placeKeys)
       );
 
       picked = pickDailyDiscoveryPlace(
@@ -1475,10 +1498,21 @@ export function MapExplorer() {
       );
 
       if (picked) {
-        writeDailyDiscoveryHistory([
-          { date: today, placeKey: dailyPlaceKey(picked) },
-          ...history.filter((item) => item.date !== today)
-        ]);
+        try {
+          const record = await personalApi.saveDailyDiscovery({
+            day: today,
+            kind: "place",
+            placeKeys: [dailyPlaceKey(picked)],
+            scenario: null
+          });
+          setDailyDiscoveries((current) =>
+            mergeDailyDiscovery(current, record)
+          );
+        } catch {
+          setNotice(
+            "Đã chọn quán hôm nay nhưng chưa đồng bộ được lịch sử chống lặp."
+          );
+        }
       }
     }
 
@@ -1521,6 +1555,14 @@ export function MapExplorer() {
         : scenario;
     const routeStartTime = suggestedDailyRouteStartTime(clock);
     const variant = seed % 10_000;
+    const recentRouteKeys = new Set(
+      recentDailyDiscoveries(dailyDiscoveries, clock, 7)
+        .filter(
+          (item) =>
+            item.kind === "route" && item.day !== today
+        )
+        .flatMap((item) => item.placeKeys)
+    );
 
     setPlanScenario(routeScenario);
     setPlanStartTime(routeStartTime);
@@ -1530,7 +1572,33 @@ export function MapExplorer() {
 
     dailyDialogRef.current?.close();
     planDialogRef.current?.showModal();
-    await generatePlan(variant, routeScenario, routeStartTime);
+
+    const result = await generatePlan(
+      variant,
+      routeScenario,
+      routeStartTime,
+      recentRouteKeys
+    );
+
+    if (!result || result.stops.length === 0) return;
+
+    try {
+      const record = await personalApi.saveDailyDiscovery({
+        day: today,
+        kind: "route",
+        placeKeys: result.stops
+          .map((stop) => dailyPlaceKey(stop.place))
+          .slice(0, 3),
+        scenario: routeScenario
+      });
+      setDailyDiscoveries((current) =>
+        mergeDailyDiscovery(current, record)
+      );
+    } catch {
+      setNotice(
+        "Route đã tạo nhưng chưa lưu được lịch sử chống lặp."
+      );
+    }
   }
 
   function plannerOrigin(): UserLocation {
@@ -1544,7 +1612,8 @@ export function MapExplorer() {
   async function generatePlan(
     nextVariant = planVariant,
     scenarioOverride: Scenario = planScenario,
-    startTimeOverride = planStartTime
+    startTimeOverride = planStartTime,
+    avoidPlaceKeys?: ReadonlySet<string>
   ) {
     const origin = plannerOrigin();
     const targetAt = nextPlanStartAt(startTimeOverride, clock);
@@ -1594,26 +1663,50 @@ export function MapExplorer() {
         })
       : forecastRanked;
 
-    const result = buildEveningPlan({
-      places: source,
-      preferences: {
-        scenario: scenarioOverride,
-        budgetForTwo: planBudget,
-        maxDistanceKm: planDistance,
-        durationHours: planDuration,
-        startTime: startTimeOverride,
-        startAt: targetAt.toISOString()
-      },
-      signals: {
-        savedIds: saved,
-        ratings,
-        feedbacks: recommendationFeedbacks,
-        visits,
-        costProfile: plannerCostProfile
-      },
-      origin,
-      variant: nextVariant
-    });
+    const preferredSource =
+      avoidPlaceKeys && avoidPlaceKeys.size > 0
+        ? source.filter(
+            (place) => !avoidPlaceKeys.has(dailyPlaceKey(place))
+          )
+        : source;
+
+    const build = (places: Place[]) =>
+      buildEveningPlan({
+        places,
+        preferences: {
+          scenario: scenarioOverride,
+          budgetForTwo: planBudget,
+          maxDistanceKm: planDistance,
+          durationHours: planDuration,
+          startTime: startTimeOverride,
+          startAt: targetAt.toISOString()
+        },
+        signals: {
+          savedIds: saved,
+          ratings,
+          feedbacks: recommendationFeedbacks,
+          visits,
+          costProfile: plannerCostProfile
+        },
+        origin,
+        variant: nextVariant
+      });
+
+    let result = build(preferredSource);
+
+    if (
+      preferredSource.length < source.length &&
+      (!result || !result.complete)
+    ) {
+      const relaxedNoveltyResult = build(source);
+      if (
+        !result ||
+        (relaxedNoveltyResult &&
+          relaxedNoveltyResult.stops.length > result.stops.length)
+      ) {
+        result = relaxedNoveltyResult;
+      }
+    }
 
     setPlanWeatherLoading(false);
     setPlanVariant(nextVariant);
@@ -1624,6 +1717,8 @@ export function MapExplorer() {
         "Chưa đủ địa điểm phù hợp. Thử tăng bán kính hoặc đổi mood."
       );
     }
+
+    return result;
   }
 
   function openPlanBuilder() {
@@ -3049,7 +3144,7 @@ export function MapExplorer() {
           <button
             type="button"
             className="daily-discovery-button"
-            onClick={openDailyDiscovery}
+            onClick={() => void openDailyDiscovery()}
           >
             ☀ Hôm nay
           </button>
@@ -4012,6 +4107,24 @@ export function MapExplorer() {
             Quán hôm nay được giữ cố định trong ngày và ưu tiên nơi bạn chưa đi. Route hôm nay đổi theo ngày nhưng vẫn theo gu, thời tiết, budget và giờ mở cửa.
           </p>
 
+          <section className="daily-insights" aria-label="Khám phá 7 ngày qua">
+            <div>
+              <span>7 ngày qua</span>
+              <strong>{dailyInsights.days}</strong>
+              <small>ngày có khám phá</small>
+            </div>
+            <div>
+              <span>Độ mới</span>
+              <strong>{dailyInsights.uniquePlaces}</strong>
+              <small>địa điểm khác nhau</small>
+            </div>
+            <div>
+              <span>Route</span>
+              <strong>{dailyInsights.routes}</strong>
+              <small>lộ trình đã gợi ý</small>
+            </div>
+          </section>
+
           <section className="daily-place-card">
             <div className="daily-place-card__head">
               <div>
@@ -4065,7 +4178,7 @@ export function MapExplorer() {
               <span className="eyebrow">Lộ trình hôm nay</span>
               <strong>Một route mới theo ngày</strong>
               <p>
-                Tạo 1–3 chặng từ dữ liệu quanh bản đồ, ưu tiên nơi mới và tự kiểm tra forecast + giờ mở cửa.
+                Tạo 1–3 chặng từ dữ liệu quanh bản đồ, ưu tiên nơi mới và tránh các điểm đã xuất hiện trong route 7 ngày gần đây khi có thể.
               </p>
             </div>
             <button
@@ -4079,7 +4192,7 @@ export function MapExplorer() {
           </section>
 
           <small className="daily-discovery-note">
-            Lịch sử quán được giữ tối đa 21 ngày trên thiết bị này để giảm lặp. Bạn vẫn có thể dùng “Bất ngờ” nếu muốn bốc thêm ngay.
+            Lịch sử khám phá được lưu theo profile để giảm lặp giữa các phiên. Route vẫn tự nới quy tắc novelty nếu cần để ghép đủ chặng.
           </small>
         </div>
       </dialog>
