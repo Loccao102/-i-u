@@ -79,7 +79,7 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - explicit post-plan feedback (1–5★, repeat intent, optional note) separates “finished the route” from “actually enjoyed it”; low feedback suppresses completion-based bonuses instead of inventing per-place dislikes;
 - History view now shows recent completed outings alongside per-place visits;
 - one active plan per anonymous profile, while completed plans are stored separately for outcome learning;
-- completing a stop records a visit only when there is no recent duplicate check-in;
+- all visit creation uses one atomic 2-hour dedupe primitive: manual check-in, rating-with-visit and active-plan completion reuse the same visit instead of racing into duplicate history; a retry with a rating may enrich an existing unrated visit;
 - active-plan progress uses expected-stop concurrency checks so stale actions from another tab cannot skip a stop;
 - real place media: private user-uploaded photos in Supabase Storage;
 - user-photo cover thumbnails on saved/imported place cards via a single batch request;
@@ -205,6 +205,7 @@ supabase/migrations/20260927152302_planner_telemetry.sql
 supabase/migrations/20260927172009_planner_telemetry_semantics.sql
 supabase/migrations/20260927172409_reset_planner_telemetry_after_semantics_change.sql
 supabase/migrations/20260927173434_idempotent_active_plan_start.sql
+supabase/migrations/20260927174110_idempotent_personal_visits.sql
 supabase/migrations/20260927153331_profile_data_reset.sql
 ```
 
