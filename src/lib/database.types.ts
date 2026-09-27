@@ -277,7 +277,11 @@ export type Database = {
     }
     Functions: {
       advance_active_personal_plan: {
-        Args: { p_action: string; p_owner_key: string }
+        Args: {
+          p_action: string
+          p_expected_index: number
+          p_owner_key: string
+        }
         Returns: Json
       }
       delete_personal_place: {
