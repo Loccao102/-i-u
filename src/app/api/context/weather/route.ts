@@ -32,7 +32,30 @@ export async function GET(request: NextRequest) {
       180
     );
 
-    const weather = await getWeatherContext(latitude, longitude);
+    const at = request.nextUrl.searchParams.get("at");
+    let targetAt: Date | undefined;
+
+    if (at) {
+      const parsed = new Date(at);
+      const now = Date.now();
+      const time = parsed.getTime();
+
+      if (
+        !Number.isFinite(time) ||
+        time < now - 30 * 60 * 1000 ||
+        time > now + 36 * 60 * 60 * 1000
+      ) {
+        throw new Error("INVALID_BODY");
+      }
+
+      targetAt = parsed;
+    }
+
+    const weather = await getWeatherContext(
+      latitude,
+      longitude,
+      targetAt
+    );
     return profileJson(profile, { weather });
   } catch (error) {
     return errorJson(
