@@ -1342,7 +1342,8 @@ export function MapExplorer() {
         budgetForTwo: planBudget,
         maxDistanceKm: planDistance,
         durationHours: planDuration,
-        startTime: planStartTime
+        startTime: planStartTime,
+        startAt: targetAt.toISOString()
       },
       signals: {
         savedIds: saved,
@@ -3857,6 +3858,16 @@ export function MapExplorer() {
                 </div>
               ) : null}
 
+              {activePlan.unknownOpeningHoursCount > 0 ? (
+                <div className="plan-warning plan-warning--neutral">
+                  {activePlan.unknownOpeningHoursCount} chặng chưa có giờ mở cửa đủ rõ để xác minh. Các địa điểm biết chắc đã đóng ở giờ dự kiến đã được loại khỏi plan.
+                </div>
+              ) : (
+                <div className="plan-opening-confirmed">
+                  ✓ Các chặng có dữ liệu giờ mở cửa đều phù hợp với lịch dự kiến.
+                </div>
+              )}
+
               <div className="plan-timeline">
                 {activePlan.stops.map((stop, index) => (
                   <div className="plan-stop" key={stop.place.id}>
@@ -3890,6 +3901,10 @@ export function MapExplorer() {
                       <span className="plan-stop__reason">{stop.reason}</span>
                       <span className="plan-stop__meta">
                         ~{moneyLabel(stop.estimatedCostForTwo)}
+                        {" · "}
+                        {stop.openingHoursStatus === "confirmed"
+                          ? "✓ giờ mở cửa"
+                          : "giờ chưa rõ"}
                         {index > 0
                           ? " · " +
                             distanceLabel(stop.travelKmFromPrevious) +

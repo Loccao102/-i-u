@@ -38,7 +38,8 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - time-aware ranking (morning / lunch / afternoon / evening / late);
 - weather-aware ranking with visible explanation;
 - compact **Evening Plan Builder** that combines 1–3 nearby stops from mood, budget, duration and radius;
-- hard planner guardrails for total budget, requested duration and maximum leg distance, with partial-plan fallback instead of silently breaking constraints;
+- hard planner guardrails for total budget, requested duration, maximum leg distance and scheduled opening hours, with partial-plan fallback instead of silently breaking constraints;
+- plan availability verification checks both arrival and near-end time; known-closed places are rejected while unknown hours are surfaced explicitly;
 - per-stop start/end time, travel time and estimated cost;
 - multi-stop Google Maps route handoff;
 - **What next?** recommendations after a recent check-in, using transition type, time of day, distance, travel time, cost and current personal ranking;
@@ -213,7 +214,7 @@ http://localhost:3000
 
 1. improve real-world price/budget estimates from personal history and explicit user input;
 2. add provider pagination/refresh controls for denser city areas;
-3. add plan-level opening-hours guardrails for every scheduled stop;
+3. add a daily discovery loop for one new place or one new route each day;
 4. Supabase Auth only when account recovery/multi-device sync is worth the friction;
 5. Groups and group voting after the personal loop is mature.
 

@@ -12,6 +12,7 @@ import type {
   UserLocation,
   VisitRecord
 } from "./types";
+import { openingStatus } from "./opening-hours";
 import { haversineKm } from "./search";
 
 type PlannerSignals = {
@@ -168,6 +169,47 @@ function formatClock(totalMinutes: number) {
   return String(hour).padStart(2, "0") + ":" + String(minute).padStart(2, "0");
 }
 
+
+function planStartDate(preferences: EveningPlanPreferences) {
+  if (preferences.startAt) {
+    const parsed = new Date(preferences.startAt);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+
+  const fallback = new Date();
+  const minutes = parseClock(preferences.startTime);
+  fallback.setHours(
+    Math.floor(minutes / 60),
+    minutes % 60,
+    0,
+    0
+  );
+  return fallback;
+}
+
+function openingAvailability(
+  place: Place,
+  startAt: Date,
+  durationMinutes: number
+): "confirmed" | "unknown" | "closed" {
+  const endCheck = new Date(
+    startAt.getTime() +
+      Math.max(1, durationMinutes - 1) * 60 * 1000
+  );
+  const start = openingStatus(place.openUntil, startAt);
+  const end = openingStatus(place.openUntil, endCheck);
+
+  if (start.state === "closed" || end.state === "closed") {
+    return "closed";
+  }
+
+  if (start.state === "open" && end.state === "open") {
+    return "confirmed";
+  }
+
+  return "unknown";
+}
+
 function variantBias(placeId: string, variant: number) {
   let hash = 2166136261;
   const value = placeId + ":" + variant;
@@ -307,6 +349,7 @@ function buildWithGuardrails(input: {
   const { places, preferences, signals, origin, variant, relaxedBudget } = input;
   const stages = stagesFor(preferences.scenario, preferences.durationHours);
   const maxDurationMinutes = preferences.durationHours * 60;
+  const planStart = planStartDate(preferences);
 
   const selected: Array<{
     place: Place;
@@ -314,6 +357,7 @@ function buildWithGuardrails(input: {
     cost: number;
     travelKm: number;
     travelMinutes: number;
+    openingHoursStatus: "confirmed" | "unknown";
   }> = [];
 
   const missingStages: PlanStage[] = [];
@@ -355,6 +399,19 @@ function buildWithGuardrails(input: {
             });
         const travelMin = selected.length > 0 ? travelMinutes(travelKm) : 0;
         const stageMin = stageDurationMinutes(stage);
+        const scheduledStart = new Date(
+          planStart.getTime() +
+            (usedMinutes + travelMin) * 60 * 1000
+        );
+        const availability = openingAvailability(
+          place,
+          scheduledStart,
+          stageMin
+        );
+
+        if (availability === "closed") {
+          return null;
+        }
 
         if (
           usedMinutes + travelMin + stageMin + reserveMinutes >
@@ -381,7 +438,15 @@ function buildWithGuardrails(input: {
 
         if (score === null) return null;
 
-        return { place, cost, score, travelKm, travelMin, stageMin };
+        return {
+          place,
+          cost,
+          score: score + (availability === "confirmed" ? 4 : 0),
+          travelKm,
+          travelMin,
+          stageMin,
+          openingHoursStatus: availability
+        };
       })
       .filter(
         (
@@ -393,6 +458,7 @@ function buildWithGuardrails(input: {
           travelKm: number;
           travelMin: number;
           stageMin: number;
+          openingHoursStatus: "confirmed" | "unknown";
         } => item !== null
       )
       .sort((a, b) => b.score - a.score);
@@ -408,7 +474,8 @@ function buildWithGuardrails(input: {
       stage,
       cost: chosen.cost,
       travelKm: chosen.travelKm,
-      travelMinutes: chosen.travelMin
+      travelMinutes: chosen.travelMin,
+      openingHoursStatus: chosen.openingHoursStatus
     });
     used.add(chosen.place.id);
     remainingBudget -= chosen.cost;
@@ -477,6 +544,7 @@ export function buildEveningPlan(input: {
       estimatedCostForTwo: item.cost,
       travelKmFromPrevious: item.travelKm,
       travelMinutesFromPrevious: item.travelMinutes,
+      openingHoursStatus: item.openingHoursStatus,
       reason: stageReason(
         item.place,
         item.stage,
@@ -512,6 +580,9 @@ export function buildEveningPlan(input: {
   const withinDuration =
     totalDurationMinutes <= preferences.durationHours * 60;
   const complete = generated.missingStages.length === 0;
+  const unknownOpeningHoursCount = stops.filter(
+    (stop) => stop.openingHoursStatus === "unknown"
+  ).length;
 
   return {
     stops,
@@ -526,6 +597,7 @@ export function buildEveningPlan(input: {
     withinDuration,
     complete,
     missingStages: generated.missingStages,
+    unknownOpeningHoursCount,
     summary:
       stops.length +
       " chặng · " +
