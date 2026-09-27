@@ -99,7 +99,11 @@ export type PoiDiscoveryCategory =
   | "food"
   | "cafe"
   | "drink"
-  | "activity";
+  | "activity"
+  | "outdoor"
+  | "culture"
+  | "sport"
+  | "shopping";
 
 export type PoiDiscoveryAmenity =
   | "any"
