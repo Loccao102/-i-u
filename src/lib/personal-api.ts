@@ -10,6 +10,7 @@ import type {
   CompletedPlanFeedbackInput,
   DailyDiscoveryKind,
   ItineraryShareSource,
+  OwnedItineraryShare,
   DailyDiscoveryRecord,
   MapBounds,
   NearbyPlaceResult,
@@ -109,6 +110,11 @@ async function api<T>(
 
 export const personalApi = {
   snapshot: () => api<PersonalSnapshot>("/api/personal"),
+
+  listItineraryShares: () =>
+    api<{ shares: OwnedItineraryShare[] }>(
+      "/api/personal/itinerary-shares"
+    ),
 
   createItineraryShare: (input: {
     plan: ActivePlanSnapshot;

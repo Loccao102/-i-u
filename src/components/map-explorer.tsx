@@ -62,6 +62,7 @@ import type {
   EveningPlan,
   ItineraryShareSource,
   MapBounds,
+  OwnedItineraryShare,
   PersonalBackup,
   PersonalRating,
   PlannerTravelMatrix,
@@ -498,6 +499,8 @@ export function MapExplorer() {
     useState<DailyDiscoveryRecord[]>([]);
   const [completedPlans, setCompletedPlans] =
     useState<CompletedPersonalPlan[]>([]);
+  const [itineraryShares, setItineraryShares] =
+    useState<OwnedItineraryShare[]>([]);
   const [serverDistances, setServerDistances] = useState<Record<string, number>>({});
   const [backupLoading, setBackupLoading] = useState(false);
   const [shareLoading, setShareLoading] = useState(false);
@@ -575,13 +578,15 @@ export function MapExplorer() {
   const compareDialogRef = useRef<HTMLDialogElement | null>(null);
   const backupInputRef = useRef<HTMLInputElement | null>(null);
   const profileTransferDialogRef = useRef<HTMLDialogElement | null>(null);
+  const shareManagerDialogRef = useRef<HTMLDialogElement | null>(null);
   const placePhotoInputRef = useRef<HTMLInputElement | null>(null);
 
   const loadSnapshot = useCallback(async () => {
     try {
-      const [snapshot, activeResult] = await Promise.all([
+      const [snapshot, activeResult, shareResult] = await Promise.all([
         personalApi.snapshot(),
-        personalApi.activePlan.get()
+        personalApi.activePlan.get(),
+        personalApi.listItineraryShares()
       ]);
       setCustomPlaces(snapshot.customPlaces);
       setSaved(new Set(snapshot.savedIds));
@@ -591,6 +596,7 @@ export function MapExplorer() {
       setCollections(snapshot.collections);
       setDailyDiscoveries(snapshot.dailyDiscoveries ?? []);
       setCompletedPlans(snapshot.completedPlans ?? []);
+      setItineraryShares(shareResult.shares);
       if (snapshot.plannerDefaults) {
         setPlanRoutingMode(snapshot.plannerDefaults.routeMode);
         setPlanBudget(snapshot.plannerDefaults.budgetForTwo);
@@ -2493,6 +2499,8 @@ export function MapExplorer() {
         sourceKind,
         sourcePlanId
       });
+      const shareResult = await personalApi.listItineraryShares();
+      setItineraryShares(shareResult.shares);
       const url = new URL(
         "/s/" + result.share.slug,
         window.location.origin
@@ -2531,6 +2539,47 @@ export function MapExplorer() {
         error instanceof Error
           ? error.message
           : "Không thể tạo link chia sẻ itinerary."
+      );
+    } finally {
+      setShareLoading(false);
+    }
+  }
+
+  function itineraryShareUrl(slug: string) {
+    return new URL("/s/" + slug, window.location.origin).toString();
+  }
+
+  async function copyItineraryShare(slug: string) {
+    const url = itineraryShareUrl(slug);
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+        setNotice("Đã copy link itinerary.");
+      } else {
+        window.prompt("Copy link itinerary:", url);
+      }
+    } catch {
+      window.prompt("Copy link itinerary:", url);
+    }
+  }
+
+  async function revokeOwnedItineraryShare(slug: string) {
+    if (!window.confirm("Thu hồi link này? Người có link sẽ không mở được nữa.")) {
+      return;
+    }
+
+    setShareLoading(true);
+    try {
+      await personalApi.revokeItineraryShare(slug);
+      setItineraryShares((current) =>
+        current.filter((item) => item.slug !== slug)
+      );
+      setNotice("Đã thu hồi link itinerary.");
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "Không thể thu hồi link itinerary."
       );
     } finally {
       setShareLoading(false);
@@ -3247,6 +3296,13 @@ export function MapExplorer() {
             onClick={() => profileTransferDialogRef.current?.showModal()}
           >
             Chuyển
+          </button>
+          <button
+            className="backup-button"
+            type="button"
+            onClick={() => shareManagerDialogRef.current?.showModal()}
+          >
+            Links{itineraryShares.length > 0 ? " " + itineraryShares.length : ""}
           </button>
           <input
             ref={backupInputRef}
@@ -5009,6 +5065,92 @@ export function MapExplorer() {
             Lưu cảm nhận
           </button>
         </form>
+      </dialog>
+
+      <dialog className="app-dialog" ref={shareManagerDialogRef}>
+        <div className="dialog-card share-manager-card">
+          <div className="dialog-header">
+            <div>
+              <span className="eyebrow">Capability links</span>
+              <h2>Itinerary đang được chia sẻ</h2>
+            </div>
+            <button
+              className="icon-button"
+              type="button"
+              onClick={() => shareManagerDialogRef.current?.close()}
+              aria-label="Đóng"
+            >
+              <CloseIcon />
+            </button>
+          </div>
+
+          <p className="dialog-copy">
+            Ai có link đều xem được snapshot read-only. Thu hồi link sẽ làm URL đó ngừng hoạt động ngay.
+          </p>
+
+          {itineraryShares.length > 0 ? (
+            <div className="share-manager-list">
+              {itineraryShares.map((share) => (
+                <article className="share-manager-item" key={share.slug}>
+                  <div className="share-manager-item__body">
+                    <span className="eyebrow">
+                      {share.sourceKind === "completed"
+                        ? "Plan đã đi"
+                        : share.sourceKind === "active"
+                          ? "Plan đang đi"
+                          : "Phương án"}
+                    </span>
+                    <strong>
+                      {share.plan.scenario
+                        ? scenarioLabels[share.plan.scenario]
+                        : "Plan cá nhân"}
+                      {" · "}
+                      {share.plan.stops.length} chặng
+                    </strong>
+                    <small>
+                      {share.plan.stops.map((stop) => stop.name).join(" → ")}
+                    </small>
+                    <span>
+                      Tạo {formatVisitedAt(share.createdAt)} · /s/{share.slug}
+                    </span>
+                  </div>
+                  <div className="share-manager-item__actions">
+                    <a
+                      href={"/s/" + share.slug}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Mở
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => void copyItineraryShare(share.slug)}
+                    >
+                      Copy
+                    </button>
+                    <button
+                      type="button"
+                      className="share-manager-item__revoke"
+                      disabled={shareLoading}
+                      onClick={() =>
+                        void revokeOwnedItineraryShare(share.slug)
+                      }
+                    >
+                      Thu hồi
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="share-manager-empty">
+              <strong>Chưa có link nào đang hoạt động.</strong>
+              <span>
+                Tạo một plan rồi bấm “Chia sẻ”; link sẽ xuất hiện ở đây.
+              </span>
+            </div>
+          )}
+        </div>
       </dialog>
 
       <dialog className="app-dialog" ref={profileTransferDialogRef}>
