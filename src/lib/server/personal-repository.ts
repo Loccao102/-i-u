@@ -15,6 +15,7 @@ import type {
   NearbyPlaceResult,
   PersonalRating,
   PersonalSnapshot,
+  PlannerDefaults,
   RecommendationFeedback,
   Place,
   Scenario,
@@ -396,6 +397,91 @@ export async function saveCompletedPlanFeedback(
   };
 }
 
+async function getPlannerDefaults(
+  ownerKey: string
+): Promise<PlannerDefaults> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("personal_planner_defaults")
+    .select(
+      "route_mode,budget_for_two,max_distance_km,duration_hours,updated_at"
+    )
+    .eq("owner_key", ownerKey)
+    .maybeSingle();
+
+  dbError(error, "Get planner defaults");
+
+  if (!data) {
+    return {
+      routeMode: "motorcycle",
+      budgetForTwo: 700_000,
+      maxDistanceKm: 5,
+      durationHours: 4,
+      updatedAt: null
+    };
+  }
+
+  const routeMode =
+    data.route_mode === "drive" || data.route_mode === "walk"
+      ? data.route_mode
+      : "motorcycle";
+  const maxDistanceKm =
+    data.max_distance_km === 3 ||
+    data.max_distance_km === 8 ||
+    data.max_distance_km === 12
+      ? data.max_distance_km
+      : 5;
+  const durationHours =
+    data.duration_hours === 2 || data.duration_hours === 3
+      ? data.duration_hours
+      : 4;
+
+  return {
+    routeMode,
+    budgetForTwo: Number(data.budget_for_two),
+    maxDistanceKm,
+    durationHours,
+    updatedAt:
+      typeof data.updated_at === "string" ? data.updated_at : null
+  };
+}
+
+export async function savePlannerDefaults(
+  ownerKey: string,
+  input: Omit<PlannerDefaults, "updatedAt">
+): Promise<PlannerDefaults> {
+  const now = new Date().toISOString();
+  const { data, error } = await getSupabaseAdmin()
+    .from("personal_planner_defaults")
+    .upsert(
+      {
+        owner_key: ownerKey,
+        route_mode: input.routeMode,
+        budget_for_two: input.budgetForTwo,
+        max_distance_km: input.maxDistanceKm,
+        duration_hours: input.durationHours,
+        updated_at: now
+      },
+      { onConflict: "owner_key" }
+    )
+    .select(
+      "route_mode,budget_for_two,max_distance_km,duration_hours,updated_at"
+    )
+    .single();
+
+  dbError(error, "Save planner defaults");
+
+  return {
+    routeMode:
+      data!.route_mode === "drive" || data!.route_mode === "walk"
+        ? data!.route_mode
+        : "motorcycle",
+    budgetForTwo: Number(data!.budget_for_two),
+    maxDistanceKm: data!.max_distance_km as 3 | 5 | 8 | 12,
+    durationHours: data!.duration_hours as 2 | 3 | 4,
+    updatedAt: String(data!.updated_at)
+  };
+}
+
 async function listCollections(ownerKey: string): Promise<Collection[]> {
   const client = getSupabaseAdmin();
   const [collectionsResult, linksResult] = await Promise.all([
@@ -443,7 +529,8 @@ export async function getPersonalSnapshot(
     visits,
     collections,
     dailyDiscoveries,
-    completedPlans
+    completedPlans,
+    plannerDefaults
   ] = await Promise.all([
     listPlaces(ownerKey),
     listSaved(ownerKey),
@@ -452,7 +539,8 @@ export async function getPersonalSnapshot(
     listVisits(ownerKey),
     listCollections(ownerKey),
     listDailyDiscoveries(ownerKey),
-    listCompletedPlans(ownerKey)
+    listCompletedPlans(ownerKey),
+    getPlannerDefaults(ownerKey)
   ]);
 
   return {
@@ -464,7 +552,8 @@ export async function getPersonalSnapshot(
     visits,
     collections,
     dailyDiscoveries,
-    completedPlans
+    completedPlans,
+    plannerDefaults
   };
 }
 
@@ -985,6 +1074,27 @@ export async function mergePersonalBackup(
     dbError(error, "Import daily discoveries");
   }
 
+  const plannerDefaults = snapshot.plannerDefaults;
+  let plannerDefaultsImported = 0;
+
+  if (plannerDefaults) {
+    const { error } = await client
+      .from("personal_planner_defaults")
+      .upsert(
+        {
+          owner_key: ownerKey,
+          route_mode: plannerDefaults.routeMode,
+          budget_for_two: plannerDefaults.budgetForTwo,
+          max_distance_km: plannerDefaults.maxDistanceKm,
+          duration_hours: plannerDefaults.durationHours,
+          updated_at: plannerDefaults.updatedAt ?? now
+        },
+        { onConflict: "owner_key" }
+      );
+    dbError(error, "Import planner defaults");
+    plannerDefaultsImported = 1;
+  }
+
   const completedPlanRows = (snapshot.completedPlans ?? []).map(
     (item) => {
       const plan = {
@@ -1030,7 +1140,8 @@ export async function mergePersonalBackup(
     collections: collectionRows.length,
     collectionPlaces: collectionPlaceRows.length,
     dailyDiscoveries: dailyDiscoveryRows.length,
-    completedPlans: completedPlanRows.length
+    completedPlans: completedPlanRows.length,
+    plannerDefaults: plannerDefaultsImported
   };
 }
 
