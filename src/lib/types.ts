@@ -30,6 +30,7 @@ export type Place = {
   accent: string;
   source?: "personal" | "provider";
   providerId?: string;
+  googlePlaceId?: string;
   address?: string;
   recommendationReasons?: string[];
 };
@@ -260,4 +261,42 @@ export type ActivePlanAdvanceResult = {
   finished: boolean;
   recordedVisit: boolean;
   stale: boolean;
+};
+
+
+export type PlaceUserPhoto = {
+  id: string;
+  url: string;
+  caption: string;
+  createdAt: string;
+};
+
+export type GooglePhotoAttribution = {
+  displayName: string;
+  uri?: string;
+  photoUri?: string;
+};
+
+export type GooglePlacePhoto = {
+  url: string;
+  width: number;
+  height: number;
+  authorAttributions: GooglePhotoAttribution[];
+};
+
+export type GooglePlaceLiveDetails = {
+  placeId: string;
+  mapsUrl: string;
+  rating: number | null;
+  userRatingCount: number | null;
+  priceLevel: string | null;
+  openNow: boolean | null;
+  weekdayDescriptions: string[];
+  photos: GooglePlacePhoto[];
+};
+
+export type PlaceMedia = {
+  userPhotos: PlaceUserPhoto[];
+  google: GooglePlaceLiveDetails | null;
+  googleConfigured: boolean;
 };
