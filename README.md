@@ -45,6 +45,7 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - weather-aware ranking with visible explanation;
 - compact **Evening Plan Builder** that combines 1–3 nearby stops from mood, budget, duration and radius;
 - cached Geoapify Route Matrix enrichment for up to 6 planner candidates + origin, using motorcycle road distance/time when available and Haversine heuristics as a safe fallback;
+- road-first planner pass: tries the matrix-covered candidate subset first, then widens to the full ranked pool only when the road-aware subset cannot produce a complete plan;
 - hard planner guardrails for total budget, requested duration, maximum leg distance and scheduled opening hours, with road-aware distance/time when matrix data is available and partial-plan fallback instead of silently breaking constraints;
 - **Plan Quality** confidence diagnostics (0–100) expose routing coverage, opening-hours coverage, provider-estimated cost usage, completeness and constraint fallbacks instead of hiding uncertainty;
 - plan availability verification checks both arrival and near-end time; known-closed places are rejected while unknown hours are surfaced explicitly;
@@ -239,9 +240,10 @@ http://localhost:3000
 
 1. validate provider cost heuristics against accumulated user corrections and tune category baselines;
 2. add data-quality repair prompts for saved places that repeatedly cause low-confidence plans;
-3. add lightweight itinerary sharing before full Groups;
-4. Supabase Auth only when account recovery/multi-device sync is worth the friction;
-5. Groups and group voting after the personal loop is mature.
+3. add plan replay/clone from completed history for repeatable successful outings;
+4. add lightweight itinerary sharing before full Groups;
+5. Supabase Auth only when account recovery/multi-device sync is worth the friction;
+6. Groups and group voting after the personal loop is mature.
 
 
 ## Manual Vercel deployment
