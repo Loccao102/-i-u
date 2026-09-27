@@ -61,6 +61,19 @@ export default function PrivacyPage() {
         backup/import.
       </p>
 
+      <h2>Xóa toàn bộ profile</h2>
+      <p>
+        Bạn có thể reset profile hiện tại từ màn Profile & dữ liệu. Thao tác
+        này xóa dữ liệu owner-scoped trên Supabase, ảnh người dùng trong private
+        Storage, các link itinerary đang chia sẻ và planner metrics, sau đó
+        trình duyệt nhận một anonymous profile mới. Cookie chỉ được đổi sau khi
+        việc xóa Storage và database đều thành công.
+      </p>
+      <p>
+        File backup JSON chỉ chứa dữ liệu có cấu trúc và không bao gồm file ảnh
+        bạn đã tải lên.
+      </p>
+
       <h2>Dữ liệu cá nhân</h2>
       <p>
         Saved, rating, visit, collection, active plan và ảnh tải lên được scope
