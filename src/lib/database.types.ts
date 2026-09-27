@@ -378,24 +378,21 @@ export type Database = {
           created_at: string
           expires_at: string
           owner_key: string
-          profile_token: string
-          used_at: string | null
+          token_ciphertext: string
         }
         Insert: {
           code_hash: string
           created_at?: string
           expires_at: string
           owner_key: string
-          profile_token: string
-          used_at?: string | null
+          token_ciphertext: string
         }
         Update: {
           code_hash?: string
           created_at?: string
           expires_at?: string
           owner_key?: string
-          profile_token?: string
-          used_at?: string | null
+          token_ciphertext?: string
         }
         Relationships: []
       }
