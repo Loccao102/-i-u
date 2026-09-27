@@ -556,6 +556,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_personal_visit_if_new: {
+        Args: {
+          p_id: string
+          p_owner_key: string
+          p_place_id: string
+          p_rating_stars: number
+          p_visited_at: string
+          p_window_minutes?: number
+        }
+        Returns: Json
+      }
       advance_active_personal_plan: {
         Args: {
           p_action: string
