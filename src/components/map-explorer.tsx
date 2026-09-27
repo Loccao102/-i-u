@@ -594,7 +594,9 @@ export function MapExplorer() {
           personalApi.snapshot(),
           personalApi.activePlan.get(),
           personalApi.listItineraryShares(),
-          personalApi.plannerMetrics.get()
+          personalApi.plannerMetrics
+            .get()
+            .catch(() => ({ metrics: null }))
         ]);
       setCustomPlaces(snapshot.customPlaces);
       setSaved(new Set(snapshot.savedIds));
@@ -605,7 +607,9 @@ export function MapExplorer() {
       setDailyDiscoveries(snapshot.dailyDiscoveries ?? []);
       setCompletedPlans(snapshot.completedPlans ?? []);
       setItineraryShares(shareResult.shares);
-      setPlannerMetrics(metricsResult.metrics);
+      if (metricsResult.metrics) {
+        setPlannerMetrics(metricsResult.metrics);
+      }
       if (snapshot.plannerDefaults) {
         setPlanRoutingMode(snapshot.plannerDefaults.routeMode);
         setPlanBudget(snapshot.plannerDefaults.budgetForTwo);
@@ -3695,6 +3699,65 @@ export function MapExplorer() {
             <span className="sort-label">Phù hợp nhất</span>
           )}
         </div>
+
+        {view === "history" &&
+        plannerMetrics &&
+        plannerMetrics.generated > 0 ? (
+          <section className="planner-metrics-card">
+            <div className="planner-metrics-card__head">
+              <div>
+                <span className="eyebrow">Planner · 30 ngày</span>
+                <strong>
+                  {plannerMetrics.activeDays} ngày có hoạt động
+                </strong>
+              </div>
+              <small>
+                {plannerMetrics.completionRate !== null
+                  ? plannerMetrics.completionRate + "% hoàn thành sau khi bắt đầu"
+                  : "Đang tích lũy dữ liệu"}
+              </small>
+            </div>
+
+            <div className="planner-metrics-grid">
+              <div>
+                <span>Đã tạo</span>
+                <strong>{plannerMetrics.generated}</strong>
+                <small>phương án</small>
+              </div>
+              <div>
+                <span>Đã bắt đầu</span>
+                <strong>{plannerMetrics.started}</strong>
+                <small>
+                  {plannerMetrics.startRate !== null
+                    ? plannerMetrics.startRate + "% / generated"
+                    : "chưa đủ mẫu"}
+                </small>
+              </div>
+              <div>
+                <span>Hoàn thành</span>
+                <strong>{plannerMetrics.completed}</strong>
+                <small>
+                  {plannerMetrics.completionRate !== null
+                    ? plannerMetrics.completionRate + "% / started"
+                    : "chưa đủ mẫu"}
+                </small>
+              </div>
+              <div>
+                <span>Replay</span>
+                <strong>{plannerMetrics.replayed}</strong>
+                <small>
+                  {plannerMetrics.replayRate !== null
+                    ? plannerMetrics.replayRate + "% / started"
+                    : "chưa có replay"}
+                </small>
+              </div>
+            </div>
+
+            <p>
+              Chỉ là counter theo ngày; ĐiĐâu không lưu GPS trace cho thống kê này.
+            </p>
+          </section>
+        ) : null}
 
         {view === "history" && completedPlans.length > 0 ? (
           <div className="completed-plan-history">
