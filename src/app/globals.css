@@ -3779,24 +3779,39 @@ textarea:focus-visible {
   background: #f8fbf8;
 }
 
-.completed-plan-history__share {
-  border: 0;
+.completed-plan-history__actions {
   border-left: 1px solid #ecece7;
-  padding: 0 10px;
+  display: grid;
+  grid-template-rows: 1fr 1fr;
   background: #fbfbf8;
+}
+
+.completed-plan-history__actions button {
+  min-width: 54px;
+  border: 0;
+  padding: 0 9px;
+  background: transparent;
   color: #526257;
   cursor: pointer;
   font-size: 8px;
   font-weight: 800;
 }
 
-.completed-plan-history__share:hover {
+.completed-plan-history__actions button + button {
+  border-top: 1px solid #ecece7;
+}
+
+.completed-plan-history__actions button:hover {
   background: #eef5ef;
 }
 
-.completed-plan-history__share:disabled {
+.completed-plan-history__actions button:disabled {
   opacity: .55;
   cursor: wait;
+}
+
+.completed-plan-history__replay {
+  color: #42684d !important;
 }
 
 .completed-plan-history__top,
@@ -4015,6 +4030,84 @@ textarea:focus-visible {
   color: #9b554a;
 }
 
+
+.plan-replay-banner {
+  margin-bottom: 12px;
+  border: 1px solid #cfe0d2;
+  border-radius: 14px;
+  padding: 10px 11px;
+  background: #f2f8f3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.plan-replay-banner > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.plan-replay-banner strong {
+  color: #3f684b;
+  font-size: 10px;
+}
+
+.plan-replay-banner small {
+  max-width: 430px;
+  color: #68766b;
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.plan-replay-banner > button {
+  flex: 0 0 auto;
+  border: 1px solid #c7d8ca;
+  border-radius: 999px;
+  padding: 6px 8px;
+  background: white;
+  color: #55705d;
+  cursor: pointer;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.plan-replay-result {
+  margin-top: 10px;
+  border: 1px solid #d4e1d6;
+  border-radius: 12px;
+  padding: 9px 10px;
+  background: #f6faf6;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.plan-replay-result strong {
+  color: #41664b;
+  font-size: 9px;
+}
+
+.plan-replay-result span {
+  color: #6d786f;
+  font-size: 8px;
+  line-height: 1.4;
+  text-align: right;
+}
+
+@media (max-width: 620px) {
+  .plan-replay-banner,
+  .plan-replay-result {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .plan-replay-result span {
+    text-align: left;
+  }
+}
 
 .planner-defaults-note {
   display: block;

@@ -303,6 +303,21 @@ export type EveningPlanPreferences = {
   startAt?: string;
 };
 
+export type PlannerReplayTemplate = {
+  sourcePlanId: string;
+  stops: Array<{
+    placeId: string;
+    stage: PlanStage;
+  }>;
+};
+
+export type EveningPlanReplayInfo = {
+  sourcePlanId: string;
+  originalStopCount: number;
+  retainedStopIds: string[];
+  replacedStopCount: number;
+};
+
 export type EveningPlanStop = {
   place: Place;
   stage: PlanStage;
@@ -334,6 +349,7 @@ export type EveningPlan = {
   missingStages: PlanStage[];
   unknownOpeningHoursCount: number;
   roadRoutedLegs: number;
+  replay: EveningPlanReplayInfo | null;
   summary: string;
 };
 

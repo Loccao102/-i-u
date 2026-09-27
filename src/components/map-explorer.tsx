@@ -65,6 +65,7 @@ import type {
   OwnedItineraryShare,
   PersonalBackup,
   PersonalRating,
+  PlannerReplayTemplate,
   PlannerTravelMatrix,
   RecommendationFeedback,
   RecommendationFeedbackReason,
@@ -527,6 +528,8 @@ export function MapExplorer() {
   const [planVariant, setPlanVariant] = useState(0);
   const [planWeather, setPlanWeather] = useState<WeatherContext | null>(null);
   const [planWeatherLoading, setPlanWeatherLoading] = useState(false);
+  const [planReplayTemplate, setPlanReplayTemplate] =
+    useState<PlannerReplayTemplate | null>(null);
   const [activePlan, setActivePlan] = useState<EveningPlan | null>(null);
   const [runningPlan, setRunningPlan] =
     useState<ActivePersonalPlan | null>(null);
@@ -1886,7 +1889,8 @@ export function MapExplorer() {
       variant,
       routeScenario,
       routeStartTime,
-      recentRouteKeys
+      recentRouteKeys,
+      null
     );
 
     if (!result || result.stops.length === 0) return;
@@ -1969,8 +1973,13 @@ export function MapExplorer() {
     nextVariant = planVariant,
     scenarioOverride: Scenario = planScenario,
     startTimeOverride = planStartTime,
-    avoidPlaceKeys?: ReadonlySet<string>
+    avoidPlaceKeys?: ReadonlySet<string>,
+    replayTemplateOverride?: PlannerReplayTemplate | null
   ) {
+    const replayTemplate =
+      replayTemplateOverride === undefined
+        ? planReplayTemplate
+        : replayTemplateOverride;
     const origin = plannerOrigin();
     const targetAt = nextPlanStartAt(startTimeOverride, clock);
     setPlanWeatherLoading(true);
@@ -2043,7 +2052,8 @@ export function MapExplorer() {
     const routingCandidates = plannerRoutingCandidates(
       routingSource,
       preferences,
-      6
+      6,
+      replayTemplate
     );
 
     if (routingCandidates.length > 0) {
@@ -2083,7 +2093,8 @@ export function MapExplorer() {
         },
         origin,
         variant: nextVariant,
-        travelMatrix
+        travelMatrix,
+        replayTemplate
       });
 
     let result = build(preferredSource);
@@ -2116,6 +2127,7 @@ export function MapExplorer() {
   }
 
   function openPlanBuilder() {
+    setPlanReplayTemplate(null);
     setPlanScenario(scenario === "all" ? "date" : scenario);
     setPlanVariant(0);
     setPlanWeather(null);
@@ -3134,6 +3146,100 @@ export function MapExplorer() {
     }
   }
 
+  async function replayCompletedPlan(
+    plan: CompletedPersonalPlan
+  ) {
+    const template: PlannerReplayTemplate = {
+      sourcePlanId: plan.id,
+      stops: plan.plan.stops.map((stop) => ({
+        placeId: stop.placeId,
+        stage: stop.stage
+      }))
+    };
+
+    const originalBudget = Math.max(
+      100_000,
+      plan.plan.totalEstimatedCostForTwo +
+        Math.max(0, plan.plan.budgetRemainingForTwo)
+    );
+    const budgetOptions = [400_000, 700_000, 1_000_000, 1_500_000];
+    const replayBudget =
+      budgetOptions.find((value) => value >= originalBudget) ??
+      budgetOptions[budgetOptions.length - 1]!;
+
+    const maxLegKm = plan.plan.stops.reduce(
+      (max, stop) => Math.max(max, stop.travelKmFromPrevious),
+      0
+    );
+    const replayDistance: 3 | 5 | 8 | 12 =
+      maxLegKm <= 3 ? 3 : maxLegKm <= 5 ? 5 : maxLegKm <= 8 ? 8 : 12;
+
+    const replayDuration: 2 | 3 | 4 =
+      plan.plan.totalDurationMinutes <= 120
+        ? 2
+        : plan.plan.totalDurationMinutes <= 180
+          ? 3
+          : 4;
+    const replayScenario = plan.plan.scenario ?? "date";
+    const replayStartTime = suggestedDailyRouteStartTime(clock);
+
+    let refreshed = 0;
+    const updates: Array<Promise<void>> = [];
+
+    for (const stop of plan.plan.stops) {
+      const place = customPlaces.find(
+        (item) => item.id === stop.placeId
+      );
+      if (!place?.providerId?.startsWith("geoapify:")) continue;
+
+      updates.push(
+        personalApi
+          .getProviderPlaceDetails(place.providerId)
+          .then(async (result) => {
+            const openingHours = result.details?.openingHours?.trim();
+            if (!openingHours || openingHours === place.openUntil) return;
+
+            await personalApi.updatePlace(place.id, {
+              ...place,
+              openUntil: openingHours
+            });
+            refreshed += 1;
+          })
+          .catch(() => undefined)
+      );
+    }
+
+    if (updates.length > 0) {
+      setNotice("Đang làm mới dữ liệu các chặng cũ…");
+      await Promise.all(updates);
+      if (refreshed > 0) {
+        await loadSnapshot();
+      }
+    }
+
+    setPlanReplayTemplate(template);
+    setPlanScenario(replayScenario);
+    setPlanRoutingMode(plan.plan.routeMode);
+    setPlanBudget(replayBudget);
+    setPlanDistance(replayDistance);
+    setPlanDuration(replayDuration);
+    setPlanStartTime(replayStartTime);
+    setPlanVariant(0);
+    setPlanWeather(null);
+    setPlanWeatherLoading(false);
+    setActivePlan(null);
+
+    planDialogRef.current?.showModal();
+    setNotice(
+      "Đã nạp " +
+        plan.plan.stops.length +
+        " chặng cũ làm template" +
+        (refreshed > 0
+          ? " · đã làm mới giờ mở cửa của " + refreshed + " nơi."
+          : ".")
+    );
+  }
+
   function focusCompletedPlan(plan: CompletedPersonalPlan) {
     const first = plan.plan.stops[0];
     if (!first) return;
@@ -3643,20 +3749,30 @@ export function MapExplorer() {
                         )}
                       </span>
                     </button>
-                    <button
-                      type="button"
-                      className="completed-plan-history__share"
-                      disabled={shareLoading}
-                      onClick={() =>
-                        void sharePlanSnapshot(
-                          plan.plan,
-                          "completed",
-                          plan.id
-                        )
-                      }
-                    >
-                      Chia sẻ
-                    </button>
+                    <div className="completed-plan-history__actions">
+                      <button
+                        type="button"
+                        className="completed-plan-history__replay"
+                        disabled={planWeatherLoading}
+                        onClick={() => void replayCompletedPlan(plan)}
+                      >
+                        Đi lại
+                      </button>
+                      <button
+                        type="button"
+                        className="completed-plan-history__share"
+                        disabled={shareLoading}
+                        onClick={() =>
+                          void sharePlanSnapshot(
+                            plan.plan,
+                            "completed",
+                            plan.id
+                          )
+                        }
+                      >
+                        Chia sẻ
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -5429,6 +5545,29 @@ export function MapExplorer() {
             Ghép các chặng gần nhau theo gu, budget, mood và dự báo thời tiết đúng giờ bạn định đi.
           </p>
 
+          {planReplayTemplate ? (
+            <section className="plan-replay-banner">
+              <div>
+                <span className="eyebrow">Replay template</span>
+                <strong>
+                  Ưu tiên {planReplayTemplate.stops.length} chặng từ buổi trước
+                </strong>
+                <small>
+                  Planner kiểm tra lại thời tiết, giờ mở cửa, road routing và budget; chặng không còn phù hợp sẽ được thay.
+                </small>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setPlanReplayTemplate(null);
+                  setActivePlan(null);
+                }}
+              >
+                Bỏ template
+              </button>
+            </section>
+          ) : null}
+
           <fieldset className="dialog-fieldset">
             <legend>Mood</legend>
             <div className="scenario-row scenario-row--wrap">
@@ -5626,7 +5765,11 @@ export function MapExplorer() {
             disabled={planWeatherLoading}
             onClick={() => void generatePlan(0)}
           >
-            {planWeatherLoading ? "Đang xem dự báo…" : "Tạo kế hoạch"}
+            {planWeatherLoading
+              ? "Đang xem dự báo…"
+              : planReplayTemplate
+                ? "Tạo lại plan hôm nay"
+                : "Tạo kế hoạch"}
           </button>
 
           {planWeather ? (
@@ -5664,6 +5807,22 @@ export function MapExplorer() {
                 </div>
                 <b>{activePlan.averageMatch}%</b>
               </div>
+
+              {activePlan.replay ? (
+                <section className="plan-replay-result">
+                  <strong>
+                    Giữ {activePlan.replay.retainedStopIds.length}/
+                    {activePlan.replay.originalStopCount} chặng cũ
+                  </strong>
+                  <span>
+                    {activePlan.replay.replacedStopCount > 0
+                      ? "Đã thay " +
+                        activePlan.replay.replacedStopCount +
+                        " chặng theo điều kiện hôm nay."
+                      : "Route cũ vẫn vượt qua các kiểm tra hiện tại."}
+                  </span>
+                </section>
+              ) : null}
 
               {activePlanQuality ? (
                 <section
