@@ -57,7 +57,9 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - multi-stop Google Maps route handoff;
 - **What next?** recommendations after a recent check-in, using transition type, time of day, distance, travel time, cost and current personal ranking;
 - persisted **active plan lifecycle**: start → resume after reload → complete/skip each stop → auto-finish;
-- one active plan per anonymous profile, intentionally without calendar/history bloat;
+- completed plan history is archived atomically when the final stop is completed/skipped, keeping mood, route snapshot, completed/skipped stops, cost, duration and completion time;
+- History view now shows recent completed outings alongside per-place visits;
+- one active plan per anonymous profile, while completed plans are stored separately for outcome learning;
 - completing a stop records a visit only when there is no recent duplicate check-in;
 - active-plan progress uses expected-stop concurrency checks so stale actions from another tab cannot skip a stop;
 - real place media: private user-uploaded photos in Supabase Storage;
@@ -170,6 +172,11 @@ The schema is versioned in `supabase/migrations/`. Apply the baseline and every 
 ```text
 supabase/migrations/20260927063759_daily_discovery_history.sql
 supabase/migrations/20260927065815_provider_cost_estimates.sql
+supabase/migrations/20260927071744_completed_plan_history.sql
+supabase/migrations/20260927072104_completed_plan_history_update_grant.sql
+supabase/migrations/20260927072239_archive_completed_plan_atomically.sql
+supabase/migrations/20260927072447_completed_plan_owner_scope.sql
+supabase/migrations/20260927072518_archive_completed_plan_owner_scope.sql
 ```
 
 Apply migrations through the Supabase SQL Editor, Supabase CLI, or the connected Supabase tooling.
@@ -226,8 +233,8 @@ http://localhost:3000
 
 ## Next
 
-1. validate provider cost heuristics against accumulated user corrections and tune category baselines;
-2. add persisted completed-plan history so successful outings can improve future planning;
+1. feed completed-plan outcomes back into ranking so repeatedly successful route patterns get a controlled bonus;
+2. validate provider cost heuristics against accumulated user corrections and tune category baselines;
 3. add lightweight itinerary sharing before full Groups;
 4. Supabase Auth only when account recovery/multi-device sync is worth the friction;
 5. Groups and group voting after the personal loop is mature.

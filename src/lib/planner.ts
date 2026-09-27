@@ -759,6 +759,7 @@ export function buildEveningPlan(input: {
   ).length;
 
   return {
+    scenario: preferences.scenario,
     stops,
     totalEstimatedCostForTwo,
     budgetRemainingForTwo:
@@ -925,6 +926,7 @@ export function toActivePlanSnapshot(
   plan: EveningPlan
 ): ActivePlanSnapshot {
   return {
+    scenario: plan.scenario,
     summary: plan.summary,
     totalEstimatedCostForTwo: plan.totalEstimatedCostForTwo,
     budgetRemainingForTwo: plan.budgetRemainingForTwo,

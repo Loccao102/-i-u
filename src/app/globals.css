@@ -3624,3 +3624,95 @@ textarea:focus-visible {
   font-weight: 600;
   line-height: 1.35;
 }
+
+
+.completed-plan-history {
+  border: 1px solid #e5e6e1;
+  border-radius: 15px;
+  padding: 10px;
+  background: #fafaf7;
+  display: grid;
+  gap: 9px;
+}
+
+.completed-plan-history__head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.completed-plan-history__head > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.completed-plan-history__head strong {
+  font-size: 11px;
+}
+
+.completed-plan-history__head > small {
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.completed-plan-history__list {
+  display: grid;
+  gap: 6px;
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.completed-plan-history__list > button {
+  min-width: 0;
+  border: 1px solid #e7e8e3;
+  border-radius: 12px;
+  padding: 9px 10px;
+  background: white;
+  display: grid;
+  gap: 4px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.completed-plan-history__list > button:hover {
+  border-color: #cfd8d0;
+  background: #f8fbf8;
+}
+
+.completed-plan-history__top,
+.completed-plan-history__meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.completed-plan-history__top {
+  justify-content: space-between;
+}
+
+.completed-plan-history__top strong {
+  font-size: 10px;
+}
+
+.completed-plan-history__top small,
+.completed-plan-history__meta {
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.completed-plan-history__route {
+  overflow: hidden;
+  color: #4f544e;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.completed-plan-history__meta b {
+  color: #4d7056;
+}

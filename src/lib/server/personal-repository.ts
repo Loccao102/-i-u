@@ -2,9 +2,12 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import { getSupabaseAdmin } from "./supabase";
+import { parseActivePlanSnapshot } from "./input";
+import type { Json } from "../database.types";
 import type {
   BackupImportResult,
   Collection,
+  CompletedPersonalPlan,
   DailyDiscoveryKind,
   DailyDiscoveryRecord,
   MapBounds,
@@ -319,6 +322,30 @@ export async function upsertDailyDiscovery(
   };
 }
 
+async function listCompletedPlans(
+  ownerKey: string
+): Promise<CompletedPersonalPlan[]> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("completed_personal_plans")
+    .select(
+      "id,plan,completed_stop_ids,skipped_stop_ids,started_at,completed_at"
+    )
+    .eq("owner_key", ownerKey)
+    .order("completed_at", { ascending: false })
+    .limit(60);
+
+  dbError(error, "List completed plans");
+
+  return (data ?? []).map((row) => ({
+    id: String(row.id),
+    plan: parseActivePlanSnapshot(row.plan),
+    completedStopIds: row.completed_stop_ids ?? [],
+    skippedStopIds: row.skipped_stop_ids ?? [],
+    startedAt: String(row.started_at),
+    completedAt: String(row.completed_at)
+  }));
+}
+
 async function listCollections(ownerKey: string): Promise<Collection[]> {
   const client = getSupabaseAdmin();
   const [collectionsResult, linksResult] = await Promise.all([
@@ -365,7 +392,8 @@ export async function getPersonalSnapshot(
     recommendationFeedbacks,
     visits,
     collections,
-    dailyDiscoveries
+    dailyDiscoveries,
+    completedPlans
   ] = await Promise.all([
     listPlaces(ownerKey),
     listSaved(ownerKey),
@@ -373,7 +401,8 @@ export async function getPersonalSnapshot(
     listRecommendationFeedbacks(ownerKey),
     listVisits(ownerKey),
     listCollections(ownerKey),
-    listDailyDiscoveries(ownerKey)
+    listDailyDiscoveries(ownerKey),
+    listCompletedPlans(ownerKey)
   ]);
 
   return {
@@ -384,7 +413,8 @@ export async function getPersonalSnapshot(
     recommendationFeedbacks,
     visits,
     collections,
-    dailyDiscoveries
+    dailyDiscoveries,
+    completedPlans
   };
 }
 
@@ -905,6 +935,38 @@ export async function mergePersonalBackup(
     dbError(error, "Import daily discoveries");
   }
 
+  const completedPlanRows = (snapshot.completedPlans ?? []).map(
+    (item) => {
+      const plan = {
+        ...item.plan,
+        stops: item.plan.stops.map((stop) => ({
+          ...stop,
+          placeId: mapPlaceId(stop.placeId)
+        }))
+      };
+
+      return {
+        id: item.id,
+        owner_key: ownerKey,
+        plan: plan as unknown as Json,
+        completed_stop_ids: item.completedStopIds.map(mapPlaceId),
+        skipped_stop_ids: item.skippedStopIds.map(mapPlaceId),
+        started_at: item.startedAt,
+        completed_at: item.completedAt
+      };
+    }
+  );
+
+  if (completedPlanRows.length > 0) {
+    const { error } = await client
+      .from("completed_personal_plans")
+      .upsert(completedPlanRows, {
+        onConflict: "owner_key,id",
+        ignoreDuplicates: true
+      });
+    dbError(error, "Import completed plans");
+  }
+
   return {
     places,
     saved: savedRows.length,
@@ -913,7 +975,8 @@ export async function mergePersonalBackup(
     visits: visitRows.length,
     collections: collectionRows.length,
     collectionPlaces: collectionPlaceRows.length,
-    dailyDiscoveries: dailyDiscoveryRows.length
+    dailyDiscoveries: dailyDiscoveryRows.length,
+    completedPlans: completedPlanRows.length
   };
 }
 

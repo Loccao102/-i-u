@@ -52,6 +52,7 @@ import type {
   ActivePersonalPlan,
   ActivePlanStopSnapshot,
   Collection,
+  CompletedPersonalPlan,
   DailyDiscoveryRecord,
   EveningPlan,
   MapBounds,
@@ -481,6 +482,8 @@ export function MapExplorer() {
   const [dailyPlace, setDailyPlace] = useState<Place | null>(null);
   const [dailyDiscoveries, setDailyDiscoveries] =
     useState<DailyDiscoveryRecord[]>([]);
+  const [completedPlans, setCompletedPlans] =
+    useState<CompletedPersonalPlan[]>([]);
   const [serverDistances, setServerDistances] = useState<Record<string, number>>({});
   const [backupLoading, setBackupLoading] = useState(false);
   const [viewportBounds, setViewportBounds] = useState<MapBounds | null>(null);
@@ -555,6 +558,7 @@ export function MapExplorer() {
       setVisits(snapshot.visits);
       setCollections(snapshot.collections);
       setDailyDiscoveries(snapshot.dailyDiscoveries ?? []);
+      setCompletedPlans(snapshot.completedPlans ?? []);
       setRunningPlan(activeResult.activePlan);
       setDataStatus("ready");
     } catch (error) {
@@ -2037,13 +2041,8 @@ export function MapExplorer() {
         return;
       }
 
-      if (result.recordedVisit) {
-        const snapshot = await personalApi.snapshot();
-        setCustomPlaces(snapshot.customPlaces);
-        setSaved(new Set(snapshot.savedIds));
-        setRatings(snapshot.ratings);
-        setVisits(snapshot.visits);
-        setCollections(snapshot.collections);
+      if (result.recordedVisit || result.finished) {
+        await loadSnapshot();
       }
 
       if (result.finished) {
@@ -2199,7 +2198,9 @@ export function MapExplorer() {
           result.collections +
           " bộ sưu tập, " +
           result.dailyDiscoveries +
-          " bản ghi khám phá."
+          " bản ghi khám phá, " +
+          result.completedPlans +
+          " plan đã hoàn thành."
       );
     } catch (error) {
       setNotice(
@@ -2646,6 +2647,32 @@ export function MapExplorer() {
     }
   }
 
+  function focusCompletedPlan(plan: CompletedPersonalPlan) {
+    const first = plan.plan.stops[0];
+    if (!first) return;
+
+    const place =
+      rankedAll.find((item) => item.id === first.placeId) ??
+      customPlaces.find((item) => item.id === first.placeId);
+
+    if (place) {
+      setSelectedId(place.id);
+      mapRef.current?.flyTo({
+        center: [place.longitude, place.latitude],
+        zoom: 13.5,
+        duration: 650,
+        essential: true
+      });
+    }
+
+    setNotice(
+      "↺ Plan " +
+        formatVisitedAt(plan.completedAt) +
+        " · " +
+        plan.plan.summary
+    );
+  }
+
   function toggleRatingContext(context: Scenario) {
     setRatingContexts((current) =>
       current.includes(context)
@@ -2658,7 +2685,10 @@ export function MapExplorer() {
     view === "saved"
       ? visiblePlaces.length + " địa điểm đã lưu"
       : view === "history"
-        ? visiblePlaces.length + " nơi bạn đã đi"
+        ? visiblePlaces.length +
+          " nơi đã đi · " +
+          completedPlans.length +
+          " plan"
         : view === "collections"
           ? selectedCollection?.name ?? "Bộ sưu tập"
           : visiblePlaces.length + " địa điểm phù hợp";
@@ -3026,6 +3056,54 @@ export function MapExplorer() {
             <span className="sort-label">Phù hợp nhất</span>
           )}
         </div>
+
+        {view === "history" && completedPlans.length > 0 ? (
+          <div className="completed-plan-history">
+            <div className="completed-plan-history__head">
+              <div>
+                <span className="eyebrow">Những buổi đã đi</span>
+                <strong>{completedPlans.length} plan được lưu</strong>
+              </div>
+              <small>Gần nhất trước</small>
+            </div>
+
+            <div className="completed-plan-history__list">
+              {completedPlans.slice(0, 8).map((plan) => {
+                const completedCount = plan.completedStopIds.length;
+                const skippedCount = plan.skippedStopIds.length;
+                return (
+                  <button
+                    type="button"
+                    key={plan.id}
+                    onClick={() => focusCompletedPlan(plan)}
+                  >
+                    <span className="completed-plan-history__top">
+                      <strong>
+                        {plan.plan.scenario
+                          ? scenarioLabels[plan.plan.scenario]
+                          : "Plan cá nhân"}
+                      </strong>
+                      <small>{formatVisitedAt(plan.completedAt)}</small>
+                    </span>
+                    <span className="completed-plan-history__route">
+                      {plan.plan.stops
+                        .map((stop) => stop.name)
+                        .join(" → ")}
+                    </span>
+                    <span className="completed-plan-history__meta">
+                      <b>{completedCount}/{plan.plan.stops.length} chặng xong</b>
+                      {skippedCount > 0 ? (
+                        <span>· {skippedCount} bỏ qua</span>
+                      ) : null}
+                      <span>· ~{moneyLabel(plan.plan.totalEstimatedCostForTwo)}</span>
+                      <span>· {plan.plan.totalDurationMinutes} phút</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
 
         {view === "discover" && tasteProfile.sampleSize >= 2 ? (
           <div className="taste-strip">

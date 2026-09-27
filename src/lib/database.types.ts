@@ -103,6 +103,39 @@ export type Database = {
         }
         Relationships: []
       }
+      completed_personal_plans: {
+        Row: {
+          completed_at: string
+          completed_stop_ids: string[]
+          created_at: string
+          id: string
+          owner_key: string
+          plan: Json
+          skipped_stop_ids: string[]
+          started_at: string
+        }
+        Insert: {
+          completed_at?: string
+          completed_stop_ids?: string[]
+          created_at?: string
+          id: string
+          owner_key: string
+          plan: Json
+          skipped_stop_ids?: string[]
+          started_at: string
+        }
+        Update: {
+          completed_at?: string
+          completed_stop_ids?: string[]
+          created_at?: string
+          id?: string
+          owner_key?: string
+          plan?: Json
+          skipped_stop_ids?: string[]
+          started_at?: string
+        }
+        Relationships: []
+      }
       daily_discoveries: {
         Row: {
           created_at: string

@@ -19,6 +19,11 @@ Recent incremental migrations:
 ```text
 supabase/migrations/20260927063759_daily_discovery_history.sql
 supabase/migrations/20260927065815_provider_cost_estimates.sql
+supabase/migrations/20260927071744_completed_plan_history.sql
+supabase/migrations/20260927072104_completed_plan_history_update_grant.sql
+supabase/migrations/20260927072239_archive_completed_plan_atomically.sql
+supabase/migrations/20260927072447_completed_plan_owner_scope.sql
+supabase/migrations/20260927072518_archive_completed_plan_owner_scope.sql
 ```
 
 The provider-cost migration adds `cost_source` and `cost_confidence` to
@@ -134,14 +139,15 @@ where schemaname = 'public'
     'active_personal_plans',
     'place_user_photos',
     'recommendation_feedback',
-    'daily_discoveries'
+    'daily_discoveries',
+    'completed_personal_plans'
   );
 ```
 
 Expected:
 
 - PostGIS exists in the dedicated extensions schema;
-- all personal tables, including `daily_discoveries`, show RLS enabled;
+- all personal tables, including `daily_discoveries` and `completed_personal_plans`, show RLS enabled;
 - `anon` and `authenticated` remain revoked from personal tables while the server secret role owns CRUD.
 
 ## 9. Do not enable Auth yet just because Supabase provides it
