@@ -47,6 +47,8 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - cached Geoapify Route Matrix enrichment for up to 6 planner candidates + origin, using motorcycle road distance/time when available and Haversine heuristics as a safe fallback;
 - hard planner guardrails for total budget, requested duration, maximum leg distance and scheduled opening hours, with road-aware distance/time when matrix data is available and partial-plan fallback instead of silently breaking constraints;
 - **Plan Quality** confidence diagnostics (0–100) expose routing coverage, opening-hours coverage, provider-estimated cost usage, completeness and constraint fallbacks instead of hiding uncertainty;
+- saved-place data repair prioritization tracks which incomplete places recur across completed plans, then surfaces actionable opening-hours and cost fixes when they affect a low-confidence plan;
+- Geoapify-backed saved places can refresh missing opening hours with one tap; cost repairs open the existing trusted user-cost editor;
 - plan availability verification checks both arrival and near-end time; known-closed places are rejected while unknown hours are surfaced explicitly;
 - per-stop start/end time, travel time and estimated cost;
 - editable real-world "chi phí 2 người" on personal/saved places;
@@ -239,8 +241,8 @@ http://localhost:3000
 
 ## Next
 
-1. add data-quality repair prompts for saved places that repeatedly cause low-confidence plans;
-2. add lightweight itinerary sharing before full Groups;
+1. add lightweight itinerary sharing before full Groups;
+2. add a small planner diagnostics history so recurring low-quality causes can be measured over time;
 3. Supabase Auth only when account recovery/multi-device sync is worth the friction;
 4. Groups and group voting after the personal loop is mature.
 
