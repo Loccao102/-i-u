@@ -28,7 +28,7 @@ function classify(error: unknown) {
   }
 
   if (
-    /google_place_id|cost_source|cost_confidence|outcome_rating|would_repeat|feedback_note|feedback_at|place_user_photos|active_personal_plans|completed_personal_plans|daily_discoveries|personal_planner_defaults|personal_places/i.test(
+    /google_place_id|cost_source|cost_confidence|outcome_rating|would_repeat|feedback_note|feedback_at|place_user_photos|active_personal_plans|completed_personal_plans|daily_discoveries|personal_planner_defaults|profile_transfer_codes|personal_places/i.test(
       raw
     ) &&
     /column|relation|schema|does not exist|cache/i.test(raw)
@@ -61,7 +61,7 @@ export async function GET() {
     const client = getSupabaseAdmin();
     const keyKind = getSupabaseServerKeyKind();
 
-    const [places, photos, activePlans, dailyDiscoveries, completedPlans, plannerDefaults] = await Promise.all([
+    const [places, photos, activePlans, dailyDiscoveries, completedPlans, plannerDefaults, transferCodes] = await Promise.all([
       client
         .from("personal_places")
         .select("id,google_place_id,cost_source,cost_confidence")
@@ -85,6 +85,10 @@ export async function GET() {
       client
         .from("personal_planner_defaults")
         .select("route_mode,budget_for_two,max_distance_km,duration_hours")
+        .limit(1),
+      client
+        .from("profile_transfer_codes")
+        .select("code_hash,expires_at,used_at")
         .limit(1)
     ]);
 
@@ -114,6 +118,11 @@ export async function GET() {
         "Health personal_planner_defaults: " + plannerDefaults.error.message
       );
     }
+    if (transferCodes.error) {
+      throw new Error(
+        "Health profile_transfer_codes: " + transferCodes.error.message
+      );
+    }
 
     return NextResponse.json(
       {
@@ -132,7 +141,8 @@ export async function GET() {
           activePersonalPlans: true,
           dailyDiscoveries: true,
           completedPersonalPlans: true,
-          personalPlannerDefaults: true
+          personalPlannerDefaults: true,
+          profileTransferCodes: true
         }
       },
       {

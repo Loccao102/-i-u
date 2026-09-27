@@ -57,6 +57,18 @@ export function errorJson(
     IMAGE_TOO_LARGE: {
       status: 413,
       message: "Ảnh phải nhỏ hơn hoặc bằng 8 MB."
+    },
+    INVALID_TRANSFER_CODE: {
+      status: 400,
+      message: "Mã chuyển profile không đúng định dạng."
+    },
+    TRANSFER_CODE_EXPIRED: {
+      status: 410,
+      message: "Mã chuyển profile đã hết hạn hoặc đã được dùng."
+    },
+    PROFILE_TRANSFER_UNAVAILABLE: {
+      status: 503,
+      message: "Chưa thể tạo mã chuyển profile lúc này."
     }
   };
 
@@ -96,7 +108,7 @@ export function internalErrorJson(
     message =
       "Supabase server key hoặc URL trên Vercel không hợp lệ. Không dùng publishable/anon key cho biến server.";
   } else if (
-    /google_place_id|cost_source|cost_confidence|outcome_rating|would_repeat|feedback_note|feedback_at|place_user_photos|active_personal_plans|completed_personal_plans|daily_discoveries|personal_planner_defaults/i.test(raw) &&
+    /google_place_id|cost_source|cost_confidence|outcome_rating|would_repeat|feedback_note|feedback_at|place_user_photos|active_personal_plans|completed_personal_plans|daily_discoveries|personal_planner_defaults|profile_transfer_codes/i.test(raw) &&
     /column|relation|schema|does not exist|cache/i.test(raw)
   ) {
     status = 503;

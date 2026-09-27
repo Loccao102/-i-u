@@ -108,6 +108,19 @@ async function api<T>(
 export const personalApi = {
   snapshot: () => api<PersonalSnapshot>("/api/personal"),
 
+  profileTransfer: {
+    create: () =>
+      api<{ code: string; expiresAt: string }>(
+        "/api/personal/profile-transfer",
+        { method: "POST", body: {} }
+      ),
+    redeem: (code: string) =>
+      api<{ transferred: true }>(
+        "/api/personal/profile-transfer",
+        { method: "PUT", body: { code } }
+      )
+  },
+
   savePlannerDefaults: (
     input: Omit<PlannerDefaults, "updatedAt">
   ) =>

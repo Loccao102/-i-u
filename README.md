@@ -45,6 +45,7 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - weather-aware ranking with visible explanation;
 - compact **Evening Plan Builder** that combines 1–3 nearby stops from mood, budget, duration and radius;
 - planner defaults persisted per anonymous profile for travel mode, budget, radius and duration, so the core planning setup survives reloads/sessions;
+- one-time **profile transfer code** (12 chars / 10 minutes) for moving the same anonymous profile to another browser without forcing sign-in;
 - cached Geoapify Route Matrix enrichment for up to 6 planner candidates + origin, with explicit **Xe máy / Ô tô / Đi bộ** modes passed to the provider and mode-aware Haversine travel-time fallback;
 - hard planner guardrails for total budget, requested duration, maximum leg distance and scheduled opening hours, with road-aware distance/time when matrix data is available and partial-plan fallback instead of silently breaking constraints;
 - **Plan Quality** confidence diagnostics (0–100) expose routing coverage, opening-hours coverage, provider-estimated cost usage, completeness and constraint fallbacks instead of hiding uncertainty;
@@ -188,6 +189,7 @@ supabase/migrations/20260927072447_completed_plan_owner_scope.sql
 supabase/migrations/20260927072518_archive_completed_plan_owner_scope.sql
 supabase/migrations/20260927073327_completed_plan_feedback.sql
 supabase/migrations/20260927081109_personal_planner_defaults.sql
+supabase/migrations/20260927083839_profile_transfer_codes.sql
 supabase/migrations/20260927073327_completed_plan_feedback.sql
 ```
 
@@ -247,7 +249,7 @@ http://localhost:3000
 
 1. add lightweight read-only itinerary sharing before full Groups;
 2. add stronger long-term plan analytics only after enough real completed-plan samples exist;
-3. Supabase Auth only when account recovery/multi-device sync is worth the friction;
+3. add Supabase Auth only when account recovery and permanent multi-device identity are worth the friction; the one-time transfer code covers the anonymous phase;
 4. Groups and group voting after the personal loop is mature.
 
 

@@ -26,13 +26,11 @@ export function resolveAnonymousProfile(
   };
 }
 
-export function attachProfileCookie(
+export function attachProfileToken(
   response: NextResponse,
-  profile: AnonymousProfile
+  token: string
 ) {
-  if (!profile.isNew) return response;
-
-  response.cookies.set(COOKIE_NAME, profile.token, {
+  response.cookies.set(COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "strict",
@@ -41,4 +39,12 @@ export function attachProfileCookie(
   });
 
   return response;
+}
+
+export function attachProfileCookie(
+  response: NextResponse,
+  profile: AnonymousProfile
+) {
+  if (!profile.isNew) return response;
+  return attachProfileToken(response, profile.token);
 }

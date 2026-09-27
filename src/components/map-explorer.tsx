@@ -498,6 +498,11 @@ export function MapExplorer() {
     useState<CompletedPersonalPlan[]>([]);
   const [serverDistances, setServerDistances] = useState<Record<string, number>>({});
   const [backupLoading, setBackupLoading] = useState(false);
+  const [profileTransferLoading, setProfileTransferLoading] = useState(false);
+  const [profileTransferCode, setProfileTransferCode] = useState("");
+  const [profileTransferExpiresAt, setProfileTransferExpiresAt] =
+    useState<string | null>(null);
+  const [profileTransferInput, setProfileTransferInput] = useState("");
   const [viewportBounds, setViewportBounds] = useState<MapBounds | null>(null);
   const [viewportPersonalIds, setViewportPersonalIds] =
     useState<Set<string> | null>(null);
@@ -566,6 +571,7 @@ export function MapExplorer() {
   const dailyDialogRef = useRef<HTMLDialogElement | null>(null);
   const compareDialogRef = useRef<HTMLDialogElement | null>(null);
   const backupInputRef = useRef<HTMLInputElement | null>(null);
+  const profileTransferDialogRef = useRef<HTMLDialogElement | null>(null);
   const placePhotoInputRef = useRef<HTMLInputElement | null>(null);
 
   const loadSnapshot = useCallback(async () => {
@@ -2430,6 +2436,47 @@ export function MapExplorer() {
     }
   }
 
+  async function createProfileTransfer() {
+    setProfileTransferLoading(true);
+    try {
+      const result = await personalApi.profileTransfer.create();
+      setProfileTransferCode(result.code);
+      setProfileTransferExpiresAt(result.expiresAt);
+      setNotice("Đã tạo mã chuyển profile dùng một lần.");
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "Không thể tạo mã chuyển profile."
+      );
+    } finally {
+      setProfileTransferLoading(false);
+    }
+  }
+
+  async function redeemProfileTransfer() {
+    const code = profileTransferInput.trim();
+    if (!code) {
+      setNotice("Nhập mã chuyển profile trước.");
+      return;
+    }
+
+    setProfileTransferLoading(true);
+    try {
+      await personalApi.profileTransfer.redeem(code);
+      setNotice("Đã chuyển profile. Đang tải lại dữ liệu…");
+      window.location.reload();
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "Không thể dùng mã chuyển profile."
+      );
+    } finally {
+      setProfileTransferLoading(false);
+    }
+  }
+
   async function exportBackup() {
     setBackupLoading(true);
     try {
@@ -3133,6 +3180,13 @@ export function MapExplorer() {
             onClick={() => backupInputRef.current?.click()}
           >
             Nhập
+          </button>
+          <button
+            className="backup-button"
+            type="button"
+            onClick={() => profileTransferDialogRef.current?.showModal()}
+          >
+            Chuyển
           </button>
           <input
             ref={backupInputRef}
@@ -4863,6 +4917,88 @@ export function MapExplorer() {
             Lưu cảm nhận
           </button>
         </form>
+      </dialog>
+
+      <dialog className="app-dialog" ref={profileTransferDialogRef}>
+        <div className="dialog-card profile-transfer-card">
+          <div className="dialog-header">
+            <div>
+              <span className="eyebrow">Profile continuity</span>
+              <h2>Chuyển profile sang trình duyệt khác</h2>
+            </div>
+            <button
+              className="icon-button"
+              type="button"
+              onClick={() => profileTransferDialogRef.current?.close()}
+              aria-label="Đóng"
+            >
+              <CloseIcon />
+            </button>
+          </div>
+
+          <p className="dialog-copy">
+            Mã chỉ dùng một lần và hết hạn sau 10 phút. Máy nhận mã sẽ dùng cùng profile Supabase hiện tại.
+          </p>
+
+          <section className="profile-transfer-section">
+            <div>
+              <span className="eyebrow">Máy hiện tại</span>
+              <strong>Tạo mã chuyển</strong>
+            </div>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={profileTransferLoading}
+              onClick={() => void createProfileTransfer()}
+            >
+              {profileTransferLoading ? "Đang tạo…" : "Tạo mã 10 phút"}
+            </button>
+            {profileTransferCode ? (
+              <div className="profile-transfer-code">
+                <code>{profileTransferCode}</code>
+                <button
+                  type="button"
+                  onClick={() => void navigator.clipboard?.writeText(profileTransferCode)}
+                >
+                  Copy
+                </button>
+              </div>
+            ) : null}
+            {profileTransferExpiresAt ? (
+              <small>
+                Hết hạn: {new Date(profileTransferExpiresAt).toLocaleTimeString("vi-VN", {
+                  hour: "2-digit",
+                  minute: "2-digit"
+                })}
+              </small>
+            ) : null}
+          </section>
+
+          <section className="profile-transfer-section">
+            <div>
+              <span className="eyebrow">Máy mới</span>
+              <strong>Nhập mã đã nhận</strong>
+            </div>
+            <input
+              type="text"
+              value={profileTransferInput}
+              onChange={(event) =>
+                setProfileTransferInput(event.target.value.toUpperCase().slice(0, 14))
+              }
+              placeholder="ABCD-EFGH-IJKL"
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <button
+              type="button"
+              className="primary-button primary-button--wide"
+              disabled={profileTransferLoading || !profileTransferInput.trim()}
+              onClick={() => void redeemProfileTransfer()}
+            >
+              Dùng profile này
+            </button>
+          </section>
+        </div>
       </dialog>
 
       <dialog className="app-dialog" ref={collectionDialogRef}>

@@ -26,6 +26,7 @@ supabase/migrations/20260927072447_completed_plan_owner_scope.sql
 supabase/migrations/20260927072518_archive_completed_plan_owner_scope.sql
 supabase/migrations/20260927073327_completed_plan_feedback.sql
 supabase/migrations/20260927081109_personal_planner_defaults.sql
+supabase/migrations/20260927083839_profile_transfer_codes.sql
 supabase/migrations/20260927073327_completed_plan_feedback.sql
 ```
 
@@ -144,7 +145,8 @@ where schemaname = 'public'
     'recommendation_feedback',
     'daily_discoveries',
     'completed_personal_plans',
-    'personal_planner_defaults'
+    'personal_planner_defaults',
+    'profile_transfer_codes'
   );
 ```
 

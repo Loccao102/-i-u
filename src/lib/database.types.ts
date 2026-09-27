@@ -372,6 +372,33 @@ export type Database = {
           },
         ]
       }
+      profile_transfer_codes: {
+        Row: {
+          code_hash: string
+          created_at: string
+          expires_at: string
+          owner_key: string
+          profile_token: string
+          used_at: string | null
+        }
+        Insert: {
+          code_hash: string
+          created_at?: string
+          expires_at: string
+          owner_key: string
+          profile_token: string
+          used_at?: string | null
+        }
+        Update: {
+          code_hash?: string
+          created_at?: string
+          expires_at?: string
+          owner_key?: string
+          profile_token?: string
+          used_at?: string | null
+        }
+        Relationships: []
+      }
       recommendation_feedback: {
         Row: {
           created_at: string
