@@ -3501,6 +3501,93 @@ textarea:focus-visible {
 }
 
 
+.cost-correction-card {
+  margin: 12px 0;
+  border: 1px solid #eaded9;
+  border-radius: 15px;
+  padding: 11px;
+  background: #fffaf7;
+  display: grid;
+  gap: 9px;
+}
+
+.cost-correction-card__head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cost-correction-card__head > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.cost-correction-card__head strong {
+  font-size: 12px;
+}
+
+.cost-correction-card__head > span {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 5px 7px;
+  background: white;
+  color: #8a7066;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.cost-correction-card > p {
+  margin: 0;
+  color: #786d67;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.cost-correction-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.cost-correction-options button {
+  min-width: 0;
+  border: 1px solid #e7d8d1;
+  border-radius: 11px;
+  padding: 8px 6px;
+  background: white;
+  display: grid;
+  gap: 2px;
+  cursor: pointer;
+  text-align: center;
+}
+
+.cost-correction-options button:hover {
+  border-color: #d9bdb2;
+  background: #fff7f3;
+}
+
+.cost-correction-options small {
+  color: #93837b;
+  font-size: 7px;
+}
+
+.cost-correction-options strong {
+  font-size: 10px;
+}
+
+.cost-correction-edit {
+  justify-self: start;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #8b5e51;
+  cursor: pointer;
+  font-size: 8px;
+  font-weight: 800;
+}
+
 .cost-estimate-note {
   color: var(--muted);
   font-size: 8px;

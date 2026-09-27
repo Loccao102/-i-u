@@ -49,6 +49,7 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - per-stop start/end time, travel time and estimated cost;
 - editable real-world "chi phí 2 người" on personal/saved places;
 - provider-derived cost estimates for common food / cafe / bar / activity / culture / sport / outdoor categories, clearly labeled as estimates rather than live prices;
+- one-tap cost correction on estimated POIs: lower / near estimate / higher choices are persisted as user-confirmed cost and become eligible for personal budget learning;
 - cost provenance + confidence stored per place so provider estimates never train the personal spending profile as if they were real user-entered prices;
 - planner blends provider estimates with learned user medians when enough real spending data exists, while real user-entered cost always wins;
 - learned budget medians by outing type (food / activity / cafe-chill) for places without explicit prices, with fixed price tiers only as the final fallback;
@@ -224,8 +225,8 @@ http://localhost:3000
 
 ## Next
 
-1. validate provider cost heuristics with real user-entered prices and tune category baselines;
-2. add optional weekly discovery notifications only after the personal loop proves useful;
+1. replace straight-line travel-time heuristics with cached road routing for planner candidates;
+2. validate provider cost heuristics against accumulated user corrections and tune category baselines;
 3. add lightweight itinerary sharing before full Groups;
 4. Supabase Auth only when account recovery/multi-device sync is worth the friction;
 5. Groups and group voting after the personal loop is mature.
