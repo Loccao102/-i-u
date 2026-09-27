@@ -96,7 +96,7 @@ export function internalErrorJson(
     message =
       "Supabase server key hoặc URL trên Vercel không hợp lệ. Không dùng publishable/anon key cho biến server.";
   } else if (
-    /google_place_id|cost_source|cost_confidence|place_user_photos|active_personal_plans|daily_discoveries/i.test(raw) &&
+    /google_place_id|cost_source|cost_confidence|place_user_photos|active_personal_plans|completed_personal_plans|daily_discoveries/i.test(raw) &&
     /column|relation|schema|does not exist|cache/i.test(raw)
   ) {
     status = 503;
