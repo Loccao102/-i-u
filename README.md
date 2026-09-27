@@ -28,8 +28,10 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - time-aware ranking (morning / lunch / afternoon / evening / late);
 - weather-aware ranking with visible explanation;
 - compact **Evening Plan Builder** that combines 1–3 nearby stops from mood, budget, duration and radius;
+- hard planner guardrails for total budget, requested duration and maximum leg distance, with partial-plan fallback instead of silently breaking constraints;
+- per-stop start/end time, travel time and estimated cost;
 - multi-stop Google Maps route handoff;
-- **What next?** recommendations after a recent check-in, using transition type, distance and current personal ranking;
+- **What next?** recommendations after a recent check-in, using transition type, time of day, distance, travel time, cost and current personal ranking;
 - JSON export/import backup with merge semantics;
 - responsive web UI.
 
