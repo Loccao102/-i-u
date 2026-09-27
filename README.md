@@ -249,6 +249,7 @@ Stored place coordinates represent saved places, not the user's live location.
 ```bash
 npm install
 cp .env.example .env.local
+npm run test:core
 npm run dev
 ```
 
@@ -257,6 +258,17 @@ Then open:
 ```text
 http://localhost:3000
 ```
+
+## Core verification
+
+`npm run test:core` compiles the dependency-free planner core to a temporary
+CommonJS output and runs Node's built-in test runner. CI and manual production
+deploys both require these tests to pass before the Next.js build.
+
+Current core coverage locks down opening-hours parsing, Planner Health sample
+gates, adaptive replay replacement for closed/over-budget stops, replay
+retention, and the rule that replay metadata is generation-only rather than
+persisted into active-plan snapshots.
 
 ## Next
 
