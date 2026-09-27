@@ -961,7 +961,7 @@ export async function mergePersonalBackup(
     const { error } = await client
       .from("completed_personal_plans")
       .upsert(completedPlanRows, {
-        onConflict: "id",
+        onConflict: "owner_key,id",
         ignoreDuplicates: true
       });
     dbError(error, "Import completed plans");
