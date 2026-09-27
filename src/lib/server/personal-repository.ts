@@ -721,9 +721,11 @@ export async function addVisitIfNew(
       p_owner_key: ownerKey,
       p_id: randomUUID(),
       p_place_id: placeId,
-      p_rating_stars: ratingStars,
       p_visited_at: visitedAt,
-      p_window_minutes: 120
+      p_window_minutes: 120,
+      ...(ratingStars === null
+        ? {}
+        : { p_rating_stars: ratingStars })
     }
   );
 
