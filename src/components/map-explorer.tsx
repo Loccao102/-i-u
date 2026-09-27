@@ -3749,28 +3749,30 @@ export function MapExplorer() {
                         )}
                       </span>
                     </button>
-                    <button
-                      type="button"
-                      className="completed-plan-history__replay"
-                      disabled={planWeatherLoading}
-                      onClick={() => void replayCompletedPlan(plan)}
-                    >
-                      Đi lại
-                    </button>
-                    <button
-                      type="button"
-                      className="completed-plan-history__share"
-                      disabled={shareLoading}
-                      onClick={() =>
-                        void sharePlanSnapshot(
-                          plan.plan,
-                          "completed",
-                          plan.id
-                        )
-                      }
-                    >
-                      Chia sẻ
-                    </button>
+                    <div className="completed-plan-history__actions">
+                      <button
+                        type="button"
+                        className="completed-plan-history__replay"
+                        disabled={planWeatherLoading}
+                        onClick={() => void replayCompletedPlan(plan)}
+                      >
+                        Đi lại
+                      </button>
+                      <button
+                        type="button"
+                        className="completed-plan-history__share"
+                        disabled={shareLoading}
+                        onClick={() =>
+                          void sharePlanSnapshot(
+                            plan.plan,
+                            "completed",
+                            plan.id
+                          )
+                        }
+                      >
+                        Chia sẻ
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -5061,29 +5063,6 @@ export function MapExplorer() {
               </button>
             ))}
           </div>
-          {planReplayTemplate ? (
-            <section className="plan-replay-banner">
-              <div>
-                <span className="eyebrow">Replay template</span>
-                <strong>
-                  Ưu tiên {planReplayTemplate.stops.length} chặng từ buổi trước
-                </strong>
-                <small>
-                  Planner vẫn kiểm tra lại thời tiết, giờ mở cửa, route và budget; chặng không còn phù hợp sẽ được thay.
-                </small>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setPlanReplayTemplate(null);
-                  setActivePlan(null);
-                }}
-              >
-                Bỏ template
-              </button>
-            </section>
-          ) : null}
-
           <fieldset className="dialog-fieldset">
             <legend>Hợp với</legend>
             <div className="scenario-row scenario-row--wrap">
@@ -5565,6 +5544,29 @@ export function MapExplorer() {
           <p className="dialog-copy">
             Ghép các chặng gần nhau theo gu, budget, mood và dự báo thời tiết đúng giờ bạn định đi.
           </p>
+
+          {planReplayTemplate ? (
+            <section className="plan-replay-banner">
+              <div>
+                <span className="eyebrow">Replay template</span>
+                <strong>
+                  Ưu tiên {planReplayTemplate.stops.length} chặng từ buổi trước
+                </strong>
+                <small>
+                  Planner kiểm tra lại thời tiết, giờ mở cửa, road routing và budget; chặng không còn phù hợp sẽ được thay.
+                </small>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setPlanReplayTemplate(null);
+                  setActivePlan(null);
+                }}
+              >
+                Bỏ template
+              </button>
+            </section>
+          ) : null}
 
           <fieldset className="dialog-fieldset">
             <legend>Mood</legend>
