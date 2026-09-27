@@ -196,6 +196,7 @@ export type BackupImportResult = {
   visits: number;
   collections: number;
   collectionPlaces: number;
+  dailyDiscoveries: number;
 };
 
 
