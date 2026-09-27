@@ -53,6 +53,20 @@ function radiusKm(value: string | null): 0 | 1 | 3 | 5 | 10 {
   return 0;
 }
 
+
+function discoveryOffset(value: string | null) {
+  const parsed = Number(value ?? 0);
+  if (
+    !Number.isInteger(parsed) ||
+    parsed < 0 ||
+    parsed > 80 ||
+    parsed % 20 !== 0
+  ) {
+    throw new Error("INVALID_BODY");
+  }
+  return parsed;
+}
+
 export async function GET(request: NextRequest) {
   const profile = resolveAnonymousProfile(request);
 
@@ -89,15 +103,19 @@ export async function GET(request: NextRequest) {
     const radius = radiusKm(
       request.nextUrl.searchParams.get("radiusKm")
     );
+    const offset = discoveryOffset(
+      request.nextUrl.searchParams.get("offset")
+    );
 
-    const results = await discoverPoi({
+    const page = await discoverPoi({
       bounds,
       category,
       amenity,
-      radiusKm: radius
+      radiusKm: radius,
+      offset
     });
 
-    return profileJson(profile, { results });
+    return profileJson(profile, page);
   } catch (error) {
     return errorJson(
       profile,

@@ -2981,6 +2981,44 @@ textarea:focus-visible {
   color: white;
 }
 
+.discovery-pagination {
+  margin-top: -5px;
+  border-top: 1px solid #ecebe6;
+  padding: 8px 2px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.discovery-pagination span {
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.discovery-pagination button {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 9px;
+  background: white;
+  color: #4f6155;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.discovery-pagination button:hover {
+  border-color: #b9ccbd;
+  background: #f7faf7;
+}
+
+.discovery-pagination button:disabled {
+  opacity: .55;
+  cursor: wait;
+}
+
 .shortlist-tray {
   border: 1px solid #e4e3de;
   border-radius: 15px;

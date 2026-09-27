@@ -431,6 +431,10 @@ export function MapExplorer() {
   const [providerResults, setProviderResults] = useState<PoiSearchResult[]>([]);
   const [discoveredPoiResults, setDiscoveredPoiResults] =
     useState<PoiSearchResult[]>([]);
+  const [discoveryNextOffset, setDiscoveryNextOffset] =
+    useState<number | null>(null);
+  const [discoveryQueryBounds, setDiscoveryQueryBounds] =
+    useState<MapBounds | null>(null);
   const [providerLoading, setProviderLoading] = useState(false);
   const [discoveryLoading, setDiscoveryLoading] = useState(false);
   const [discoveryFilters, setDiscoveryFilters] =
@@ -1216,20 +1220,47 @@ export function MapExplorer() {
 
   async function refreshDiscovery(
     bounds: MapBounds,
-    announce = false
+    announce = false,
+    append = false
   ) {
+    if (append && discoveryNextOffset === null) return;
+
     setDiscoveryLoading(true);
     try {
+      const offset = append ? discoveryNextOffset ?? 0 : 0;
       const result = await personalApi.discoverPoi(
         bounds,
-        discoveryFilters
+        discoveryFilters,
+        offset
       );
-      setDiscoveredPoiResults(result.results);
+
+      setDiscoveredPoiResults((current) => {
+        if (!append) return result.results;
+
+        const merged = new Map(
+          current.map((item) => [item.providerId, item])
+        );
+        for (const item of result.results) {
+          merged.set(item.providerId, item);
+        }
+        return Array.from(merged.values());
+      });
+      setDiscoveryNextOffset(result.nextOffset);
+      if (!append) setDiscoveryQueryBounds(bounds);
+
       if (announce) {
         setNotice(
           result.results.length > 0
-            ? "Đã tìm " + result.results.length + " địa điểm thật trong vùng."
-            : "Chưa tìm thấy POI phù hợp trong vùng này."
+            ? append
+              ? "Đã nạp thêm " +
+                result.results.length +
+                " địa điểm."
+              : "Đã tìm " +
+                result.results.length +
+                " địa điểm thật trong vùng."
+            : append
+              ? "Không còn địa điểm mới trong vùng này."
+              : "Chưa tìm thấy POI phù hợp trong vùng này."
         );
       }
     } catch (error) {
@@ -1243,6 +1274,13 @@ export function MapExplorer() {
     } finally {
       setDiscoveryLoading(false);
     }
+  }
+
+  async function loadMoreDiscovery() {
+    if (!discoveryQueryBounds || discoveryNextOffset === null) {
+      return;
+    }
+    await refreshDiscovery(discoveryQueryBounds, true, true);
   }
 
   function switchView(next: PersonalView) {
@@ -1305,7 +1343,7 @@ export function MapExplorer() {
     try {
       const [viewportResult, discoveryResult] = await Promise.all([
         personalApi.viewport(bounds),
-        personalApi.discoverPoi(bounds, discoveryFilters),
+        personalApi.discoverPoi(bounds, discoveryFilters, 0),
         refreshWeather({
           latitude: center.lat,
           longitude: center.lng
@@ -1316,6 +1354,8 @@ export function MapExplorer() {
         new Set(viewportResult.results.map((item) => item.placeId))
       );
       setDiscoveredPoiResults(discoveryResult.results);
+      setDiscoveryNextOffset(discoveryResult.nextOffset);
+      setDiscoveryQueryBounds(bounds);
 
       const cleaned = cleanPlainText(query, 120);
       if (cleaned.length >= 2) {
@@ -2890,6 +2930,24 @@ export function MapExplorer() {
             })
           )}
         </div>
+
+        {view === "discover" && discoveredPoiResults.length > 0 ? (
+          <div className="discovery-pagination">
+            <span>
+              {discoveredPoiResults.length} POI đã nạp
+              {discoveryNextOffset !== null ? " · còn kết quả" : " · đã hết trang"}
+            </span>
+            {discoveryNextOffset !== null ? (
+              <button
+                type="button"
+                disabled={discoveryLoading}
+                onClick={() => void loadMoreDiscovery()}
+              >
+                {discoveryLoading ? "Đang nạp…" : "+ Xem thêm 20"}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
 
         {shortlist.length > 0 ? (
           <div className="shortlist-tray">
