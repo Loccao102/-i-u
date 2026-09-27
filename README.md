@@ -47,6 +47,7 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - planner defaults persisted per anonymous profile for travel mode, budget, radius and duration, so the core planning setup survives reloads/sessions;
 - one-time **profile transfer code** (12 chars / 10 minutes) for moving the same anonymous profile to another browser without forcing sign-in; transfer tokens are AES-GCM encrypted at rest and consumed by delete-on-redeem;
 - read-only itinerary sharing via capability links under `/s/<slug>`, with sanitized plan snapshots, no owner identity, no personal feedback, and noindex metadata;
+- owner-side share manager for active links with open/copy/revoke controls; public capability links are intentionally excluded from backup/import;
 - cached Geoapify Route Matrix enrichment for up to 6 planner candidates + origin, with explicit **Xe máy / Ô tô / Đi bộ** modes passed to the provider and mode-aware Haversine travel-time fallback;
 - hard planner guardrails for total budget, requested duration, maximum leg distance and scheduled opening hours, with road-aware distance/time when matrix data is available and partial-plan fallback instead of silently breaking constraints;
 - **Plan Quality** confidence diagnostics (0–100) expose routing coverage, opening-hours coverage, provider-estimated cost usage, completeness and constraint fallbacks instead of hiding uncertainty;
@@ -250,8 +251,8 @@ http://localhost:3000
 
 ## Next
 
-1. add owner-side share management/revocation UI for previously created itinerary links;
-2. add stronger long-term plan analytics only after enough real completed-plan samples exist;
+1. add stronger long-term plan analytics only after enough real completed-plan samples exist;
+2. improve completed-plan replay/clone so a successful outing can become a new plan with fresh weather/opening/routing checks;
 3. add Supabase Auth only when account recovery and permanent multi-device identity are worth the friction; the one-time transfer code covers the anonymous phase;
 4. Groups and group voting after the personal loop is mature.
 
