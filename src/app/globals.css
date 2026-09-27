@@ -3813,3 +3813,34 @@ textarea:focus-visible {
 .plan-feedback-card .dialog-fieldset {
   margin-top: 2px;
 }
+
+
+.cost-calibration-strip {
+  margin-top: 10px;
+  border: 1px solid #e2e6df;
+  border-radius: 13px;
+  padding: 9px 10px;
+  background: #f7faf6;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cost-calibration-strip > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.cost-calibration-strip strong {
+  font-size: 10px;
+}
+
+.cost-calibration-strip > small {
+  max-width: 190px;
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.4;
+  text-align: right;
+}
