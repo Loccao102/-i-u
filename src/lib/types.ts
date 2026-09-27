@@ -197,9 +197,12 @@ export type WeatherContext = {
   condition: WeatherCondition;
   temperatureC: number;
   precipitationMm: number;
+  precipitationProbability: number | null;
   weatherCode: number;
   isDay: boolean;
   observedAt: string;
+  forecastFor: string | null;
+  mode: "current" | "forecast";
   timezone: string;
   source: "Open-Meteo";
 };
