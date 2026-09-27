@@ -108,31 +108,43 @@ export type Database = {
           completed_at: string
           completed_stop_ids: string[]
           created_at: string
+          feedback_at: string | null
+          feedback_note: string | null
           id: string
+          outcome_rating: number | null
           owner_key: string
           plan: Json
           skipped_stop_ids: string[]
           started_at: string
+          would_repeat: boolean | null
         }
         Insert: {
           completed_at?: string
           completed_stop_ids?: string[]
           created_at?: string
+          feedback_at?: string | null
+          feedback_note?: string | null
           id: string
+          outcome_rating?: number | null
           owner_key: string
           plan: Json
           skipped_stop_ids?: string[]
           started_at: string
+          would_repeat?: boolean | null
         }
         Update: {
           completed_at?: string
           completed_stop_ids?: string[]
           created_at?: string
+          feedback_at?: string | null
+          feedback_note?: string | null
           id?: string
+          outcome_rating?: number | null
           owner_key?: string
           plan?: Json
           skipped_stop_ids?: string[]
           started_at?: string
+          would_repeat?: boolean | null
         }
         Relationships: []
       }
