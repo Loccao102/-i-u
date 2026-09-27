@@ -3772,16 +3772,19 @@ export function MapExplorer() {
 
             <div className="planner-metrics-grid">
               <div>
-                <span>Đã tạo</span>
+                <span>Tạo thành công</span>
                 <strong>{plannerMetrics.generated}</strong>
-                <small>phương án</small>
+                <small>
+                  {plannerMetrics.initialGenerated} lần đầu ·{" "}
+                  {plannerMetrics.rerolled} reroll
+                </small>
               </div>
               <div>
                 <span>Đã bắt đầu</span>
                 <strong>{plannerMetrics.started}</strong>
                 <small>
                   {plannerMetrics.startRate !== null
-                    ? plannerMetrics.startRate + "% / generated"
+                    ? plannerMetrics.startRate + "% / lần tạo đầu"
                     : "chưa đủ mẫu"}
                 </small>
               </div>
@@ -3795,12 +3798,14 @@ export function MapExplorer() {
                 </small>
               </div>
               <div>
-                <span>Replay</span>
-                <strong>{plannerMetrics.replayed}</strong>
+                <span>Fail / Hủy</span>
+                <strong>
+                  {plannerMetrics.generationFailed} / {plannerMetrics.canceled}
+                </strong>
                 <small>
-                  {plannerMetrics.replayRate !== null
-                    ? plannerMetrics.replayRate + "% / started"
-                    : "chưa có replay"}
+                  {plannerMetrics.generationSuccessRate !== null
+                    ? plannerMetrics.generationSuccessRate + "% tạo thành công"
+                    : "chưa đủ mẫu"}
                 </small>
               </div>
             </div>
