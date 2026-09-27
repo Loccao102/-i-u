@@ -124,7 +124,11 @@ const discoveryCategoryOptions: Array<{
   { value: "food", label: "Ăn uống" },
   { value: "cafe", label: "Cafe" },
   { value: "drink", label: "Bar / Pub" },
-  { value: "activity", label: "Vui chơi" }
+  { value: "activity", label: "Vui chơi" },
+  { value: "outdoor", label: "Đi dạo / Công viên" },
+  { value: "culture", label: "Văn hóa / Bảo tàng" },
+  { value: "sport", label: "Thể thao" },
+  { value: "shopping", label: "Mua sắm" }
 ];
 
 const discoveryAmenityOptions: Array<{
@@ -343,6 +347,10 @@ function feedbackLabel(feedback: RecommendationFeedback | undefined) {
 }
 
 function placeIcon(place: Pick<Place, "kind">) {
+  if (place.kind.includes("Outdoor")) return "♧";
+  if (place.kind.includes("Culture")) return "◆";
+  if (place.kind.includes("Sport")) return "◎";
+  if (place.kind.includes("Shopping")) return "▣";
   if (place.kind.includes("Activity")) return "◇";
   if (place.kind.includes("Restaurant")) return "◉";
   if (place.kind.includes("Bar")) return "◐";

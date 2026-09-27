@@ -21,6 +21,7 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - controlled POI pagination: load 20 places at a time with Geoapify `offset`, capped at 100 provider results per focused query to protect the free quota;
 - Geoapify text search + import for named places;
 - discovery filters for place type, Wi-Fi, wheelchair access and 1/3/5/10 km radius from the current map center;
+- richer outing presets: food, cafe, bar/pub, active fun, outdoor/parks, culture/museums, sport and shopping, mapped to both Geoapify categories and OSM fallback tags;
 - "Đang mở" filtering from available provider `opening_hours` without bulk detail requests;
 - lazy Geoapify Place Details on selection: website, phone/email, opening hours, facilities, wheelchair and parking metadata;
 - 30-minute server cache for place details so opening the same place repeatedly does not burn free-tier credits;
@@ -217,8 +218,8 @@ http://localhost:3000
 
 ## Next
 
-1. add richer provider category presets for more types of outings;
-2. add lightweight daily-discovery history/insights beyond device-local anti-repeat;
+1. add lightweight daily-discovery history/insights beyond device-local anti-repeat;
+2. make daily routes more novelty-aware across multiple days, not only deterministic by date;
 3. Supabase Auth only when account recovery/multi-device sync is worth the friction;
 4. Groups and group voting after the personal loop is mature.
 

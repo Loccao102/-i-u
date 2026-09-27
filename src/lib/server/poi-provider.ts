@@ -37,8 +37,20 @@ function classifyKind(type: string, category: string) {
   }
   if (/cafe|coffee/.test(raw)) return "Cafe";
   if (/bar|pub|biergarten/.test(raw)) return "Bar / Drink";
+  if (/shopping_mall|marketplace|shop.mall/.test(raw)) {
+    return "Shopping";
+  }
+  if (/park|garden|nature_reserve|picnic|beach/.test(raw)) {
+    return "Outdoor";
+  }
+  if (/museum|gallery|theatre|cinema|arts_centre|heritage/.test(raw)) {
+    return "Culture";
+  }
+  if (/sport|fitness|gym|stadium|swimming_pool|ice_rink/.test(raw)) {
+    return "Sport";
+  }
   if (
-    /cinema|bowling|arcade|theatre|attraction|museum|gallery|viewpoint|escape_game|sports_centre|activity_park|theme_park|water_park|zoo|aquarium|miniature_golf/.test(
+    /bowling|arcade|attraction|viewpoint|escape_game|activity_park|theme_park|water_park|zoo|aquarium|miniature_golf/.test(
       raw
     )
   ) {
@@ -50,6 +62,10 @@ function classifyKind(type: string, category: string) {
 function colorForKind(kind: string) {
   if (kind === "Restaurant") return "#d68d4f";
   if (kind === "Activity") return "#6c63d9";
+  if (kind === "Outdoor") return "#5f8b68";
+  if (kind === "Culture") return "#8a6c9b";
+  if (kind === "Sport") return "#4f7f91";
+  if (kind === "Shopping") return "#a66f76";
   if (kind === "Bar / Drink") return "#6677a8";
   return "#6f9274";
 }
@@ -65,6 +81,22 @@ function scenarioForKind(kind: string, name: string): Scenario[] {
   }
   if (kind === "Activity") {
     return Array.from(new Set<Scenario>(["fun", "friends", ...suggested]));
+  }
+  if (kind === "Outdoor") {
+    return Array.from(
+      new Set<Scenario>(["chill", "date", "friends", "fun", ...suggested])
+    );
+  }
+  if (kind === "Culture") {
+    return Array.from(
+      new Set<Scenario>(["fun", "date", "friends", "chill", ...suggested])
+    );
+  }
+  if (kind === "Sport") {
+    return Array.from(new Set<Scenario>(["fun", "friends", ...suggested]));
+  }
+  if (kind === "Shopping") {
+    return Array.from(new Set<Scenario>(["friends", "date", "fun", ...suggested]));
   }
   if (kind === "Bar / Drink") {
     return Array.from(new Set<Scenario>(["friends", "chill", "date", ...suggested]));
@@ -106,7 +138,29 @@ function discoveryCategories(category: PoiDiscoveryCategory) {
   }
   if (category === "cafe") return ["catering.cafe"];
   if (category === "drink") return ["catering.bar", "catering.pub"];
-  if (category === "activity") return ["entertainment", "tourism"];
+  if (category === "activity") {
+    return [
+      "entertainment.activity_park",
+      "entertainment.amusement_arcade",
+      "entertainment.aquarium",
+      "entertainment.bowling_alley",
+      "entertainment.escape_game",
+      "entertainment.miniature_golf",
+      "entertainment.theme_park",
+      "entertainment.water_park",
+      "entertainment.zoo"
+    ];
+  }
+  if (category === "outdoor") {
+    return ["leisure.park", "leisure.picnic", "beach"];
+  }
+  if (category === "culture") {
+    return ["entertainment.culture", "entertainment.museum", "heritage"];
+  }
+  if (category === "sport") return ["sport"];
+  if (category === "shopping") {
+    return ["commercial.shopping_mall", "commercial.marketplace"];
+  }
 
   return [
     "catering.restaurant",
@@ -116,6 +170,11 @@ function discoveryCategories(category: PoiDiscoveryCategory) {
     "catering.bar",
     "catering.pub",
     "entertainment",
+    "leisure.park",
+    "sport",
+    "commercial.shopping_mall",
+    "commercial.marketplace",
+    "heritage",
     "tourism"
   ];
 }
@@ -190,21 +249,60 @@ function overpassSelectors(
 
   if (category === "all" || category === "activity") {
     lines.push(
-      'nwr["amenity"~"^(cinema|theatre)$"]' +
+      'nwr["leisure"~"^(bowling_alley|amusement_arcade|escape_game|miniature_golf|water_park)$"]' +
         extra +
         "(" +
         bbox +
         ");",
-      'nwr["leisure"~"^(bowling_alley|amusement_arcade|escape_game|sports_centre)$"]' +
-        extra +
-        "(" +
-        bbox +
-        ");",
-      'nwr["tourism"~"^(attraction|museum|gallery|viewpoint)$"]' +
+      'nwr["tourism"~"^(attraction|viewpoint|zoo|aquarium|theme_park)$"]' +
         extra +
         "(" +
         bbox +
         ");"
+    );
+  }
+
+  if (category === "all" || category === "outdoor") {
+    lines.push(
+      'nwr["leisure"~"^(park|garden|nature_reserve|picnic_table)$"]' +
+        extra +
+        "(" +
+        bbox +
+        ");",
+      'nwr["tourism"="picnic_site"]' + extra + "(" + bbox + ");"
+    );
+  }
+
+  if (category === "all" || category === "culture") {
+    lines.push(
+      'nwr["amenity"~"^(cinema|theatre|arts_centre)$"]' +
+        extra +
+        "(" +
+        bbox +
+        ");",
+      'nwr["tourism"~"^(museum|gallery)$"]' +
+        extra +
+        "(" +
+        bbox +
+        ");"
+    );
+  }
+
+  if (category === "all" || category === "sport") {
+    lines.push(
+      'nwr["leisure"~"^(sports_centre|fitness_centre|swimming_pool|stadium|pitch)$"]' +
+        extra +
+        "(" +
+        bbox +
+        ");",
+      'nwr["sport"]' + extra + "(" + bbox + ");"
+    );
+  }
+
+  if (category === "all" || category === "shopping") {
+    lines.push(
+      'nwr["shop"="mall"]' + extra + "(" + bbox + ");",
+      'nwr["amenity"="marketplace"]' + extra + "(" + bbox + ");"
     );
   }
 
@@ -840,7 +938,10 @@ out center 80;
       const category = [
         typeof tags.amenity === "string" ? tags.amenity : "",
         typeof tags.leisure === "string" ? tags.leisure : "",
-        typeof tags.tourism === "string" ? tags.tourism : ""
+        typeof tags.tourism === "string" ? tags.tourism : "",
+        typeof tags.shop === "string" ? "shop." + tags.shop : "",
+        typeof tags.sport === "string" ? "sport." + tags.sport : "",
+        typeof tags.historic === "string" ? "heritage." + tags.historic : ""
       ]
         .filter(Boolean)
         .join(" ");
