@@ -1,5 +1,9 @@
 import { NextRequest } from "next/server";
-import { errorJson, profileJson } from "@/lib/server/http";
+import {
+  errorJson,
+  internalErrorJson,
+  profileJson
+} from "@/lib/server/http";
 import { parseActivePlanSnapshot } from "@/lib/server/input";
 import {
   advanceActivePlan,
@@ -19,7 +23,11 @@ export async function GET(request: NextRequest) {
     const activePlan = await getActivePlan(profile.ownerKey);
     return profileJson(profile, { activePlan });
   } catch (error) {
-    return errorJson(profile, error, "Không thể tải kế hoạch đang đi.");
+    return internalErrorJson(
+      profile,
+      error,
+      "Không thể tải kế hoạch đang đi."
+    );
   }
 }
 

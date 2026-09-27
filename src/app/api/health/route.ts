@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { getSupabaseAdmin } from "@/lib/server/supabase";
+import {
+  getSupabaseAdmin,
+  getSupabaseServerKeyKind
+} from "@/lib/server/supabase";
 
 export const runtime = "nodejs";
 
@@ -15,14 +18,34 @@ function classify(error: unknown) {
     };
   }
 
+  if (raw.startsWith("Invalid server env:")) {
+    return {
+      status: 503,
+      code: "SERVER_CONFIG_INVALID",
+      message:
+        "Supabase server credentials are invalid. Use a secret/service-role key, not a publishable/anon key."
+    };
+  }
+
   if (
-    /google_place_id|personal_places/i.test(raw) &&
+    /google_place_id|place_user_photos|active_personal_plans|personal_places/i.test(
+      raw
+    ) &&
     /column|relation|schema|does not exist|cache/i.test(raw)
   ) {
     return {
       status: 503,
       code: "DATABASE_SCHEMA_MISMATCH",
       message: "Supabase schema is behind the deployed app."
+    };
+  }
+
+  if (/permission denied|row-level security/i.test(raw)) {
+    return {
+      status: 503,
+      code: "SERVER_KEY_PERMISSION_DENIED",
+      message:
+        "The configured Supabase key does not have server-level database access."
     };
   }
 
@@ -35,13 +58,34 @@ function classify(error: unknown) {
 
 export async function GET() {
   try {
-    const { error } = await getSupabaseAdmin()
-      .from("personal_places")
-      .select("id,google_place_id")
-      .limit(1);
+    const client = getSupabaseAdmin();
+    const keyKind = getSupabaseServerKeyKind();
 
-    if (error) {
-      throw new Error("Health personal_places: " + error.message);
+    const [places, photos, activePlans] = await Promise.all([
+      client
+        .from("personal_places")
+        .select("id,google_place_id")
+        .limit(1),
+      client
+        .from("place_user_photos")
+        .select("id")
+        .limit(1),
+      client
+        .from("active_personal_plans")
+        .select("id,current_stop_index")
+        .limit(1)
+    ]);
+
+    if (places.error) {
+      throw new Error("Health personal_places: " + places.error.message);
+    }
+    if (photos.error) {
+      throw new Error("Health place_user_photos: " + photos.error.message);
+    }
+    if (activePlans.error) {
+      throw new Error(
+        "Health active_personal_plans: " + activePlans.error.message
+      );
     }
 
     return NextResponse.json(
@@ -50,8 +94,11 @@ export async function GET() {
         services: {
           supabase: "ok"
         },
+        serverKeyKind: keyKind,
         schema: {
-          personalPlacesGooglePlaceId: true
+          personalPlacesGooglePlaceId: true,
+          placeUserPhotos: true,
+          activePersonalPlans: true
         }
       },
       {
