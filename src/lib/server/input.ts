@@ -7,6 +7,8 @@ import type {
   PersonalBackup,
   PersonalRating,
   PersonalSnapshot,
+  RecommendationFeedback,
+  RecommendationFeedbackReason,
   Place,
   RatingDraft,
   Scenario,
@@ -178,6 +180,44 @@ export function parseRatingDraft(
   };
 }
 
+export function parseRecommendationFeedback(
+  placeId: string,
+  body: Record<string, unknown>
+): RecommendationFeedback {
+  const reason = body.reason;
+  const allowed = new Set<RecommendationFeedbackReason>([
+    "not_taste",
+    "not_now",
+    "too_far",
+    "too_expensive"
+  ]);
+
+  if (typeof reason !== "string" || !allowed.has(reason as RecommendationFeedbackReason)) {
+    throw new Error("INVALID_BODY");
+  }
+
+  const scenario =
+    typeof body.scenario === "string" && scenarios.has(body.scenario as Scenario)
+      ? (body.scenario as Scenario)
+      : null;
+
+  const distanceKm =
+    body.distanceKm === null || body.distanceKm === undefined
+      ? null
+      : finiteNumber(body.distanceKm, 0, 50000);
+
+  const now = new Date().toISOString();
+
+  return {
+    placeId,
+    reason: reason as RecommendationFeedbackReason,
+    scenario,
+    distanceKm,
+    createdAt: now,
+    updatedAt: now
+  };
+}
+
 export function parseCollection(body: Record<string, unknown>) {
   return {
     name: stringValue(body.name, 60, true),
@@ -274,6 +314,32 @@ export function parsePersonalBackup(value: unknown): PersonalSnapshot {
     };
   }
 
+  const recommendationFeedbacks: Record<
+    string,
+    RecommendationFeedback
+  > = {};
+  const rawFeedbacks =
+    data.recommendationFeedbacks &&
+    typeof data.recommendationFeedbacks === "object" &&
+    !Array.isArray(data.recommendationFeedbacks)
+      ? (data.recommendationFeedbacks as Record<string, unknown>)
+      : {};
+
+  const feedbackEntries = Object.entries(rawFeedbacks);
+  if (feedbackEntries.length > 5000) throw new Error("INVALID_BODY");
+
+  for (const [placeIdRaw, feedbackRaw] of feedbackEntries) {
+    const placeId = boundedId(placeIdRaw);
+    const feedback = objectValue(feedbackRaw);
+    const parsed = parseRecommendationFeedback(placeId, feedback);
+
+    recommendationFeedbacks[placeId] = {
+      ...parsed,
+      createdAt: isoDate(feedback.createdAt ?? feedback.updatedAt),
+      updatedAt: isoDate(feedback.updatedAt ?? feedback.createdAt)
+    };
+  }
+
   const rawVisits = Array.isArray(data.visits) ? data.visits : [];
   if (rawVisits.length > 5000) throw new Error("INVALID_BODY");
   const visits: VisitRecord[] = rawVisits.map((item) => {
@@ -314,10 +380,11 @@ export function parsePersonalBackup(value: unknown): PersonalSnapshot {
   });
 
   return {
-    version: 2,
+    version: 3,
     customPlaces,
     savedIds,
     ratings,
+    recommendationFeedbacks,
     visits,
     collections
   };
