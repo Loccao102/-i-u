@@ -96,7 +96,13 @@ export async function DELETE(request: NextRequest) {
   const profile = resolveAnonymousProfile(request);
 
   try {
+    const activePlan = await getActivePlan(profile.ownerKey);
     await cancelActivePlan(profile.ownerKey);
+    if (activePlan) {
+      await Promise.allSettled([
+        recordPlannerMetric(profile.ownerKey, "canceled")
+      ]);
+    }
     return profileJson(profile, { canceled: true });
   } catch (error) {
     return errorJson(profile, error, "Không thể hủy kế hoạch.");
