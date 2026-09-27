@@ -464,7 +464,7 @@ async function discoverGeoapify(input: {
   offset: number;
 }): Promise<PoiDiscoveryPage> {
   const key = geoapifyApiKey();
-  if (!key) return [];
+  if (!key) return { results: [], nextOffset: null };
 
   const bounds = normalizedBounds(input.bounds);
   const cacheKey = [
@@ -795,7 +795,9 @@ out center 80;
   }
 
   const raw: unknown = await response.json();
-  if (!raw || typeof raw !== "object") return [];
+  if (!raw || typeof raw !== "object") {
+    return { results: [], nextOffset: null };
+  }
 
   const elements = Array.isArray((raw as { elements?: unknown }).elements)
     ? ((raw as { elements: unknown[] }).elements ?? [])
