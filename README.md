@@ -46,6 +46,7 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - compact **Evening Plan Builder** that combines 1–3 nearby stops from mood, budget, duration and radius;
 - planner defaults persisted per anonymous profile for travel mode, budget, radius and duration, so the core planning setup survives reloads/sessions;
 - one-time **profile transfer code** (12 chars / 10 minutes) for moving the same anonymous profile to another browser without forcing sign-in; transfer tokens are AES-GCM encrypted at rest and consumed by delete-on-redeem;
+- explicit **profile data reset** removes every current owner-scoped row, private uploaded-photo object, active public share link and planner metric, then rotates the HttpOnly anonymous profile token;
 - read-only itinerary sharing via capability links under `/s/<slug>`, with sanitized plan snapshots, no owner identity, no personal feedback, and noindex metadata;
 - owner-side share manager for active links with open/copy/revoke controls; public capability links are intentionally excluded from backup/import;
 - cached Geoapify Route Matrix enrichment for up to 6 planner candidates + origin, with explicit **Xe máy / Ô tô / Đi bộ** modes passed to the provider and mode-aware Haversine travel-time fallback;
@@ -199,6 +200,7 @@ supabase/migrations/20260927083839_profile_transfer_codes.sql
 supabase/migrations/20260927094900_public_itinerary_shares.sql
 supabase/migrations/20260927095409_encrypt_profile_transfer_tokens.sql
 supabase/migrations/20260927152302_planner_telemetry.sql
+supabase/migrations/20260927153331_profile_data_reset.sql
 ```
 
 Apply migrations through the Supabase SQL Editor, Supabase CLI, or the connected Supabase tooling.
