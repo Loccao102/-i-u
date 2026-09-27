@@ -44,7 +44,7 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - time-aware ranking (morning / lunch / afternoon / evening / late);
 - weather-aware ranking with visible explanation;
 - compact **Evening Plan Builder** that combines 1–3 nearby stops from mood, budget, duration and radius;
-- cached Geoapify Route Matrix enrichment for up to 6 planner candidates + origin, using motorcycle road distance/time when available and Haversine heuristics as a safe fallback;
+- cached Geoapify Route Matrix enrichment for up to 6 planner candidates + origin, with explicit **Xe máy / Ô tô / Đi bộ** modes passed to the provider and mode-aware Haversine travel-time fallback;
 - hard planner guardrails for total budget, requested duration, maximum leg distance and scheduled opening hours, with road-aware distance/time when matrix data is available and partial-plan fallback instead of silently breaking constraints;
 - **Plan Quality** confidence diagnostics (0–100) expose routing coverage, opening-hours coverage, provider-estimated cost usage, completeness and constraint fallbacks instead of hiding uncertainty;
 - Plan Quality is snapshotted when an outing starts and survives into completed-plan history, so historical average/low-quality counts and recurring data problems can be measured instead of inferred after the fact;
@@ -60,7 +60,7 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - cost provenance + confidence stored per place so provider estimates never train the personal spending profile as if they were real user-entered prices;
 - planner blends provider estimates with learned user medians when enough real spending data exists, while real user-entered cost always wins;
 - learned budget medians by outing type (food / activity / cafe-chill) for places without explicit prices, with fixed price tiers only as the final fallback;
-- multi-stop Google Maps route handoff;
+- multi-stop Google Maps route handoff; walking plans open as walking directions, while motorcycle/car plans use driving handoff because Maps URLs do not expose a motorcycle travel mode;
 - **What next?** recommendations after a recent check-in, using transition type, time of day, distance, travel time, cost and current personal ranking;
 - persisted **active plan lifecycle**: start → resume after reload → complete/skip each stop → auto-finish;
 - completed plan history is archived atomically when the final stop is completed/skipped, keeping mood, route snapshot, completed/skipped stops, cost, duration and completion time;
@@ -242,8 +242,8 @@ http://localhost:3000
 
 ## Next
 
-1. add lightweight itinerary sharing before full Groups;
-2. add explicit route-mode preferences (motorcycle / car / walk) without weakening planner guardrails;
+1. make **What next?** optionally use a tiny road-routing matrix for its top candidates instead of only straight-line travel estimates;
+2. add lightweight itinerary sharing before full Groups;
 3. Supabase Auth only when account recovery/multi-device sync is worth the friction;
 4. Groups and group voting after the personal loop is mature.
 
