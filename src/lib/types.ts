@@ -259,4 +259,5 @@ export type ActivePlanAdvanceResult = {
   activePlan: ActivePersonalPlan | null;
   finished: boolean;
   recordedVisit: boolean;
+  stale: boolean;
 };
