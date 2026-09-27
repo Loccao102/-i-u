@@ -37,6 +37,7 @@ import {
 } from "@/lib/taste";
 import {
   filterPlaces,
+  pickDailyDiscoveryPlace,
   pickSurprisePlace,
   recommendForCollection
 } from "@/lib/search";
@@ -144,6 +145,94 @@ const discoveryRadiusOptions: Array<{
   { value: 5, label: "Trong 5 km" },
   { value: 10, label: "Trong 10 km" }
 ];
+
+type DailyDiscoveryHistoryEntry = {
+  date: string;
+  placeKey: string;
+};
+
+const dailyDiscoveryStorageKey = "di-dau-daily-discovery-v1";
+
+function localDateKey(date: Date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0")
+  ].join("-");
+}
+
+function dailyPlaceKey(place: Place) {
+  return place.providerId ?? place.id;
+}
+
+function dailyHash(value: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function readDailyDiscoveryHistory(): DailyDiscoveryHistoryEntry[] {
+  try {
+    const raw = window.localStorage.getItem(dailyDiscoveryStorageKey);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .filter(
+        (item): item is DailyDiscoveryHistoryEntry =>
+          Boolean(
+            item &&
+              typeof item === "object" &&
+              "date" in item &&
+              "placeKey" in item &&
+              typeof (item as { date?: unknown }).date === "string" &&
+              typeof (item as { placeKey?: unknown }).placeKey === "string"
+          )
+      )
+      .slice(0, 21);
+  } catch {
+    return [];
+  }
+}
+
+function writeDailyDiscoveryHistory(
+  entries: DailyDiscoveryHistoryEntry[]
+) {
+  window.localStorage.setItem(
+    dailyDiscoveryStorageKey,
+    JSON.stringify(entries.slice(0, 21))
+  );
+}
+
+function suggestedDailyRouteStartTime(now: Date) {
+  const hour = now.getHours();
+  const minute = now.getMinutes();
+
+  if (hour < 18 || (hour === 18 && minute < 15)) {
+    return "19:00";
+  }
+
+  if (hour < 22) {
+    const target = new Date(now.getTime() + 60 * 60 * 1000);
+    const roundedMinutes = Math.ceil(target.getMinutes() / 15) * 15;
+    if (roundedMinutes >= 60) {
+      target.setHours(target.getHours() + 1, 0, 0, 0);
+    } else {
+      target.setMinutes(roundedMinutes, 0, 0);
+    }
+    return (
+      String(target.getHours()).padStart(2, "0") +
+      ":" +
+      String(target.getMinutes()).padStart(2, "0")
+    );
+  }
+
+  return "19:00";
+}
 
 function distanceLabel(value: number) {
   if (value < 1) return Math.round(value * 1000) + " m";
@@ -360,6 +449,7 @@ export function MapExplorer() {
   const [photoUploading, setPhotoUploading] = useState(false);
   const [placeCovers, setPlaceCovers] = useState<Record<string, string>>({});
   const [shortlist, setShortlist] = useState<Place[]>([]);
+  const [dailyPlace, setDailyPlace] = useState<Place | null>(null);
   const [serverDistances, setServerDistances] = useState<Record<string, number>>({});
   const [backupLoading, setBackupLoading] = useState(false);
   const [viewportBounds, setViewportBounds] = useState<MapBounds | null>(null);
@@ -415,6 +505,7 @@ export function MapExplorer() {
   const ratingDialogRef = useRef<HTMLDialogElement | null>(null);
   const collectionDialogRef = useRef<HTMLDialogElement | null>(null);
   const planDialogRef = useRef<HTMLDialogElement | null>(null);
+  const dailyDialogRef = useRef<HTMLDialogElement | null>(null);
   const compareDialogRef = useRef<HTMLDialogElement | null>(null);
   const backupInputRef = useRef<HTMLInputElement | null>(null);
   const placePhotoInputRef = useRef<HTMLInputElement | null>(null);
@@ -746,6 +837,13 @@ export function MapExplorer() {
       : selected.openUntil,
     clock
   );
+  const dailyOpening = dailyPlace
+    ? openingStatus(dailyPlace.openUntil, clock)
+    : null;
+  const dailyPlaceVisited = dailyPlace
+    ? visits.some((visit) => visit.placeId === dailyPlace.id)
+    : false;
+
   const selectedFeedback = hasSelectedPlace
     ? recommendationFeedbacks[selected.id]
     : undefined;
@@ -1278,6 +1376,106 @@ export function MapExplorer() {
     setNotice("🎯 " + picked.name + " · " + reason);
   }
 
+  function openDailyDiscovery() {
+    const today = localDateKey(clock);
+    const history = readDailyDiscoveryHistory();
+    const todaysEntry = history.find((item) => item.date === today);
+
+    const cafeOrFood = rankedAll.filter(
+      (place) =>
+        place.scenarios.includes("coffee") ||
+        place.scenarios.includes("food") ||
+        /cafe|coffee|restaurant|bar/i.test(place.kind)
+    );
+    const source = cafeOrFood.length >= 3 ? cafeOrFood : rankedAll;
+
+    let picked = todaysEntry
+      ? source.find(
+          (place) => dailyPlaceKey(place) === todaysEntry.placeKey
+        ) ?? null
+      : null;
+
+    if (!picked) {
+      const avoidPlaceKeys = new Set(
+        history
+          .filter((item) => item.date !== today)
+          .slice(0, 14)
+          .map((item) => item.placeKey)
+      );
+
+      picked = pickDailyDiscoveryPlace(
+        source,
+        {
+          savedIds: saved,
+          ratings,
+          feedbacks: recommendationFeedbacks,
+          visits
+        },
+        {
+          seed: today + ":place",
+          avoidPlaceKeys
+        }
+      );
+
+      if (picked) {
+        writeDailyDiscoveryHistory([
+          { date: today, placeKey: dailyPlaceKey(picked) },
+          ...history.filter((item) => item.date !== today)
+        ]);
+      }
+    }
+
+    setDailyPlace(picked);
+    dailyDialogRef.current?.showModal();
+  }
+
+  function focusDailyPlace() {
+    if (!dailyPlace) return;
+
+    setSelectedId(dailyPlace.id);
+    mapRef.current?.flyTo({
+      center: [dailyPlace.longitude, dailyPlace.latitude],
+      zoom: 14,
+      duration: 700,
+      essential: true
+    });
+    dailyDialogRef.current?.close();
+
+    const reason =
+      dailyPlace.recommendationReasons?.[0] ??
+      "ưu tiên một nơi mới hợp gu của bạn";
+    setNotice("☀ Quán hôm nay · " + dailyPlace.name + " · " + reason);
+  }
+
+  async function openDailyRoute() {
+    const today = localDateKey(clock);
+    const seed = dailyHash(today + ":route");
+    const dailyScenarios: Scenario[] = [
+      "date",
+      "friends",
+      "food",
+      "coffee",
+      "fun",
+      "chill"
+    ];
+    const routeScenario =
+      scenario === "all"
+        ? dailyScenarios[seed % dailyScenarios.length]!
+        : scenario;
+    const routeStartTime = suggestedDailyRouteStartTime(clock);
+    const variant = seed % 10_000;
+
+    setPlanScenario(routeScenario);
+    setPlanStartTime(routeStartTime);
+    setPlanVariant(variant);
+    setPlanWeather(null);
+    setActivePlan(null);
+
+    dailyDialogRef.current?.close();
+    planDialogRef.current?.showModal();
+    await generatePlan(variant, routeScenario, routeStartTime);
+  }
+
   function plannerOrigin(): UserLocation {
     if (userLocation) return userLocation;
     const center = mapRef.current?.getCenter();
@@ -1286,9 +1484,13 @@ export function MapExplorer() {
       : { latitude: defaultCenter[1], longitude: defaultCenter[0] };
   }
 
-  async function generatePlan(nextVariant = planVariant) {
+  async function generatePlan(
+    nextVariant = planVariant,
+    scenarioOverride: Scenario = planScenario,
+    startTimeOverride = planStartTime
+  ) {
     const origin = plannerOrigin();
-    const targetAt = nextPlanStartAt(planStartTime, clock);
+    const targetAt = nextPlanStartAt(startTimeOverride, clock);
     setPlanWeatherLoading(true);
 
     let forecast: WeatherContext | null = null;
@@ -1338,11 +1540,11 @@ export function MapExplorer() {
     const result = buildEveningPlan({
       places: source,
       preferences: {
-        scenario: planScenario,
+        scenario: scenarioOverride,
         budgetForTwo: planBudget,
         maxDistanceKm: planDistance,
         durationHours: planDuration,
-        startTime: planStartTime,
+        startTime: startTimeOverride,
         startAt: targetAt.toISOString()
       },
       signals: {
@@ -2758,6 +2960,13 @@ export function MapExplorer() {
           </button>
           <button
             type="button"
+            className="daily-discovery-button"
+            onClick={openDailyDiscovery}
+          >
+            ☀ Hôm nay
+          </button>
+          <button
+            type="button"
             className="surprise-button"
             onClick={surpriseMe}
           >
@@ -3673,6 +3882,99 @@ export function MapExplorer() {
             {collectionEditingId ? "Lưu thay đổi" : "Tạo bộ sưu tập"}
           </button>
         </form>
+      </dialog>
+
+      <dialog className="app-dialog app-dialog--daily" ref={dailyDialogRef}>
+        <div className="dialog-card daily-discovery-dialog">
+          <div className="dialog-header">
+            <div>
+              <span className="eyebrow">Khám phá hôm nay</span>
+              <h2>Mỗi ngày một thứ mới</h2>
+            </div>
+            <button
+              className="icon-button"
+              type="button"
+              onClick={() => dailyDialogRef.current?.close()}
+              aria-label="Đóng"
+            >
+              <CloseIcon />
+            </button>
+          </div>
+
+          <p className="dialog-copy">
+            Quán hôm nay được giữ cố định trong ngày và ưu tiên nơi bạn chưa đi. Route hôm nay đổi theo ngày nhưng vẫn theo gu, thời tiết, budget và giờ mở cửa.
+          </p>
+
+          <section className="daily-place-card">
+            <div className="daily-place-card__head">
+              <div>
+                <span className="eyebrow">Quán hôm nay</span>
+                <strong>{dailyPlace?.name ?? "Chưa có đủ địa điểm"}</strong>
+              </div>
+              {dailyPlace ? <b>{dailyPlace.match}%</b> : null}
+            </div>
+
+            {dailyPlace ? (
+              <>
+                <p>
+                  {dailyPlace.recommendationReasons?.[0] ??
+                    "Một lựa chọn mới được cân bằng giữa độ hợp gu và sự mới mẻ."}
+                </p>
+                <div className="daily-place-meta">
+                  <span>{distanceLabel(dailyPlace.distanceKm)}</span>
+                  <span>·</span>
+                  <span>{priceBadge(dailyPlace)}</span>
+                  <span>·</span>
+                  <span
+                    className={
+                      "daily-opening daily-opening--" +
+                      (dailyOpening?.state ?? "unknown")
+                    }
+                  >
+                    {dailyOpening?.label ?? "Giờ chưa rõ"}
+                  </span>
+                  <span>·</span>
+                  <span>
+                    {dailyPlaceVisited ? "Đã từng đi" : "Chưa từng đi"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="primary-button primary-button--wide"
+                  onClick={focusDailyPlace}
+                >
+                  Xem quán hôm nay
+                </button>
+              </>
+            ) : (
+              <p>
+                Hãy tìm khu vực này hoặc di chuyển bản đồ để có thêm địa điểm thật cho gợi ý hôm nay.
+              </p>
+            )}
+          </section>
+
+          <section className="daily-route-card">
+            <div>
+              <span className="eyebrow">Lộ trình hôm nay</span>
+              <strong>Một route mới theo ngày</strong>
+              <p>
+                Tạo 1–3 chặng từ dữ liệu quanh bản đồ, ưu tiên nơi mới và tự kiểm tra forecast + giờ mở cửa.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={planWeatherLoading || rankedAll.length === 0}
+              onClick={() => void openDailyRoute()}
+            >
+              ◫ Tạo route hôm nay
+            </button>
+          </section>
+
+          <small className="daily-discovery-note">
+            Lịch sử quán được giữ tối đa 21 ngày trên thiết bị này để giảm lặp. Bạn vẫn có thể dùng “Bất ngờ” nếu muốn bốc thêm ngay.
+          </small>
+        </div>
       </dialog>
 
       <dialog className="app-dialog app-dialog--plan" ref={planDialogRef}>
