@@ -938,7 +938,10 @@ out center 80;
       const category = [
         typeof tags.amenity === "string" ? tags.amenity : "",
         typeof tags.leisure === "string" ? tags.leisure : "",
-        typeof tags.tourism === "string" ? tags.tourism : ""
+        typeof tags.tourism === "string" ? tags.tourism : "",
+        typeof tags.shop === "string" ? "shop." + tags.shop : "",
+        typeof tags.sport === "string" ? "sport." + tags.sport : "",
+        typeof tags.historic === "string" ? "heritage." + tags.historic : ""
       ]
         .filter(Boolean)
         .join(" ");
