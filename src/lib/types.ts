@@ -354,6 +354,7 @@ export type NextPlaceSuggestion = {
   estimatedTravelMinutes: number;
   estimatedCostForTwo: number;
   transitionLabel: string;
+  travelSource?: "road" | "heuristic";
   reason: string;
 };
 

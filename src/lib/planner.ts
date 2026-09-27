@@ -797,6 +797,8 @@ export function suggestWhatNext(input: {
   limit?: number;
   localHour?: number;
   maxCostForTwo?: number;
+  travelMatrix?: PlannerTravelMatrix;
+  routeMode?: RoutingMode;
 }): NextPlaceSuggestion[] {
   const {
     current,
@@ -805,7 +807,9 @@ export function suggestWhatNext(input: {
     maxDistanceKm = 4,
     limit = 3,
     localHour,
-    maxCostForTwo = Number.POSITIVE_INFINITY
+    maxCostForTwo = Number.POSITIVE_INFINITY,
+    travelMatrix,
+    routeMode = "motorcycle"
   } = input;
 
   const desired = nextStageOrder(current, localHour);
@@ -834,10 +838,14 @@ export function suggestWhatNext(input: {
       return true;
     })
     .map((place) => {
-      const distanceKm = haversineKm(currentPoint, {
-        latitude: place.latitude,
-        longitude: place.longitude
+      const metric = travelMetric({
+        origin: currentPoint,
+        previous: current,
+        place,
+        matrix: travelMatrix,
+        routeMode
       });
+      const distanceKm = metric.distanceKm;
 
       if (distanceKm > maxDistanceKm) return null;
 
@@ -850,7 +858,7 @@ export function suggestWhatNext(input: {
         orderIndex === 0 ? 26 : orderIndex === 1 ? 12 : 0;
       const count = visitCount(signals.visits, place.id);
       const novelty = count === 0 ? 5 : Math.max(0, 3 - count);
-      const estimatedTravelMinutes = travelMinutes(distanceKm);
+      const estimatedTravelMinutes = metric.durationMinutes;
       const latePenalty =
         typeof localHour === "number" &&
         localHour >= 22 &&
@@ -884,6 +892,7 @@ export function suggestWhatNext(input: {
         estimatedTravelMinutes,
         estimatedCostForTwo,
         transitionLabel,
+        travelSource: metric.source,
         score,
         reason:
           personalReason +
@@ -895,7 +904,10 @@ export function suggestWhatNext(input: {
     .filter(
       (
         item
-      ): item is NextPlaceSuggestion & { score: number } => item !== null
+      ): item is NextPlaceSuggestion & {
+        score: number;
+        travelSource: "road" | "heuristic";
+      } => item !== null
     )
     .sort(
       (a, b) =>

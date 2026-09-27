@@ -61,7 +61,7 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - planner blends provider estimates with learned user medians when enough real spending data exists, while real user-entered cost always wins;
 - learned budget medians by outing type (food / activity / cafe-chill) for places without explicit prices, with fixed price tiers only as the final fallback;
 - multi-stop Google Maps route handoff; walking plans open as walking directions, while motorcycle/car plans use driving handoff because Maps URLs do not expose a motorcycle travel mode;
-- **What next?** recommendations after a recent check-in, using transition type, time of day, distance, travel time, cost and current personal ranking;
+- **What next?** recommendations after a recent check-in, using transition type, time of day, cost and current personal ranking; the top heuristic candidates are re-ranked with a tiny road-routing matrix using the current plan/travel mode when available;
 - persisted **active plan lifecycle**: start → resume after reload → complete/skip each stop → auto-finish;
 - completed plan history is archived atomically when the final stop is completed/skipped, keeping mood, route snapshot, completed/skipped stops, cost, duration and completion time;
 - completed-plan outcome learning uses only actually completed stops as positive evidence, applies a small recency-weighted scenario/place bonus, never treats skipped stops as dislike, and caps the total influence so explicit feedback and current context remain stronger;
@@ -242,7 +242,7 @@ http://localhost:3000
 
 ## Next
 
-1. make **What next?** optionally use a tiny road-routing matrix for its top candidates instead of only straight-line travel estimates;
+1. persist planner defaults (travel mode / budget / radius / duration) per anonymous profile so the core adapts across sessions;
 2. add lightweight itinerary sharing before full Groups;
 3. Supabase Auth only when account recovery/multi-device sync is worth the friction;
 4. Groups and group voting after the personal loop is mature.
