@@ -2,6 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import type {
+  ActivePlanSnapshot,
   Collection,
   PersonalBackup,
   PersonalRating,
@@ -319,5 +320,79 @@ export function parsePersonalBackup(value: unknown): PersonalSnapshot {
     ratings,
     visits,
     collections
+  };
+}
+
+
+function planStage(value: unknown) {
+  if (value === "food" || value === "activity" || value === "coffee") {
+    return value;
+  }
+  throw new Error("INVALID_BODY");
+}
+
+function clockValue(value: unknown) {
+  const result = stringValue(value, 5, true);
+  if (!/^\d{2}:\d{2}$/.test(result)) {
+    throw new Error("INVALID_BODY");
+  }
+  return result;
+}
+
+export function parseActivePlanSnapshot(value: unknown): ActivePlanSnapshot {
+  const root = objectValue(value);
+  const rawStops = Array.isArray(root.stops) ? root.stops : [];
+
+  if (rawStops.length < 1 || rawStops.length > 3) {
+    throw new Error("INVALID_BODY");
+  }
+
+  const seen = new Set<string>();
+  const stops = rawStops.map((item) => {
+    const row = objectValue(item);
+    const placeId = boundedId(row.placeId);
+
+    if (seen.has(placeId)) throw new Error("INVALID_BODY");
+    seen.add(placeId);
+
+    return {
+      placeId,
+      name: stringValue(row.name, 100, true),
+      latitude: finiteNumber(row.latitude, -90, 90),
+      longitude: finiteNumber(row.longitude, -180, 180),
+      stage: planStage(row.stage),
+      stageLabel: stringValue(row.stageLabel, 40, true),
+      startTime: clockValue(row.startTime),
+      endTime: clockValue(row.endTime),
+      estimatedCostForTwo: Math.round(
+        finiteNumber(row.estimatedCostForTwo, 0, 20_000_000)
+      ),
+      travelKmFromPrevious: finiteNumber(
+        row.travelKmFromPrevious,
+        0,
+        200
+      ),
+      travelMinutesFromPrevious: Math.round(
+        finiteNumber(row.travelMinutesFromPrevious, 0, 240)
+      ),
+      match: Math.round(finiteNumber(row.match, 0, 100)),
+      reason: stringValue(row.reason, 220)
+    };
+  });
+
+  return {
+    summary: stringValue(root.summary, 180, true),
+    totalEstimatedCostForTwo: Math.round(
+      finiteNumber(root.totalEstimatedCostForTwo, 0, 60_000_000)
+    ),
+    budgetRemainingForTwo: Math.round(
+      finiteNumber(root.budgetRemainingForTwo, -60_000_000, 60_000_000)
+    ),
+    routeKm: finiteNumber(root.routeKm, 0, 500),
+    totalDurationMinutes: Math.round(
+      finiteNumber(root.totalDurationMinutes, 1, 24 * 60)
+    ),
+    averageMatch: Math.round(finiteNumber(root.averageMatch, 0, 100)),
+    stops
   };
 }
