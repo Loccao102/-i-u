@@ -8,6 +8,7 @@ import type {
   DailyDiscoveryRecord,
   PersonalBackup,
   PersonalRating,
+  PlannerDefaults,
   PersonalSnapshot,
   RecommendationFeedback,
   RecommendationFeedbackReason,
@@ -519,6 +520,43 @@ export function parsePersonalBackup(value: unknown): PersonalSnapshot {
       };
     });
 
+  let plannerDefaults: PlannerDefaults | undefined;
+  if (
+    data.plannerDefaults &&
+    typeof data.plannerDefaults === "object" &&
+    !Array.isArray(data.plannerDefaults)
+  ) {
+    const row = data.plannerDefaults as Record<string, unknown>;
+    const routeMode =
+      row.routeMode === "drive" || row.routeMode === "walk"
+        ? row.routeMode
+        : "motorcycle";
+    const budgetForTwo = Math.round(
+      finiteNumber(row.budgetForTwo ?? 700000, 100000, 10000000)
+    );
+    const distance = Math.round(
+      finiteNumber(row.maxDistanceKm ?? 5, 3, 12)
+    );
+    const maxDistanceKm =
+      distance === 3 || distance === 8 || distance === 12 ? distance : 5;
+    const duration = Math.round(
+      finiteNumber(row.durationHours ?? 4, 2, 4)
+    );
+    const durationHours =
+      duration === 2 || duration === 3 ? duration : 4;
+
+    plannerDefaults = {
+      routeMode,
+      budgetForTwo,
+      maxDistanceKm,
+      durationHours,
+      updatedAt:
+        row.updatedAt === null || row.updatedAt === undefined
+          ? null
+          : isoDate(row.updatedAt)
+    };
+  }
+
   return {
     version: 3,
     customPlaces,
@@ -528,7 +566,8 @@ export function parsePersonalBackup(value: unknown): PersonalSnapshot {
     visits,
     collections,
     dailyDiscoveries,
-    completedPlans
+    completedPlans,
+    plannerDefaults
   };
 }
 
