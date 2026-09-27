@@ -256,6 +256,29 @@ export type PlannerCostProfile = {
   byStage: Partial<Record<PlanStage, number>>;
 };
 
+export type PlannerTravelMetric = {
+  distanceKm: number;
+  durationMinutes: number;
+};
+
+export type PlannerTravelMatrix = Record<
+  string,
+  Record<string, PlannerTravelMetric | null>
+>;
+
+export type RoutingMatrixPoint = {
+  key: string;
+  latitude: number;
+  longitude: number;
+};
+
+export type RoutingMatrixResult = {
+  matrix: PlannerTravelMatrix | null;
+  provider: "geoapify" | null;
+  mode: "motorcycle";
+  configured: boolean;
+};
+
 export type EveningPlanPreferences = {
   scenario: Scenario;
   budgetForTwo: number;
@@ -275,6 +298,7 @@ export type EveningPlanStop = {
   estimatedCostForTwo: number;
   travelKmFromPrevious: number;
   travelMinutesFromPrevious: number;
+  travelSource: "road" | "heuristic";
   openingHoursStatus: "confirmed" | "unknown";
   reason: string;
 };
@@ -292,6 +316,7 @@ export type EveningPlan = {
   complete: boolean;
   missingStages: PlanStage[];
   unknownOpeningHoursCount: number;
+  roadRoutedLegs: number;
   summary: string;
 };
 
