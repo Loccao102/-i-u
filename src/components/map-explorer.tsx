@@ -1554,6 +1554,10 @@ export function MapExplorer() {
                 ? "Không tải được dữ liệu"
                 : "Cá nhân · Supabase"}
           </span>
+          <span className="legal-links">
+            <a href="/privacy">Privacy</a>
+            <a href="/terms">Terms</a>
+          </span>
 
           <button
             className="backup-button"
