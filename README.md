@@ -68,6 +68,7 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - **What next?** recommendations after a recent check-in, using transition type, time of day, cost and current personal ranking; the top heuristic candidates are re-ranked with a tiny road-routing matrix using the current plan/travel mode when available;
 - persisted **active plan lifecycle**: start → resume after reload → complete/skip each stop → auto-finish;
 - completed plan history is archived atomically when the final stop is completed/skipped, keeping mood, route snapshot, completed/skipped stops, cost, duration and completion time;
+- completed outings can be replayed as **templates**, not frozen copies: original stops get a controlled preference bonus but still pass fresh weather, opening-hours, routing, budget, distance and duration checks, with unsuitable stops replaced automatically;
 - completed-plan outcome learning uses only actually completed stops as positive evidence, applies a small recency-weighted scenario/place bonus, never treats skipped stops as dislike, and caps the total influence so explicit feedback and current context remain stronger;
 - explicit post-plan feedback (1–5★, repeat intent, optional note) separates “finished the route” from “actually enjoyed it”; low feedback suppresses completion-based bonuses instead of inventing per-place dislikes;
 - History view now shows recent completed outings alongside per-place visits;
@@ -252,7 +253,7 @@ http://localhost:3000
 ## Next
 
 1. add stronger long-term plan analytics only after enough real completed-plan samples exist;
-2. improve completed-plan replay/clone so a successful outing can become a new plan with fresh weather/opening/routing checks;
+2. add a compact “why this changed” explanation when replay replaces an old stop;
 3. add Supabase Auth only when account recovery and permanent multi-device identity are worth the friction; the one-time transfer code covers the anonymous phase;
 4. Groups and group voting after the personal loop is mature.
 
