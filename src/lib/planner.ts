@@ -7,6 +7,7 @@ import type {
   PersonalRating,
   Place,
   PlannerCostProfile,
+  PlannerReplayTemplate,
   PlannerTravelMatrix,
   PlanOutcomeProfile,
   RecommendationFeedback,
@@ -265,14 +266,32 @@ function travelMetric(input: {
 export function plannerRoutingCandidates(
   places: Place[],
   preferences: EveningPlanPreferences,
-  limit = 6
+  limit = 6,
+  replayTemplate?: PlannerReplayTemplate | null
 ) {
   const chosen: Place[] = [];
   const used = new Set<string>();
-  const stages = stagesFor(
-    preferences.scenario,
-    preferences.durationHours
-  );
+  const stages =
+    replayTemplate?.stops.length
+      ? replayTemplate.stops.map((stop) => stop.stage)
+      : stagesFor(
+          preferences.scenario,
+          preferences.durationHours
+        );
+
+  if (replayTemplate?.stops.length) {
+    for (const templateStop of replayTemplate.stops) {
+      if (chosen.length >= limit) break;
+      const place = places.find(
+        (item) => item.id === templateStop.placeId
+      );
+      if (!place || used.has(place.id)) continue;
+      if (!matchesStage(place, templateStop.stage)) continue;
+
+      chosen.push(place);
+      used.add(place.id);
+    }
+  }
 
   for (const stage of stages) {
     for (const place of places) {
@@ -407,6 +426,7 @@ function candidateScore(input: {
   variant: number;
   originDistanceKm: number;
   legDistanceKm: number;
+  preferredPlaceId?: string | null;
 }) {
   const {
     place,
@@ -418,7 +438,8 @@ function candidateScore(input: {
     stageBudget,
     variant,
     originDistanceKm,
-    legDistanceKm
+    legDistanceKm,
+    preferredPlaceId
   } = input;
 
   const rating = signals.ratings[place.id];
@@ -463,6 +484,10 @@ function candidateScore(input: {
   const outcomeBonus = signals.planOutcomes
     ? scorePlanOutcomeMatch(place, signals.planOutcomes, scenario).score
     : 0;
+  const replayBonus =
+    preferredPlaceId === place.id
+      ? Math.max(12, 44 - input.variant * 12)
+      : 0;
 
   return (
     place.match +
@@ -470,7 +495,8 @@ function candidateScore(input: {
     (place.scenarios.includes(scenario) ? 10 : 0) +
     novelty +
     variantScore +
-    outcomeBonus -
+    outcomeBonus +
+    replayBonus -
     routePenalty -
     feedbackPenalty
   );
@@ -484,6 +510,7 @@ function buildWithGuardrails(input: {
   variant: number;
   relaxedBudget: boolean;
   travelMatrix?: PlannerTravelMatrix;
+  replayTemplate?: PlannerReplayTemplate | null;
 }) {
   const {
     places,
@@ -492,9 +519,13 @@ function buildWithGuardrails(input: {
     origin,
     variant,
     relaxedBudget,
-    travelMatrix
+    travelMatrix,
+    replayTemplate
   } = input;
-  const stages = stagesFor(preferences.scenario, preferences.durationHours);
+  const stages =
+    replayTemplate?.stops.length
+      ? replayTemplate.stops.map((stop) => stop.stage)
+      : stagesFor(preferences.scenario, preferences.durationHours);
   const maxDurationMinutes = preferences.durationHours * 60;
   const planStart = planStartDate(preferences);
 
@@ -516,6 +547,8 @@ function buildWithGuardrails(input: {
 
   for (let index = 0; index < stages.length; index += 1) {
     const stage = stages[index]!;
+    const preferredPlaceId =
+      replayTemplate?.stops[index]?.placeId ?? null;
     const futureStages = stages.slice(index + 1);
     const reserveMinutes = minimumFutureMinutes(futureStages);
     const remainingStages = stages.length - index;
@@ -583,7 +616,8 @@ function buildWithGuardrails(input: {
           stageBudget,
           variant,
           originDistanceKm: originMetric.distanceKm,
-          legDistanceKm: metric.distanceKm
+          legDistanceKm: metric.distanceKm,
+          preferredPlaceId
         });
 
         if (score === null) return null;
@@ -650,6 +684,7 @@ export function buildEveningPlan(input: {
   origin: UserLocation;
   variant?: number;
   travelMatrix?: PlannerTravelMatrix;
+  replayTemplate?: PlannerReplayTemplate | null;
 }): EveningPlan | null {
   const { places, preferences, signals, origin } = input;
   const variant = input.variant ?? 0;
@@ -661,7 +696,8 @@ export function buildEveningPlan(input: {
     origin,
     variant,
     relaxedBudget: false,
-    travelMatrix: input.travelMatrix
+    travelMatrix: input.travelMatrix,
+    replayTemplate: input.replayTemplate
   });
 
   if (generated.selected.length === 0) {
@@ -672,7 +708,8 @@ export function buildEveningPlan(input: {
       origin,
       variant,
       relaxedBudget: true,
-      travelMatrix: input.travelMatrix
+      travelMatrix: input.travelMatrix,
+      replayTemplate: input.replayTemplate
     });
   }
 
@@ -743,6 +780,25 @@ export function buildEveningPlan(input: {
   const roadRoutedLegs = stops.filter(
     (stop) => stop.travelSource === "road"
   ).length;
+  const retainedStopIds = input.replayTemplate
+    ? stops
+        .filter(
+          (stop, index) =>
+            input.replayTemplate?.stops[index]?.placeId === stop.place.id
+        )
+        .map((stop) => stop.place.id)
+    : [];
+  const replay = input.replayTemplate
+    ? {
+        sourcePlanId: input.replayTemplate.sourcePlanId,
+        originalStopCount: input.replayTemplate.stops.length,
+        retainedStopIds,
+        replacedStopCount: Math.max(
+          0,
+          input.replayTemplate.stops.length - retainedStopIds.length
+        )
+      }
+    : null;
 
   return {
     scenario: preferences.scenario,
@@ -761,6 +817,7 @@ export function buildEveningPlan(input: {
     missingStages: generated.missingStages,
     unknownOpeningHoursCount,
     roadRoutedLegs,
+    replay,
     summary:
       stops.length +
       " chặng · " +
