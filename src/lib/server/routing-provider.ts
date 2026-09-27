@@ -3,7 +3,8 @@ import "server-only";
 import type {
   PlannerTravelMatrix,
   RoutingMatrixPoint,
-  RoutingMatrixResult
+  RoutingMatrixResult,
+  RoutingMode
 } from "../types";
 
 const routeMatrixCache = new Map<
@@ -19,8 +20,11 @@ export function isRoutingConfigured() {
   return Boolean(apiKey());
 }
 
-function cacheKey(points: RoutingMatrixPoint[]) {
-  return points
+function cacheKey(points: RoutingMatrixPoint[], mode: RoutingMode) {
+  return (
+    mode +
+    "|" +
+    points
     .map(
       (point) =>
         point.key +
@@ -29,23 +33,25 @@ function cacheKey(points: RoutingMatrixPoint[]) {
         "," +
         point.longitude.toFixed(5)
     )
-    .join("|");
+    .join("|")
+  );
 }
 
 export async function getRoadRouteMatrix(
-  points: RoutingMatrixPoint[]
+  points: RoutingMatrixPoint[],
+  mode: RoutingMode
 ): Promise<RoutingMatrixResult> {
   const key = apiKey();
   if (!key) {
     return {
       matrix: null,
       provider: null,
-      mode: "motorcycle",
+      mode,
       configured: false
     };
   }
 
-  const cacheId = cacheKey(points);
+  const cacheId = cacheKey(points, mode);
   const cached = routeMatrixCache.get(cacheId);
   if (cached && cached.expiresAt > Date.now()) {
     return cached.result;
@@ -65,7 +71,7 @@ export async function getRoadRouteMatrix(
       "User-Agent": "DiDau/0.3 road-routing"
     },
     body: JSON.stringify({
-      mode: "motorcycle",
+      mode,
       type: "balanced",
       sources: locations,
       targets: locations
@@ -136,7 +142,7 @@ export async function getRoadRouteMatrix(
   const result: RoutingMatrixResult = {
     matrix,
     provider: "geoapify",
-    mode: "motorcycle",
+    mode,
     configured: true
   };
 
