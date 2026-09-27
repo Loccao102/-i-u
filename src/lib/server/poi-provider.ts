@@ -27,7 +27,7 @@ function classifyKind(type: string, category: string) {
   if (/cafe|coffee/.test(raw)) return "Cafe";
   if (/bar|pub|biergarten/.test(raw)) return "Bar / Drink";
   if (
-    /cinema|bowling|arcade|theatre|attraction|museum|gallery|viewpoint|escape_game|sports_centre/.test(
+    /cinema|bowling|arcade|theatre|attraction|museum|gallery|viewpoint|escape_game|sports_centre|activity_park|theme_park|water_park|zoo|aquarium|miniature_golf/.test(
       raw
     )
   ) {
@@ -125,6 +125,294 @@ function stableOsmId(type: unknown, id: unknown, fallback: string) {
     return "osm:" + type + ":" + String(id);
   }
   return fallback;
+}
+
+
+function geoapifyApiKey() {
+  return process.env.GEOAPIFY_API_KEY?.trim() || null;
+}
+
+type GeoapifyFeature = {
+  properties?: Record<string, unknown>;
+  geometry?: {
+    coordinates?: unknown;
+  };
+};
+
+function geoapifyCategories(properties: Record<string, unknown>) {
+  return Array.isArray(properties.categories)
+    ? properties.categories.filter(
+        (item): item is string => typeof item === "string"
+      )
+    : [];
+}
+
+function geoapifyOpeningHours(properties: Record<string, unknown>) {
+  if (typeof properties.opening_hours === "string") {
+    return cleanPlainText(properties.opening_hours, 120);
+  }
+
+  if (Array.isArray(properties.opening_hours)) {
+    const value = properties.opening_hours
+      .filter((item): item is string => typeof item === "string")
+      .join("; ");
+    return value ? cleanPlainText(value, 120) : undefined;
+  }
+
+  return undefined;
+}
+
+function geoapifyFeatureToPoi(
+  feature: GeoapifyFeature
+): PoiSearchResult | null {
+  const properties =
+    feature.properties && typeof feature.properties === "object"
+      ? feature.properties
+      : {};
+
+  const coordinates = Array.isArray(feature.geometry?.coordinates)
+    ? feature.geometry?.coordinates
+    : [];
+
+  const latitude = Number(properties.lat ?? coordinates?.[1]);
+  const longitude = Number(properties.lon ?? coordinates?.[0]);
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return null;
+  }
+
+  const formatted =
+    typeof properties.formatted === "string"
+      ? cleanPlainText(properties.formatted, 240)
+      : "";
+
+  const rawName =
+    typeof properties.name === "string"
+      ? properties.name
+      : typeof properties.address_line1 === "string"
+        ? properties.address_line1
+        : formatted.split(",")[0] ?? "";
+
+  const name = cleanPlainText(rawName, 100);
+  if (name.length < 2) return null;
+
+  const categories = geoapifyCategories(properties);
+  const resultType =
+    typeof properties.result_type === "string"
+      ? properties.result_type
+      : "";
+  const categoryText = [...categories, resultType].join(" ");
+  const kind = classifyKind(categoryText, categoryText);
+
+  const providerPlaceId =
+    typeof properties.place_id === "string" &&
+    properties.place_id.trim().length > 0
+      ? properties.place_id.trim()
+      : [latitude.toFixed(6), longitude.toFixed(6), name]
+          .join(":")
+          .toLowerCase();
+
+  const address =
+    formatted ||
+    [properties.address_line1, properties.address_line2]
+      .filter(
+        (item): item is string =>
+          typeof item === "string" && item.trim().length > 0
+      )
+      .map((item) => cleanPlainText(item, 120))
+      .join(", ");
+
+  return {
+    provider: "geoapify",
+    providerId: "geoapify:" + providerPlaceId,
+    name,
+    displayName: address || name,
+    kind,
+    latitude,
+    longitude,
+    scenarios: scenarioForKind(kind, name),
+    accent: colorForKind(kind),
+    address: address || undefined,
+    openingHours: geoapifyOpeningHours(properties)
+  };
+}
+
+async function searchGeoapify(input: {
+  query: string;
+  latitude?: number;
+  longitude?: number;
+  bounds?: MapBounds;
+}): Promise<PoiSearchResult[]> {
+  const key = geoapifyApiKey();
+  if (!key) return [];
+
+  if (geoapifyApiKey()) {
+    try {
+      return await searchGeoapify(input);
+    } catch (error) {
+      console.warn(
+        "[di-dau][geoapify][search] falling back to OpenStreetMap",
+        error instanceof Error ? error.message : error
+      );
+    }
+  }
+
+  const query = cleanPlainText(input.query, 120);
+  if (query.length < 2) return [];
+
+  const bounds = input.bounds ? normalizedBounds(input.bounds) : undefined;
+  const cacheKey = [
+    "geoapify-search",
+    query.toLowerCase(),
+    input.latitude?.toFixed(2) ?? "",
+    input.longitude?.toFixed(2) ?? "",
+    bounds
+      ? [
+          bounds.west.toFixed(2),
+          bounds.south.toFixed(2),
+          bounds.east.toFixed(2),
+          bounds.north.toFixed(2)
+        ].join(",")
+      : ""
+  ].join("|");
+
+  const cached = searchCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.data;
+
+  const url = new URL("https://api.geoapify.com/v1/geocode/search");
+  url.searchParams.set("text", query);
+  url.searchParams.set("format", "geojson");
+  url.searchParams.set("lang", "vi");
+  url.searchParams.set("limit", "8");
+  url.searchParams.set("apiKey", key);
+
+  if (bounds) {
+    url.searchParams.set(
+      "filter",
+      [
+        "rect:" +
+          [bounds.west, bounds.south, bounds.east, bounds.north].join(","),
+        "countrycode:vn"
+      ].join("|")
+    );
+  } else {
+    url.searchParams.set("filter", "countrycode:vn");
+
+    if (
+      typeof input.latitude === "number" &&
+      typeof input.longitude === "number"
+    ) {
+      url.searchParams.set(
+        "bias",
+        "proximity:" + input.longitude + "," + input.latitude
+      );
+    }
+  }
+
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("POI_PROVIDER_UNAVAILABLE");
+  }
+
+  const raw: unknown = await response.json();
+  const features =
+    raw &&
+    typeof raw === "object" &&
+    Array.isArray((raw as { features?: unknown }).features)
+      ? ((raw as { features: GeoapifyFeature[] }).features ?? [])
+      : [];
+
+  const seen = new Set<string>();
+  const data = features
+    .map(geoapifyFeatureToPoi)
+    .filter((item): item is PoiSearchResult => item !== null)
+    .filter((item) => {
+      if (seen.has(item.providerId)) return false;
+      seen.add(item.providerId);
+      return true;
+    })
+    .slice(0, 8);
+
+  searchCache.set(cacheKey, {
+    expiresAt: Date.now() + 5 * 60 * 1000,
+    data
+  });
+
+  return data;
+}
+
+async function discoverGeoapify(input: {
+  bounds: MapBounds;
+}): Promise<PoiSearchResult[]> {
+  const key = geoapifyApiKey();
+  if (!key) return [];
+
+  const bounds = normalizedBounds(input.bounds);
+  const cacheKey = [
+    "geoapify-discovery",
+    bounds.west.toFixed(3),
+    bounds.south.toFixed(3),
+    bounds.east.toFixed(3),
+    bounds.north.toFixed(3)
+  ].join("|");
+
+  const cached = discoveryCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.data;
+
+  const url = new URL("https://api.geoapify.com/v2/places");
+  url.searchParams.set(
+    "categories",
+    [
+      "catering.restaurant",
+      "catering.cafe",
+      "catering.fast_food",
+      "catering.food_court",
+      "catering.bar",
+      "catering.pub",
+      "entertainment",
+      "tourism"
+    ].join(",")
+  );
+  url.searchParams.set(
+    "filter",
+    "rect:" +
+      [bounds.west, bounds.south, bounds.east, bounds.north].join(",")
+  );
+  url.searchParams.set("lang", "vi");
+  url.searchParams.set("limit", "20");
+  url.searchParams.set("apiKey", key);
+
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("POI_PROVIDER_UNAVAILABLE");
+  }
+
+  const raw: unknown = await response.json();
+  const features =
+    raw &&
+    typeof raw === "object" &&
+    Array.isArray((raw as { features?: unknown }).features)
+      ? ((raw as { features: GeoapifyFeature[] }).features ?? [])
+      : [];
+
+  const seen = new Set<string>();
+  const data = features
+    .map(geoapifyFeatureToPoi)
+    .filter((item): item is PoiSearchResult => item !== null)
+    .filter((item) => item.kind !== "Địa điểm")
+    .filter((item) => {
+      if (seen.has(item.providerId)) return false;
+      seen.add(item.providerId);
+      return true;
+    })
+    .slice(0, 20);
+
+  discoveryCache.set(cacheKey, {
+    expiresAt: Date.now() + 10 * 60 * 1000,
+    data
+  });
+
+  return data;
 }
 
 export async function searchPoi(input: {
@@ -263,6 +551,17 @@ export async function searchPoi(input: {
 export async function discoverPoi(input: {
   bounds: MapBounds;
 }): Promise<PoiSearchResult[]> {
+  if (geoapifyApiKey()) {
+    try {
+      return await discoverGeoapify(input);
+    } catch (error) {
+      console.warn(
+        "[di-dau][geoapify][discover] falling back to OpenStreetMap",
+        error instanceof Error ? error.message : error
+      );
+    }
+  }
+
   const bounds = normalizedBounds(input.bounds);
   const key = [
     bounds.west.toFixed(3),
