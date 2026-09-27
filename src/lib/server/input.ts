@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import type {
   ActivePlanSnapshot,
   Collection,
+  CompletedPersonalPlan,
   DailyDiscoveryRecord,
   PersonalBackup,
   PersonalRating,
@@ -476,6 +477,37 @@ export function parsePersonalBackup(value: unknown): PersonalSnapshot {
       };
     });
 
+  const rawCompletedPlans = Array.isArray(data.completedPlans)
+    ? data.completedPlans
+    : [];
+  if (rawCompletedPlans.length > 200) {
+    throw new Error("INVALID_BODY");
+  }
+
+  const completedPlans: CompletedPersonalPlan[] =
+    rawCompletedPlans.map((item) => {
+      const row = objectValue(item);
+      const rawCompleted = Array.isArray(row.completedStopIds)
+        ? row.completedStopIds
+        : [];
+      const rawSkipped = Array.isArray(row.skippedStopIds)
+        ? row.skippedStopIds
+        : [];
+
+      return {
+        id: uuidValue(row.id),
+        plan: parseActivePlanSnapshot(row.plan),
+        completedStopIds: Array.from(
+          new Set(rawCompleted.map((id) => boundedId(id)))
+        ).slice(0, 3),
+        skippedStopIds: Array.from(
+          new Set(rawSkipped.map((id) => boundedId(id)))
+        ).slice(0, 3),
+        startedAt: isoDate(row.startedAt),
+        completedAt: isoDate(row.completedAt)
+      };
+    });
+
   return {
     version: 3,
     customPlaces,
@@ -484,7 +516,8 @@ export function parsePersonalBackup(value: unknown): PersonalSnapshot {
     recommendationFeedbacks,
     visits,
     collections,
-    dailyDiscoveries
+    dailyDiscoveries,
+    completedPlans
   };
 }
 
@@ -553,7 +586,14 @@ export function parseActivePlanSnapshot(value: unknown): ActivePlanSnapshot {
     };
   });
 
+  const scenario =
+    typeof root.scenario === "string" &&
+    scenarios.has(root.scenario as Scenario)
+      ? (root.scenario as Scenario)
+      : null;
+
   return {
+    scenario,
     summary: stringValue(root.summary, 180, true),
     totalEstimatedCostForTwo: Math.round(
       finiteNumber(root.totalEstimatedCostForTwo, 0, 60_000_000)
