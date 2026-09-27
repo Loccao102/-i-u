@@ -31,6 +31,7 @@ supabase/migrations/20260927094900_public_itinerary_shares.sql
 supabase/migrations/20260927095409_encrypt_profile_transfer_tokens.sql
 supabase/migrations/20260927152302_planner_telemetry.sql
 supabase/migrations/20260927172009_planner_telemetry_semantics.sql
+supabase/migrations/20260927172409_reset_planner_telemetry_after_semantics_change.sql
 supabase/migrations/20260927153331_profile_data_reset.sql
 ```
 
@@ -239,6 +240,10 @@ counters only; it does not store GPS traces or route coordinates.
 The conversion denominator uses `initial_generated_count`, not total
 successful generations. Rerolls are counted separately so repeatedly pressing
 “Đổi phương án” does not artificially lower start conversion.
+
+The first legacy telemetry rows are deleted once by migration because their
+`generated_count` mixed initial generations and rerolls. This reset affects
+derived counters only, not places, plans, visits, ratings, photos or feedback.
 
 Current counters:
 
