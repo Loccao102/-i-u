@@ -1488,6 +1488,13 @@ export function MapExplorer() {
       await personalApi.uploadPlacePhoto(selected.id, file);
       const media = await personalApi.getPlaceMedia(selected.id);
       setPlaceMedia(media);
+      setPlaceCovers((current) => {
+        const next = { ...current };
+        const cover = media.userPhotos[0]?.url;
+        if (cover) next[selected.id] = cover;
+        else delete next[selected.id];
+        return next;
+      });
       setNotice("Đã thêm ảnh thật cho địa điểm.");
     } catch (error) {
       setNotice(
@@ -1506,6 +1513,13 @@ export function MapExplorer() {
       await personalApi.deletePlacePhoto(photoId);
       const media = await personalApi.getPlaceMedia(selected.id);
       setPlaceMedia(media);
+      setPlaceCovers((current) => {
+        const next = { ...current };
+        const cover = media.userPhotos[0]?.url;
+        if (cover) next[selected.id] = cover;
+        else delete next[selected.id];
+        return next;
+      });
       setNotice("Đã xóa ảnh.");
     } catch (error) {
       setNotice(
@@ -2760,7 +2774,15 @@ export function MapExplorer() {
               <div><dt>Không gian</dt><dd>{selected.noise}</dd></div>
               <div><dt>Đông đúc</dt><dd>{selected.crowd}</dd></div>
               <div><dt>Đi đẹp nhất</dt><dd>{selected.bestTime}</dd></div>
-              <div><dt>Đóng cửa</dt><dd>{selected.openUntil}</dd></div>
+              <div>
+                <dt>Giờ mở cửa</dt>
+                <dd>
+                  {selectedOpening.label}
+                  {selectedOpening.detail
+                    ? " · " + selectedOpening.detail
+                    : ""}
+                </dd>
+              </div>
             </dl>
             {selected.note ? <blockquote>“{selected.note}”</blockquote> : null}
           </section>
@@ -2790,6 +2812,132 @@ export function MapExplorer() {
           </button>
         </div>
       ) : null}
+
+      <dialog className="app-dialog app-dialog--compare" ref={compareDialogRef}>
+        <div className="dialog-card compare-dialog-card">
+          <div className="dialog-header">
+            <div>
+              <span className="eyebrow">Chọn nhanh</span>
+              <h2>So sánh shortlist</h2>
+            </div>
+            <button
+              className="icon-button"
+              type="button"
+              onClick={() => compareDialogRef.current?.close()}
+            >
+              <CloseIcon />
+            </button>
+          </div>
+
+          <p className="dialog-copy">
+            So sánh tối đa 3 chỗ theo đúng context hiện tại. Shortlist chỉ sống
+            trong phiên trình duyệt, không tạo thêm dữ liệu dài hạn.
+          </p>
+
+          <div
+            className="compare-grid"
+            style={{
+              gridTemplateColumns:
+                "repeat(" + Math.max(1, shortlistView.length) + ", minmax(0, 1fr))"
+            }}
+          >
+            {shortlistView.map((place) => {
+              const status = openingStatus(place.openUntil, clock);
+              const rating = ratings[place.id];
+              const cover = placeCovers[place.id];
+
+              return (
+                <article className="compare-card" key={place.id}>
+                  <div
+                    className={
+                      "compare-card__hero" +
+                      (cover ? " compare-card__hero--photo" : "")
+                    }
+                    style={{ "--place-accent": place.accent } as CSSProperties}
+                  >
+                    {cover ? (
+                      <img src={cover} alt={"Ảnh " + place.name} />
+                    ) : (
+                      <span>{placeIcon(place)}</span>
+                    )}
+                    <b>{place.match}%</b>
+                  </div>
+
+                  <div className="compare-card__body">
+                    <span className="eyebrow">
+                      {place.kind}
+                      {place.source === "provider" ? " · OSM" : ""}
+                    </span>
+                    <h3>{place.name}</h3>
+
+                    <dl>
+                      <div>
+                        <dt>Khoảng cách</dt>
+                        <dd>{distanceLabel(place.distanceKm)}</dd>
+                      </div>
+                      <div>
+                        <dt>Giá</dt>
+                        <dd>{priceBadge(place)}</dd>
+                      </div>
+                      <div>
+                        <dt>Mở cửa</dt>
+                        <dd>
+                          <span
+                            className={
+                              "opening-badge opening-badge--" + status.state
+                            }
+                          >
+                            {status.label}
+                          </span>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Rating</dt>
+                        <dd>
+                          {rating
+                            ? "★ " + rating.stars.toFixed(1) + " của bạn"
+                            : place.publicRating > 0
+                              ? "★ " + place.publicRating.toFixed(1)
+                              : "Chưa có"}
+                        </dd>
+                      </div>
+                    </dl>
+
+                    <p>
+                      {place.recommendationReasons?.[0] ??
+                        "Phù hợp với bối cảnh hiện tại"}
+                    </p>
+
+                    <button
+                      type="button"
+                      className="primary-button"
+                      onClick={() => {
+                        setSelectedId(place.id);
+                        compareDialogRef.current?.close();
+                        mapRef.current?.flyTo({
+                          center: [place.longitude, place.latitude],
+                          zoom: 14,
+                          duration: 650,
+                          essential: true
+                        });
+                      }}
+                    >
+                      Chọn chỗ này
+                    </button>
+                    <button
+                      type="button"
+                      className="compare-card__remove"
+                      onClick={() => toggleShortlist(place)}
+                    >
+                      Bỏ khỏi shortlist
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      </dialog>
 
       <dialog className="app-dialog" ref={addDialogRef}>
         <form className="dialog-card" onSubmit={submitNewPlace}>
