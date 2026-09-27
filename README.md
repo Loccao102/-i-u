@@ -18,6 +18,7 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - edit/delete personal places;
 - collections;
 - real Geoapify POI discovery for cafe / food / bar / activity places in the visible map viewport;
+- controlled POI pagination: load 20 places at a time with Geoapify `offset`, capped at 100 provider results per focused query to protect the free quota;
 - Geoapify text search + import for named places;
 - discovery filters for place type, Wi-Fi, wheelchair access and 1/3/5/10 km radius from the current map center;
 - "Đang mở" filtering from available provider `opening_hours` without bulk detail requests;
@@ -215,9 +216,7 @@ http://localhost:3000
 ## Next
 
 1. improve real-world price/budget estimates from personal history and explicit user input;
-2. add provider pagination/refresh controls for denser city areas;
-3. add provider pagination/refresh controls for denser city areas;
-4. improve real-world price/budget estimates from personal history and explicit user input;
+2. add richer provider category presets for more types of outings;
 5. Supabase Auth only when account recovery/multi-device sync is worth the friction;
 6. Groups and group voting after the personal loop is mature.
 
