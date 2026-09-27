@@ -5,6 +5,8 @@ import type {
   ActivePlanSnapshot,
   BackupImportResult,
   Collection,
+  CompletedPersonalPlan,
+  CompletedPlanFeedbackInput,
   DailyDiscoveryKind,
   DailyDiscoveryRecord,
   MapBounds,
@@ -409,6 +411,17 @@ export const personalApi = {
     api<BackupImportResult & { mode: "merge" }>(
       "/api/personal/import",
       { method: "POST", body: backup }
+    ),
+
+  saveCompletedPlanFeedback: (
+    planId: string,
+    input: CompletedPlanFeedbackInput
+  ) =>
+    api<{ completedPlan: CompletedPersonalPlan }>(
+      "/api/personal/completed-plans/" +
+        encodeURIComponent(planId) +
+        "/feedback",
+      { method: "PATCH", body: input }
     ),
 
   activePlan: {
