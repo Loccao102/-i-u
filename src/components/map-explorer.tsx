@@ -511,6 +511,9 @@ export function MapExplorer() {
   ]);
 
   const isPersonalPlace = customIds.has(selected.id);
+  const heroUserPhoto = placeMedia?.userPhotos[0] ?? null;
+  const heroGooglePhoto = placeMedia?.google?.photos[0] ?? null;
+  const heroPhotoUrl = heroUserPhoto?.url ?? heroGooglePhoto?.url ?? null;
 
   useEffect(() => {
     let active = true;
@@ -1974,12 +1977,45 @@ export function MapExplorer() {
 
       <aside className="detail-pane" aria-label="Chi tiết địa điểm">
         <div
-          className="detail-hero"
+          className={
+            "detail-hero" +
+            (heroPhotoUrl ? " detail-hero--photo" : "")
+          }
           style={{ "--place-accent": selected.accent } as CSSProperties}
         >
-          <span className="detail-hero__icon" aria-hidden="true">
-            {placeIcon(selected)}
-          </span>
+          {heroPhotoUrl ? (
+            <img
+              className="detail-hero__image"
+              src={heroPhotoUrl}
+              alt={"Ảnh " + selected.name}
+            />
+          ) : (
+            <span className="detail-hero__icon" aria-hidden="true">
+              {placeIcon(selected)}
+            </span>
+          )}
+
+          {heroGooglePhoto && !heroUserPhoto ? (
+            <div className="google-photo-attribution">
+              <strong>Google Maps</strong>
+              {heroGooglePhoto.authorAttributions[0] ? (
+                heroGooglePhoto.authorAttributions[0].uri ? (
+                  <a
+                    href={heroGooglePhoto.authorAttributions[0].uri}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {heroGooglePhoto.authorAttributions[0].displayName}
+                  </a>
+                ) : (
+                  <span>
+                    {heroGooglePhoto.authorAttributions[0].displayName}
+                  </span>
+                )
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="detail-hero__match">
             <strong>{selected.match}%</strong>
             <span>match cá nhân</span>
@@ -2028,6 +2064,138 @@ export function MapExplorer() {
 
           {selected.address ? (
             <p className="place-address">{selected.address}</p>
+          ) : null}
+
+          {isPersonalPlace ? (
+            <section className="place-media-block">
+              <div className="place-media-block__head">
+                <div>
+                  <span className="eyebrow">Ảnh thật</span>
+                  <strong>
+                    {mediaLoading
+                      ? "Đang tìm ảnh…"
+                      : placeMedia?.userPhotos.length
+                        ? placeMedia.userPhotos.length + " ảnh của bạn"
+                        : placeMedia?.google?.photos.length
+                          ? "Có ảnh Google Maps"
+                          : "Chưa có ảnh"}
+                  </strong>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={photoUploading}
+                  onClick={() => placePhotoInputRef.current?.click()}
+                >
+                  {photoUploading ? "Đang tải…" : "+ Thêm ảnh"}
+                </button>
+                <input
+                  ref={placePhotoInputRef}
+                  className="visually-hidden"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/avif"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) void uploadSelectedPhoto(file);
+                  }}
+                />
+              </div>
+
+              {placeMedia &&
+              (placeMedia.userPhotos.length > 0 ||
+                (placeMedia.google?.photos.length ?? 0) > 0) ? (
+                <div className="place-photo-grid">
+                  {placeMedia.userPhotos.slice(0, 4).map((photo) => (
+                    <figure className="place-photo-card" key={photo.id}>
+                      <img src={photo.url} alt={"Ảnh " + selected.name} />
+                      <figcaption>
+                        <span>Ảnh của bạn</span>
+                        <button
+                          type="button"
+                          aria-label="Xóa ảnh"
+                          onClick={() => void deleteSelectedPhoto(photo.id)}
+                        >
+                          ×
+                        </button>
+                      </figcaption>
+                    </figure>
+                  ))}
+
+                  {placeMedia.google?.photos
+                    .slice(0, Math.max(0, 4 - placeMedia.userPhotos.length))
+                    .map((photo, index) => (
+                      <figure
+                        className="place-photo-card place-photo-card--google"
+                        key={"google-" + index}
+                      >
+                        <img
+                          src={photo.url}
+                          alt={"Ảnh Google Maps của " + selected.name}
+                        />
+                        <figcaption>
+                          <span>Google Maps</span>
+                          {photo.authorAttributions[0] ? (
+                            photo.authorAttributions[0].uri ? (
+                              <a
+                                href={photo.authorAttributions[0].uri}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                {photo.authorAttributions[0].displayName}
+                              </a>
+                            ) : (
+                              <small>
+                                {photo.authorAttributions[0].displayName}
+                              </small>
+                            )
+                          ) : null}
+                        </figcaption>
+                      </figure>
+                    ))}
+                </div>
+              ) : null}
+
+              {placeMedia?.google ? (
+                <div className="google-live-strip">
+                  <div>
+                    <strong>Google Maps</strong>
+                    <span>
+                      {placeMedia.google.rating !== null
+                        ? "★ " +
+                          placeMedia.google.rating.toFixed(1) +
+                          (placeMedia.google.userRatingCount !== null
+                            ? " · " +
+                              placeMedia.google.userRatingCount.toLocaleString(
+                                "vi-VN"
+                              ) +
+                              " đánh giá"
+                            : "")
+                        : "Thông tin live"}
+                    </span>
+                  </div>
+                  <div>
+                    {placeMedia.google.openNow !== null ? (
+                      <b
+                        className={
+                          placeMedia.google.openNow
+                            ? "is-open"
+                            : "is-closed"
+                        }
+                      >
+                        {placeMedia.google.openNow ? "Đang mở" : "Đang đóng"}
+                      </b>
+                    ) : null}
+                    <a
+                      href={placeMedia.google.mapsUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Xem trên Google Maps
+                    </a>
+                  </div>
+                </div>
+              ) : null}
+            </section>
           ) : null}
 
           <div className="tag-line tag-line--large">
