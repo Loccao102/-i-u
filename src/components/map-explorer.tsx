@@ -735,6 +735,24 @@ export function MapExplorer() {
       .slice(0, 3);
   }, [activePlan, activePlanQuality, dataRepairPrompts]);
 
+  const completedPlanQualityStats = useMemo(() => {
+    const scored = completedPlans
+      .map((item) => item.plan.quality?.score)
+      .filter((score): score is number => typeof score === "number");
+
+    if (scored.length === 0) {
+      return { sampleSize: 0, average: null, lowCount: 0 };
+    }
+
+    return {
+      sampleSize: scored.length,
+      average: Math.round(
+        scored.reduce((sum, score) => sum + score, 0) / scored.length
+      ),
+      lowCount: scored.filter((score) => score < 65).length
+    };
+  }, [completedPlans]);
+
   const recentDailyActivity = useMemo(
     () => recentDailyDiscoveries(dailyDiscoveries, clock, 7),
     [dailyDiscoveries, clock]
@@ -3226,7 +3244,17 @@ export function MapExplorer() {
                 <span className="eyebrow">Những buổi đã đi</span>
                 <strong>{completedPlans.length} plan được lưu</strong>
               </div>
-              <small>Gần nhất trước</small>
+              <small>
+                {completedPlanQualityStats.average !== null
+                  ? "Q TB " +
+                    completedPlanQualityStats.average +
+                    (completedPlanQualityStats.lowCount > 0
+                      ? " · " +
+                        completedPlanQualityStats.lowCount +
+                        " plan thấp"
+                      : "")
+                  : "Gần nhất trước"}
+              </small>
             </div>
 
             <div className="completed-plan-history__list">
@@ -3259,6 +3287,16 @@ export function MapExplorer() {
                       ) : null}
                       <span>· ~{moneyLabel(plan.plan.totalEstimatedCostForTwo)}</span>
                       <span>· {plan.plan.totalDurationMinutes} phút</span>
+                      {plan.plan.quality ? (
+                        <span
+                          className={
+                            "completed-plan-quality completed-plan-quality--" +
+                            plan.plan.quality.level
+                          }
+                        >
+                          · Q{plan.plan.quality.score}
+                        </span>
+                      ) : null}
                       {plan.outcomeRating ? (
                         <span>· ★ {plan.outcomeRating}/5</span>
                       ) : (
@@ -5015,12 +5053,17 @@ export function MapExplorer() {
                 </strong>
               </div>
               <small>
-                {dataRepairPrompts[0]?.recurring
+                {dataRepairPrompts[0]?.lowQualityAppearances
                   ? dataRepairPrompts[0].name +
-                    " đã lặp lại trong " +
-                    dataRepairPrompts[0].planAppearances +
-                    " plan."
-                  : "Planner sẽ ưu tiên nhắc các nơi xuất hiện nhiều trong lịch sử."}
+                    " đã xuất hiện trong " +
+                    dataRepairPrompts[0].lowQualityAppearances +
+                    " plan quality thấp."
+                  : dataRepairPrompts[0]?.recurring
+                    ? dataRepairPrompts[0].name +
+                      " đã lặp lại trong " +
+                      dataRepairPrompts[0].planAppearances +
+                      " plan."
+                    : "Planner sẽ ưu tiên nhắc các nơi xuất hiện nhiều trong lịch sử."}
               </small>
             </section>
           ) : null}
