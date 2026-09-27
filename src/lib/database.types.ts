@@ -399,6 +399,36 @@ export type Database = {
         }
         Relationships: []
       }
+      public_itinerary_shares: {
+        Row: {
+          created_at: string
+          owner_key: string
+          plan: Json
+          revoked_at: string | null
+          slug: string
+          source_kind: string
+          source_plan_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          owner_key: string
+          plan: Json
+          revoked_at?: string | null
+          slug: string
+          source_kind: string
+          source_plan_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          owner_key?: string
+          plan?: Json
+          revoked_at?: string | null
+          slug?: string
+          source_kind?: string
+          source_plan_id?: string | null
+        }
+        Relationships: []
+      }
       recommendation_feedback: {
         Row: {
           created_at: string
