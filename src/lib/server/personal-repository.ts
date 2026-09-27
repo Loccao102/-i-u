@@ -5,6 +5,8 @@ import { getSupabaseAdmin } from "./supabase";
 import type {
   BackupImportResult,
   Collection,
+  DailyDiscoveryKind,
+  DailyDiscoveryRecord,
   MapBounds,
   NearbyPlaceResult,
   PersonalRating,
@@ -224,6 +226,95 @@ async function listVisits(ownerKey: string): Promise<VisitRecord[]> {
   }));
 }
 
+async function listDailyDiscoveries(
+  ownerKey: string
+): Promise<DailyDiscoveryRecord[]> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("daily_discoveries")
+    .select("day,kind,place_keys,scenario,created_at,updated_at")
+    .eq("owner_key", ownerKey)
+    .order("day", { ascending: false })
+    .limit(60);
+
+  dbError(error, "List daily discoveries");
+
+  return (data ?? []).flatMap((row) => {
+    const kind: DailyDiscoveryKind | null =
+      row.kind === "place" || row.kind === "route" ? row.kind : null;
+    if (!kind) return [];
+
+    const scenario: Scenario | null =
+      row.scenario === "date" ||
+      row.scenario === "friends" ||
+      row.scenario === "food" ||
+      row.scenario === "coffee" ||
+      row.scenario === "fun" ||
+      row.scenario === "chill"
+        ? row.scenario
+        : null;
+
+    return [{
+      day: String(row.day),
+      kind,
+      placeKeys: Array.isArray(row.place_keys)
+        ? row.place_keys.filter(
+            (item): item is string =>
+              typeof item === "string" && item.length > 0
+          )
+        : [],
+      scenario,
+      createdAt: String(row.created_at),
+      updatedAt: String(row.updated_at)
+    }];
+  });
+}
+
+export async function upsertDailyDiscovery(
+  ownerKey: string,
+  input: {
+    day: string;
+    kind: DailyDiscoveryKind;
+    placeKeys: string[];
+    scenario: Scenario | null;
+  }
+): Promise<DailyDiscoveryRecord> {
+  const now = new Date().toISOString();
+  const { data, error } = await getSupabaseAdmin()
+    .from("daily_discoveries")
+    .upsert(
+      {
+        owner_key: ownerKey,
+        day: input.day,
+        kind: input.kind,
+        place_keys: input.placeKeys,
+        scenario: input.scenario,
+        updated_at: now
+      },
+      { onConflict: "owner_key,day,kind" }
+    )
+    .select("day,kind,place_keys,scenario,created_at,updated_at")
+    .single();
+
+  dbError(error, "Upsert daily discovery");
+
+  return {
+    day: String(data!.day),
+    kind: data!.kind === "route" ? "route" : "place",
+    placeKeys: data!.place_keys ?? [],
+    scenario:
+      data!.scenario === "date" ||
+      data!.scenario === "friends" ||
+      data!.scenario === "food" ||
+      data!.scenario === "coffee" ||
+      data!.scenario === "fun" ||
+      data!.scenario === "chill"
+        ? data!.scenario
+        : null,
+    createdAt: String(data!.created_at),
+    updatedAt: String(data!.updated_at)
+  };
+}
+
 async function listCollections(ownerKey: string): Promise<Collection[]> {
   const client = getSupabaseAdmin();
   const [collectionsResult, linksResult] = await Promise.all([
@@ -269,14 +360,16 @@ export async function getPersonalSnapshot(
     ratings,
     recommendationFeedbacks,
     visits,
-    collections
+    collections,
+    dailyDiscoveries
   ] = await Promise.all([
     listPlaces(ownerKey),
     listSaved(ownerKey),
     listRatings(ownerKey),
     listRecommendationFeedbacks(ownerKey),
     listVisits(ownerKey),
-    listCollections(ownerKey)
+    listCollections(ownerKey),
+    listDailyDiscoveries(ownerKey)
   ]);
 
   return {
@@ -286,7 +379,8 @@ export async function getPersonalSnapshot(
     ratings,
     recommendationFeedbacks,
     visits,
-    collections
+    collections,
+    dailyDiscoveries
   };
 }
 
@@ -781,6 +875,27 @@ export async function mergePersonalBackup(
     dbError(error, "Import collection places");
   }
 
+  const dailyDiscoveryRows = (snapshot.dailyDiscoveries ?? []).map(
+    (item) => ({
+      owner_key: ownerKey,
+      day: item.day,
+      kind: item.kind,
+      place_keys: item.placeKeys.map(mapPlaceId),
+      scenario: item.scenario,
+      created_at: item.createdAt,
+      updated_at: item.updatedAt
+    })
+  );
+
+  if (dailyDiscoveryRows.length > 0) {
+    const { error } = await client
+      .from("daily_discoveries")
+      .upsert(dailyDiscoveryRows, {
+        onConflict: "owner_key,day,kind"
+      });
+    dbError(error, "Import daily discoveries");
+  }
+
   return {
     places,
     saved: savedRows.length,
@@ -788,7 +903,8 @@ export async function mergePersonalBackup(
     recommendationFeedbacks: feedbackRows.length,
     visits: visitRows.length,
     collections: collectionRows.length,
-    collectionPlaces: collectionPlaceRows.length
+    collectionPlaces: collectionPlaceRows.length,
+    dailyDiscoveries: dailyDiscoveryRows.length
   };
 }
 

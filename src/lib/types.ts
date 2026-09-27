@@ -84,6 +84,17 @@ export type Collection = {
   updatedAt: string;
 };
 
+export type DailyDiscoveryKind = "place" | "route";
+
+export type DailyDiscoveryRecord = {
+  day: string;
+  kind: DailyDiscoveryKind;
+  placeKeys: string[];
+  scenario: Scenario | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type PersonalSnapshot = {
   version: 3;
   customPlaces: Place[];
@@ -92,6 +103,7 @@ export type PersonalSnapshot = {
   recommendationFeedbacks: Record<string, RecommendationFeedback>;
   visits: VisitRecord[];
   collections: Collection[];
+  dailyDiscoveries?: DailyDiscoveryRecord[];
 };
 
 export type PoiDiscoveryCategory =
@@ -184,6 +196,7 @@ export type BackupImportResult = {
   visits: number;
   collections: number;
   collectionPlaces: number;
+  dailyDiscoveries: number;
 };
 
 
