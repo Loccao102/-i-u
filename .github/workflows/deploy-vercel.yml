@@ -1,0 +1,93 @@
+name: Deploy Vercel (Manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Nhập DEPLOY để xác nhận deploy production'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vercel-production-manual
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Verify and deploy production
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.ref == 'refs/heads/main' && inputs.confirm == 'DEPLOY'
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Production build check
+        run: npm run build
+
+      - name: Validate deploy hook secret
+        env:
+          VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$VERCEL_DEPLOY_HOOK" ]; then
+            echo "::error::Missing GitHub Actions secret VERCEL_DEPLOY_HOOK"
+            exit 1
+          fi
+
+      - name: Trigger Vercel production deployment
+        env:
+          VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: |
+          RESPONSE="$(curl --fail-with-body --silent --show-error             --request POST             "$VERCEL_DEPLOY_HOOK")"
+
+          echo "$RESPONSE" > vercel-deploy-response.json
+
+          node <<'NODE'
+          const fs = require("fs");
+          const raw = fs.readFileSync("vercel-deploy-response.json", "utf8");
+          let data;
+
+          try {
+            data = JSON.parse(raw);
+          } catch {
+            console.error("Vercel Deploy Hook returned non-JSON.");
+            process.exit(1);
+          }
+
+          if (data.error) {
+            console.error("Vercel rejected the deployment:", data.error);
+            process.exit(1);
+          }
+
+          console.log("Vercel deployment triggered successfully.");
+          if (data.job?.id) console.log("Job:", data.job.id);
+          if (data.job?.state) console.log("State:", data.job.state);
+          NODE
+
+      - name: Summary
+        run: |
+          {
+            echo "## Vercel production deployment"
+            echo ""
+            echo "- Trigger: manual"
+            echo "- Branch: main"
+            echo "- Commit: `$GITHUB_SHA`"
+            echo "- CI verification: passed"
+            echo "- Vercel deploy hook: triggered"
+          } >> "$GITHUB_STEP_SUMMARY"
