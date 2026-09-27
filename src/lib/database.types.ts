@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      active_personal_plans: {
+        Row: {
+          completed_stop_ids: string[]
+          current_stop_index: number
+          id: string
+          owner_key: string
+          plan: Json
+          skipped_stop_ids: string[]
+          started_at: string
+          updated_at: string
+        }
+        Insert: {
+          completed_stop_ids?: string[]
+          current_stop_index?: number
+          id: string
+          owner_key: string
+          plan: Json
+          skipped_stop_ids?: string[]
+          started_at?: string
+          updated_at?: string
+        }
+        Update: {
+          completed_stop_ids?: string[]
+          current_stop_index?: number
+          id?: string
+          owner_key?: string
+          plan?: Json
+          skipped_stop_ids?: string[]
+          started_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       collection_places: {
         Row: {
           collection_id: string
