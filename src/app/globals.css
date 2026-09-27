@@ -3716,3 +3716,17 @@ textarea:focus-visible {
 .completed-plan-history__meta b {
   color: #4d7056;
 }
+
+
+.plan-feedback-card {
+  max-width: 520px;
+}
+
+.plan-feedback-stars {
+  justify-content: center;
+  padding: 4px 0 2px;
+}
+
+.plan-feedback-card .dialog-fieldset {
+  margin-top: 2px;
+}
