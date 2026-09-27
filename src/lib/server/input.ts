@@ -324,7 +324,9 @@ export function parsePersonalBackup(value: unknown): PersonalSnapshot {
 }
 
 
-function planStage(value: unknown) {
+function planStage(
+  value: unknown
+): ActivePlanSnapshot["stops"][number]["stage"] {
   if (value === "food" || value === "activity" || value === "coffee") {
     return value;
   }
