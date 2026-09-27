@@ -217,3 +217,46 @@ export type TasteProfile = {
   preferredNoise: Place["noise"] | null;
   preferredCrowd: Place["crowd"] | null;
 };
+
+
+export type ActivePlanStopSnapshot = {
+  placeId: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  stage: PlanStage;
+  stageLabel: string;
+  startTime: string;
+  endTime: string;
+  estimatedCostForTwo: number;
+  travelKmFromPrevious: number;
+  travelMinutesFromPrevious: number;
+  match: number;
+  reason: string;
+};
+
+export type ActivePlanSnapshot = {
+  summary: string;
+  totalEstimatedCostForTwo: number;
+  budgetRemainingForTwo: number;
+  routeKm: number;
+  totalDurationMinutes: number;
+  averageMatch: number;
+  stops: ActivePlanStopSnapshot[];
+};
+
+export type ActivePersonalPlan = {
+  id: string;
+  plan: ActivePlanSnapshot;
+  currentStopIndex: number;
+  completedStopIds: string[];
+  skippedStopIds: string[];
+  startedAt: string;
+  updatedAt: string;
+};
+
+export type ActivePlanAdvanceResult = {
+  activePlan: ActivePersonalPlan | null;
+  finished: boolean;
+  recordedVisit: boolean;
+};
