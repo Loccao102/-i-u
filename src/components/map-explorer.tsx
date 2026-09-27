@@ -1209,6 +1209,7 @@ export function MapExplorer() {
       estimatedTravelMinutes: runningNextStop.travelMinutesFromPrevious,
       estimatedCostForTwo: runningNextStop.estimatedCostForTwo,
       transitionLabel: "Theo plan · " + runningNextStop.stageLabel,
+      travelSource: undefined,
       reason: "Chặng tiếp theo đã chốt trong kế hoạch"
     };
 
