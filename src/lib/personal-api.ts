@@ -248,10 +248,13 @@ export const personalApi = {
         { method: "PUT", body: { plan } }
       ),
 
-    advance: (action: "complete" | "skip") =>
+    advance: (
+      action: "complete" | "skip",
+      expectedIndex: number
+    ) =>
       api<ActivePlanAdvanceResult>(
         "/api/personal/active-plan",
-        { method: "PATCH", body: { action } }
+        { method: "PATCH", body: { action, expectedIndex } }
       ),
 
     cancel: () =>
