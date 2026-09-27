@@ -1967,3 +1967,106 @@ textarea:focus-visible {
 .plan-warning + .plan-warning {
   margin-top: 6px;
 }
+
+
+.active-plan-strip {
+  border: 1px solid #dce9df;
+  border-radius: 16px;
+  padding: 8px;
+  background: #f5faf6;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.active-plan-strip__main {
+  min-width: 0;
+  border: 0;
+  border-radius: 12px;
+  padding: 8px 9px;
+  background: white;
+  text-align: left;
+  display: grid;
+  gap: 2px;
+  cursor: pointer;
+}
+
+.active-plan-strip__main span {
+  color: #5a785f;
+  font-size: 8px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.active-plan-strip__main strong,
+.active-plan-strip__main small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.active-plan-strip__main strong {
+  font-size: 12px;
+}
+
+.active-plan-strip__main small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.active-plan-strip__actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.active-plan-strip__actions button {
+  border: 0;
+  border-radius: 999px;
+  padding: 7px 9px;
+  background: white;
+  color: #5a5d56;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.active-plan-strip__actions .active-plan-strip__done {
+  background: #e4f3e8;
+  color: #356c46;
+}
+
+.active-plan-strip__actions .active-plan-strip__cancel {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: #fff0ee;
+  color: #a44e46;
+  font-size: 15px;
+}
+
+.plan-actions--three {
+  grid-template-columns: .8fr 1fr 1.2fr;
+}
+
+@media (max-width: 760px) {
+  .active-plan-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .active-plan-strip__actions {
+    justify-content: flex-end;
+    overflow-x: auto;
+  }
+
+  .active-plan-strip__actions button:first-child {
+    display: none;
+  }
+
+  .plan-actions--three {
+    grid-template-columns: 1fr;
+  }
+}
