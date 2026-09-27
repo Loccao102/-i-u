@@ -256,7 +256,9 @@ export async function upsertPlace(ownerKey: string, place: Place) {
         accent: place.accent,
         source: place.source === "provider" ? "PROVIDER" : "PERSONAL",
         provider_id: place.providerId ?? null,
-        google_place_id: place.googlePlaceId ?? null,
+        ...(place.googlePlaceId
+          ? { google_place_id: place.googlePlaceId }
+          : {}),
         address: place.address ?? null,
         updated_at: now
       },
