@@ -17,6 +17,7 @@ import type {
   PersonalBackup,
   PersonalRating,
   PlannerDefaults,
+  PlannerMetricsSummary,
   RecommendationFeedback,
   RecommendationFeedbackReason,
   ProviderPlaceDetails,
@@ -142,6 +143,18 @@ export const personalApi = {
       api<{ transferred: true }>(
         "/api/personal/profile-transfer",
         { method: "PUT", body: { code } }
+      )
+  },
+
+  plannerMetrics: {
+    get: () =>
+      api<{ metrics: PlannerMetricsSummary }>(
+        "/api/personal/planner-metrics"
+      ),
+    recordGenerated: () =>
+      api<{ metrics: PlannerMetricsSummary }>(
+        "/api/personal/planner-metrics",
+        { method: "POST", body: { metric: "generated" } }
       )
   },
 
@@ -484,10 +497,10 @@ export const personalApi = {
         "/api/personal/active-plan"
       ),
 
-    start: (plan: ActivePlanSnapshot) =>
+    start: (plan: ActivePlanSnapshot, replayed = false) =>
       api<{ activePlan: ActivePersonalPlan }>(
         "/api/personal/active-plan",
-        { method: "PUT", body: { plan } }
+        { method: "PUT", body: { plan, replayed } }
       ),
 
     advance: (
