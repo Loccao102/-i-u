@@ -1956,3 +1956,14 @@ textarea:focus-visible {
     display: none;
   }
 }
+
+
+.plan-result__footer small {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.plan-warning + .plan-warning {
+  margin-top: 6px;
+}
