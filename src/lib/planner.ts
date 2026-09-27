@@ -422,7 +422,6 @@ function candidateScore(input: {
   stage: PlanStage;
   scenario: Scenario;
   signals: PlannerSignals;
-  origin: UserLocation;
   previous: Place | null;
   maxDistanceKm: number;
   stageBudget: number;
@@ -435,7 +434,6 @@ function candidateScore(input: {
     stage,
     scenario,
     signals,
-    origin,
     previous,
     maxDistanceKm,
     stageBudget,
@@ -594,7 +592,6 @@ function buildWithGuardrails(input: {
           stage,
           scenario: preferences.scenario,
           signals,
-          origin,
           previous,
           maxDistanceKm: preferences.maxDistanceKm,
           stageBudget,
