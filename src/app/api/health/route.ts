@@ -88,7 +88,7 @@ export async function GET() {
         .limit(1),
       client
         .from("profile_transfer_codes")
-        .select("code_hash,expires_at,used_at")
+        .select("code_hash,expires_at,token_ciphertext")
         .limit(1),
       client
         .from("public_itinerary_shares")
