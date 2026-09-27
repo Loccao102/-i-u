@@ -304,6 +304,36 @@ export type Database = {
         }
         Relationships: []
       }
+      personal_planner_metrics: {
+        Row: {
+          completed_count: number
+          day: string
+          generated_count: number
+          owner_key: string
+          replayed_count: number
+          started_count: number
+          updated_at: string
+        }
+        Insert: {
+          completed_count?: number
+          day: string
+          generated_count?: number
+          owner_key: string
+          replayed_count?: number
+          started_count?: number
+          updated_at?: string
+        }
+        Update: {
+          completed_count?: number
+          day?: string
+          generated_count?: number
+          owner_key?: string
+          replayed_count?: number
+          started_count?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       personal_ratings: {
         Row: {
           contexts: string[]
@@ -525,6 +555,10 @@ export type Database = {
       delete_personal_place: {
         Args: { p_owner_key: string; p_place_id: string }
         Returns: boolean
+      }
+      increment_personal_planner_metric: {
+        Args: { p_metric: string; p_owner_key: string }
+        Returns: undefined
       }
       nearby_personal_places: {
         Args: {
