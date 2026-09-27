@@ -30,6 +30,7 @@ supabase/migrations/20260927083839_profile_transfer_codes.sql
 supabase/migrations/20260927094900_public_itinerary_shares.sql
 supabase/migrations/20260927095409_encrypt_profile_transfer_tokens.sql
 supabase/migrations/20260927152302_planner_telemetry.sql
+supabase/migrations/20260927172009_planner_telemetry_semantics.sql
 supabase/migrations/20260927153331_profile_data_reset.sql
 ```
 
@@ -228,3 +229,27 @@ browser to a new owner identity while old profile rows are still present.
 
 Reset requires the explicit confirmation string `XOA` and an additional UI
 confirmation. JSON backup does not contain uploaded photo binaries.
+
+
+### Planner telemetry semantics
+
+Planner telemetry is deliberately coarse and profile-scoped. It stores daily
+counters only; it does not store GPS traces or route coordinates.
+
+The conversion denominator uses `initial_generated_count`, not total
+successful generations. Rerolls are counted separately so repeatedly pressing
+“Đổi phương án” does not artificially lower start conversion.
+
+Current counters:
+
+- successful generation attempts;
+- initial generations;
+- rerolls;
+- failed generations;
+- started plans;
+- completed plans;
+- replay starts;
+- canceled plans.
+
+Planner Health is derived in the app only after minimum sample thresholds.
+These counters do not automatically modify ranking, budget or radius.
