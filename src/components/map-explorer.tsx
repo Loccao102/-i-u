@@ -296,6 +296,20 @@ function weatherEmoji(weather: WeatherContext | null) {
   return labels[weather.condition];
 }
 
+function nextPlanStartAt(value: string, now: Date) {
+  const match = /^(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return new Date(now);
+
+  const target = new Date(now);
+  target.setHours(Number(match[1]), Number(match[2]), 0, 0);
+
+  if (target.getTime() < now.getTime()) {
+    target.setDate(target.getDate() + 1);
+  }
+
+  return target;
+}
+
 function daypartLabel(hour: number) {
   if (hour >= 5 && hour < 11) return "Sáng";
   if (hour >= 11 && hour < 14) return "Trưa";
@@ -362,6 +376,8 @@ export function MapExplorer() {
   const [planDuration, setPlanDuration] = useState<2 | 3 | 4>(4);
   const [planStartTime, setPlanStartTime] = useState("19:00");
   const [planVariant, setPlanVariant] = useState(0);
+  const [planWeather, setPlanWeather] = useState<WeatherContext | null>(null);
+  const [planWeatherLoading, setPlanWeatherLoading] = useState(false);
   const [activePlan, setActivePlan] = useState<EveningPlan | null>(null);
   const [runningPlan, setRunningPlan] =
     useState<ActivePersonalPlan | null>(null);
@@ -1270,15 +1286,54 @@ export function MapExplorer() {
       : { latitude: defaultCenter[1], longitude: defaultCenter[0] };
   }
 
-  function generatePlan(nextVariant = planVariant) {
+  async function generatePlan(nextVariant = planVariant) {
+    const origin = plannerOrigin();
+    const targetAt = nextPlanStartAt(planStartTime, clock);
+    setPlanWeatherLoading(true);
+
+    let forecast: WeatherContext | null = null;
+    try {
+      const result = await personalApi.weather(
+        origin,
+        targetAt.toISOString()
+      );
+      forecast = result.weather;
+      setPlanWeather(result.weather);
+    } catch {
+      setPlanWeather(null);
+    }
+
+    const planContext: RecommendationContext = {
+      localHour: targetAt.getHours(),
+      isWeekend:
+        targetAt.getDay() === 0 || targetAt.getDay() === 6,
+      weather: forecast ?? weather
+    };
+
+    const forecastRanked = filterPlaces(
+      allPlaces,
+      "",
+      "all",
+      origin,
+      {
+        savedIds: saved,
+        ratings,
+        feedbacks: recommendationFeedbacks,
+        visits
+      },
+      undefined,
+      planContext,
+      tasteProfile
+    );
+
     const source = viewportBounds
-      ? rankedAll.filter((place) => {
+      ? forecastRanked.filter((place) => {
           if (customIds.has(place.id) && viewportPersonalIds) {
             return viewportPersonalIds.has(place.id);
           }
           return placeInsideBounds(place, viewportBounds);
         })
-      : rankedAll;
+      : forecastRanked;
 
     const result = buildEveningPlan({
       places: source,
@@ -1295,10 +1350,11 @@ export function MapExplorer() {
         feedbacks: recommendationFeedbacks,
         visits
       },
-      origin: plannerOrigin(),
+      origin,
       variant: nextVariant
     });
 
+    setPlanWeatherLoading(false);
     setPlanVariant(nextVariant);
     setActivePlan(result);
 
@@ -1312,6 +1368,8 @@ export function MapExplorer() {
   function openPlanBuilder() {
     setPlanScenario(scenario === "all" ? "date" : scenario);
     setPlanVariant(0);
+    setPlanWeather(null);
+    setPlanWeatherLoading(false);
     setActivePlan(null);
     planDialogRef.current?.showModal();
   }
@@ -3634,7 +3692,7 @@ export function MapExplorer() {
           </div>
 
           <p className="dialog-copy">
-            Ghép các chặng gần nhau từ chính ranking cá nhân, budget và mood hiện tại.
+            Ghép các chặng gần nhau theo gu, budget, mood và dự báo thời tiết đúng giờ bạn định đi.
           </p>
 
           <fieldset className="dialog-fieldset">
@@ -3652,6 +3710,7 @@ export function MapExplorer() {
                     onClick={() => {
                       setPlanScenario(item);
                       setActivePlan(null);
+                  setPlanWeather(null);
                     }}
                   >
                     <span>{scenarioEmoji[item]}</span>
@@ -3671,6 +3730,7 @@ export function MapExplorer() {
                 onChange={(event) => {
                   setPlanStartTime(event.target.value);
                   setActivePlan(null);
+                  setPlanWeather(null);
                 }}
               />
             </label>
@@ -3682,6 +3742,7 @@ export function MapExplorer() {
                 onChange={(event) => {
                   setPlanBudget(Number(event.target.value));
                   setActivePlan(null);
+                  setPlanWeather(null);
                 }}
               >
                 <option value={400000}>400k</option>
@@ -3698,6 +3759,7 @@ export function MapExplorer() {
                 onChange={(event) => {
                   setPlanDuration(Number(event.target.value) as 2 | 3 | 4);
                   setActivePlan(null);
+                  setPlanWeather(null);
                 }}
               >
                 <option value={2}>2 giờ</option>
@@ -3713,6 +3775,7 @@ export function MapExplorer() {
                 onChange={(event) => {
                   setPlanDistance(Number(event.target.value));
                   setActivePlan(null);
+                  setPlanWeather(null);
                 }}
               >
                 <option value={3}>3 km</option>
@@ -3726,10 +3789,37 @@ export function MapExplorer() {
           <button
             className="primary-button primary-button--wide"
             type="button"
-            onClick={() => generatePlan(0)}
+            disabled={planWeatherLoading}
+            onClick={() => void generatePlan(0)}
           >
-            Tạo kế hoạch
+            {planWeatherLoading ? "Đang xem dự báo…" : "Tạo kế hoạch"}
           </button>
+
+          {planWeather ? (
+            <div className="plan-weather-card">
+              <span className="plan-weather-card__icon">
+                {weatherEmoji(planWeather)}
+              </span>
+              <div>
+                <span className="eyebrow">
+                  Dự báo lúc {planStartTime}
+                </span>
+                <strong>
+                  {weatherLabel(planWeather)} ·{" "}
+                  {Math.round(planWeather.temperatureC)}°C
+                </strong>
+                <small>
+                  {planWeather.precipitationProbability !== null
+                    ? planWeather.precipitationProbability +
+                      "% khả năng mưa"
+                    : planWeather.precipitationMm > 0
+                      ? planWeather.precipitationMm.toFixed(1) + " mm mưa"
+                      : "Không có xác suất mưa"}
+                  {" · "}Open-Meteo
+                </small>
+              </div>
+            </div>
+          ) : null}
 
           {activePlan ? (
             <div className="plan-result">
@@ -3843,7 +3933,8 @@ export function MapExplorer() {
                 <button
                   type="button"
                   className="secondary-button"
-                  onClick={() => generatePlan(planVariant + 1)}
+                  disabled={planWeatherLoading}
+                  onClick={() => void generatePlan(planVariant + 1)}
                 >
                   Đổi phương án
                 </button>
