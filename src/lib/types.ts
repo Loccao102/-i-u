@@ -323,6 +323,17 @@ export type EveningPlan = {
   summary: string;
 };
 
+export type PlanQualityReport = {
+  score: number;
+  level: "high" | "medium" | "low";
+  label: string;
+  routingCoverage: number;
+  openingCoverage: number;
+  estimatedCostStops: number;
+  issues: string[];
+  strengths: string[];
+};
+
 
 export type NextPlaceSuggestion = {
   place: Place;

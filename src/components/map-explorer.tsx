@@ -38,6 +38,7 @@ import {
 } from "@/lib/planner";
 import { placeFromPoiResult, scenarioLabels } from "@/lib/places";
 import { derivePlanOutcomeProfile } from "@/lib/plan-outcomes";
+import { analyzePlanQuality } from "@/lib/plan-quality";
 import { openingStatus } from "@/lib/opening-hours";
 import {
   deriveTasteProfile,
@@ -695,6 +696,11 @@ export function MapExplorer() {
   const planOutcomeProfile = useMemo(
     () => derivePlanOutcomeProfile(completedPlans, clock.getTime()),
     [completedPlans, clock]
+  );
+
+  const activePlanQuality = useMemo(
+    () => (activePlan ? analyzePlanQuality(activePlan) : null),
+    [activePlan]
   );
 
   const recentDailyActivity = useMemo(
@@ -4935,6 +4941,36 @@ export function MapExplorer() {
                 </div>
                 <b>{activePlan.averageMatch}%</b>
               </div>
+
+              {activePlanQuality ? (
+                <section
+                  className={
+                    "plan-quality-card plan-quality-card--" +
+                    activePlanQuality.level
+                  }
+                >
+                  <div className="plan-quality-card__score">
+                    <span>Plan Quality</span>
+                    <strong>{activePlanQuality.score}</strong>
+                    <small>/100</small>
+                  </div>
+                  <div className="plan-quality-card__body">
+                    <strong>{activePlanQuality.label}</strong>
+                    <span>
+                      Road {Math.round(activePlanQuality.routingCoverage * 100)}%
+                      {" · "}Giờ mở cửa{" "}
+                      {Math.round(activePlanQuality.openingCoverage * 100)}%
+                    </span>
+                    {activePlanQuality.issues[0] ? (
+                      <small>{activePlanQuality.issues[0]}</small>
+                    ) : (
+                      <small>
+                        Các dữ liệu quan trọng của phương án đều đã được xác minh ở mức tốt.
+                      </small>
+                    )}
+                  </div>
+                </section>
+              ) : null}
 
               {!activePlan.complete ? (
                 <div className="plan-warning">
