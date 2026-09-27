@@ -6,6 +6,7 @@ import type {
   NextPlaceSuggestion,
   PersonalRating,
   Place,
+  RecommendationFeedback,
   PlanStage,
   Scenario,
   UserLocation,
@@ -16,6 +17,7 @@ import { haversineKm } from "./search";
 type PlannerSignals = {
   savedIds: ReadonlySet<string>;
   ratings: Readonly<Record<string, PersonalRating>>;
+  feedbacks?: Readonly<Record<string, RecommendationFeedback>>;
   visits: ReadonlyArray<VisitRecord>;
 };
 
@@ -232,6 +234,20 @@ function candidateScore(input: {
   const rating = signals.ratings[place.id];
   if (rating?.revisit === "no") return null;
 
+  const feedback = signals.feedbacks?.[place.id];
+  if (feedback?.reason === "not_taste") return null;
+
+  if (feedback?.reason === "not_now") {
+    const time = new Date(feedback.updatedAt).getTime();
+    const stillFresh =
+      Number.isFinite(time) &&
+      Date.now() - time <= 24 * 60 * 60 * 1000;
+    const sameContext =
+      !feedback.scenario || feedback.scenario === scenario;
+
+    if (stillFresh && sameContext) return null;
+  }
+
   const originDistance = haversineKm(origin, {
     latitude: place.latitude,
     longitude: place.longitude
@@ -262,6 +278,12 @@ function candidateScore(input: {
   const routePenalty = legDistance * (previous ? 6.5 : 3.2);
   const novelty = visitCount(signals.visits, place.id) === 0 ? 5 : 0;
   const variantScore = variantBias(place.id, input.variant) * 14;
+  const feedbackPenalty =
+    feedback?.reason === "too_expensive"
+      ? 10
+      : feedback?.reason === "too_far" && originDistance > 2
+        ? 12
+        : 0;
 
   return (
     place.match +
@@ -269,7 +291,8 @@ function candidateScore(input: {
     (place.scenarios.includes(scenario) ? 10 : 0) +
     novelty +
     variantScore -
-    routePenalty
+    routePenalty -
+    feedbackPenalty
   );
 }
 
@@ -565,7 +588,23 @@ export function suggestWhatNext(input: {
 
   const scored = places
     .filter((place) => place.id !== current.id)
-    .filter((place) => signals.ratings[place.id]?.revisit !== "no")
+    .filter((place) => {
+      if (signals.ratings[place.id]?.revisit === "no") return false;
+      const feedback = signals.feedbacks?.[place.id];
+      if (feedback?.reason === "not_taste") return false;
+
+      if (feedback?.reason === "not_now") {
+        const time = new Date(feedback.updatedAt).getTime();
+        if (
+          Number.isFinite(time) &&
+          Date.now() - time <= 24 * 60 * 60 * 1000
+        ) {
+          return false;
+        }
+      }
+
+      return true;
+    })
     .map((place) => {
       const distanceKm = haversineKm(currentPoint, {
         latitude: place.latitude,
