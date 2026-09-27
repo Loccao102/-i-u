@@ -29,7 +29,7 @@ import {
   suggestWhatNext,
   toActivePlanSnapshot
 } from "@/lib/planner";
-import { places as seedPlaces, scenarioLabels } from "@/lib/places";
+import { placeFromPoiResult, scenarioLabels } from "@/lib/places";
 import {
   deriveTasteProfile,
   tasteProfileSummary
@@ -64,6 +64,29 @@ import {
 } from "@/lib/validation";
 
 const defaultCenter: [number, number] = [105.8342, 21.0278];
+
+const emptyPlace: Place = {
+  id: "",
+  name: "",
+  kind: "Địa điểm",
+  description: "",
+  latitude: defaultCenter[1],
+  longitude: defaultCenter[0],
+  distanceKm: 0,
+  priceLabel: "$",
+  averageForTwo: "Chưa có dữ liệu",
+  publicRating: 0,
+  match: 0,
+  communityNote: "",
+  openUntil: "Chưa rõ",
+  bestTime: "Chưa có dữ liệu",
+  noise: "Vừa",
+  crowd: "Vừa",
+  tags: [],
+  scenarios: [],
+  note: "",
+  accent: "#d9ddd7"
+};
 
 const scenarios: Array<Scenario | "all"> = [
   "all",
@@ -103,8 +126,17 @@ function moneyLabel(value: number) {
   return Math.round(value / 1000) + "k";
 }
 
-function priceText(price: Place["priceLabel"]) {
-  return price === "$" ? "Tiết kiệm" : price === "$$" ? "Vừa phải" : "Cao";
+function priceText(place: Pick<Place, "priceLabel" | "averageForTwo">) {
+  if (place.averageForTwo === "Chưa có dữ liệu") return "Chưa rõ";
+  if (place.priceLabel.length === 1) return "Tiết kiệm";
+  if (place.priceLabel.length === 2) return "Vừa phải";
+  return "Cao";
+}
+
+function priceBadge(place: Pick<Place, "priceLabel" | "averageForTwo">) {
+  return place.averageForTwo === "Chưa có dữ liệu"
+    ? "Giá chưa rõ"
+    : place.priceLabel;
 }
 
 function readableScenario(value: Scenario | "all") {
@@ -192,13 +224,16 @@ export function MapExplorer() {
   const [view, setView] = useState<PersonalView>("discover");
   const [query, setQuery] = useState("");
   const [scenario, setScenario] = useState<Scenario | "all">("all");
-  const [selectedId, setSelectedId] = useState(seedPlaces[0]!.id);
+  const [selectedId, setSelectedId] = useState("");
   const [selectedCollectionId, setSelectedCollectionId] = useState<
     string | null
   >(null);
 
   const [providerResults, setProviderResults] = useState<PoiSearchResult[]>([]);
+  const [discoveredPoiResults, setDiscoveredPoiResults] =
+    useState<PoiSearchResult[]>([]);
   const [providerLoading, setProviderLoading] = useState(false);
+  const [discoveryLoading, setDiscoveryLoading] = useState(false);
   const [placeMedia, setPlaceMedia] = useState<PlaceMedia | null>(null);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
@@ -302,9 +337,27 @@ export function MapExplorer() {
     }
   }, []);
 
-  const allPlaces = useMemo(
-    () => [...customPlaces, ...seedPlaces],
+  const importedProviderIds = useMemo(
+    () =>
+      new Set(
+        customPlaces
+          .map((place) => place.providerId)
+          .filter((value): value is string => Boolean(value))
+      ),
     [customPlaces]
+  );
+
+  const discoveredPlaces = useMemo(
+    () =>
+      discoveredPoiResults
+        .filter((item) => !importedProviderIds.has(item.providerId))
+        .map(placeFromPoiResult),
+    [discoveredPoiResults, importedProviderIds]
+  );
+
+  const allPlaces = useMemo(
+    () => [...customPlaces, ...discoveredPlaces],
+    [customPlaces, discoveredPlaces]
   );
 
   const tasteProfile = useMemo(
@@ -314,16 +367,6 @@ export function MapExplorer() {
 
   const customIds = useMemo(
     () => new Set(customPlaces.map((place) => place.id)),
-    [customPlaces]
-  );
-
-  const importedProviderIds = useMemo(
-    () =>
-      new Set(
-        customPlaces
-          .map((place) => place.providerId)
-          .filter((value): value is string => Boolean(value))
-      ),
     [customPlaces]
   );
 
@@ -455,9 +498,12 @@ export function MapExplorer() {
     rankedAll.find((place) => place.id === selectedId) ??
     visiblePlaces[0] ??
     rankedAll[0] ??
-    seedPlaces[0]!;
+    emptyPlace;
 
-  const selectedPersonalRating = ratings[selected.id] ?? null;
+  const hasSelectedPlace = Boolean(selected.id);
+  const selectedPersonalRating = hasSelectedPlace
+    ? ratings[selected.id] ?? null
+    : null;
   const selectedVisit = recentVisitByPlace.get(selected.id) ?? null;
   const selectedVisitTime = selectedVisit
     ? new Date(selectedVisit.visitedAt).getTime()
@@ -510,7 +556,8 @@ export function MapExplorer() {
     runningNextStop
   ]);
 
-  const isPersonalPlace = customIds.has(selected.id);
+  const isPersonalPlace =
+    hasSelectedPlace && customIds.has(selected.id);
   const heroUserPhoto = placeMedia?.userPhotos[0] ?? null;
   const heroGooglePhoto = placeMedia?.google?.photos[0] ?? null;
   const heroPhotoUrl = heroUserPhoto?.url ?? heroGooglePhoto?.url ?? null;
@@ -593,6 +640,17 @@ export function MapExplorer() {
       latitude: center.lat,
       longitude: center.lng
     });
+
+    const raw = mapRef.current.getBounds();
+    void refreshDiscovery(
+      {
+        west: raw.getWest(),
+        south: raw.getSouth(),
+        east: raw.getEast(),
+        north: raw.getNorth()
+      },
+      false
+    );
   }, [mapReady, refreshWeather]);
 
   useEffect(() => {
@@ -639,14 +697,14 @@ export function MapExplorer() {
   }, [mapReady, visiblePlaces, selectedId, userLocation]);
 
   useEffect(() => {
-    if (!mapReady || !mapRef.current || !selected) return;
+    if (!mapReady || !mapRef.current || !hasSelectedPlace) return;
     mapRef.current.flyTo({
       center: [selected.longitude, selected.latitude],
       zoom: 13,
       duration: 650,
       essential: true
     });
-  }, [mapReady, selected]);
+  }, [mapReady, selected, hasSelectedPlace]);
 
   useEffect(() => {
     if (
@@ -677,6 +735,19 @@ export function MapExplorer() {
           zoom: 13,
           duration: 700
         });
+        mapRef.current?.once("moveend", () => {
+          const raw = mapRef.current?.getBounds();
+          if (!raw) return;
+          void refreshDiscovery(
+            {
+              west: raw.getWest(),
+              south: raw.getSouth(),
+              east: raw.getEast(),
+              north: raw.getNorth()
+            },
+            false
+          );
+        });
         setNotice(
           "GPS chỉ dùng trong phiên hiện tại và không được ghi vào Supabase."
         );
@@ -706,6 +777,34 @@ export function MapExplorer() {
         maximumAge: 60000
       }
     );
+  }
+
+  async function refreshDiscovery(
+    bounds: MapBounds,
+    announce = false
+  ) {
+    setDiscoveryLoading(true);
+    try {
+      const result = await personalApi.discoverPoi(bounds);
+      setDiscoveredPoiResults(result.results);
+      if (announce) {
+        setNotice(
+          result.results.length > 0
+            ? "Đã tìm " + result.results.length + " địa điểm thật trong vùng."
+            : "Chưa tìm thấy POI phù hợp trong vùng này."
+        );
+      }
+    } catch (error) {
+      if (announce) {
+        setNotice(
+          error instanceof Error
+            ? error.message
+            : "Không thể tải địa điểm thật."
+        );
+      }
+    } finally {
+      setDiscoveryLoading(false);
+    }
   }
 
   function switchView(next: PersonalView) {
@@ -766,8 +865,9 @@ export function MapExplorer() {
     setViewportPersonalIds(null);
 
     try {
-      const [viewportResult] = await Promise.all([
+      const [viewportResult, discoveryResult] = await Promise.all([
         personalApi.viewport(bounds),
+        personalApi.discoverPoi(bounds),
         refreshWeather({
           latitude: center.lat,
           longitude: center.lng
@@ -777,6 +877,7 @@ export function MapExplorer() {
       setViewportPersonalIds(
         new Set(viewportResult.results.map((item) => item.placeId))
       );
+      setDiscoveredPoiResults(discoveryResult.results);
 
       const cleaned = cleanPlainText(query, 120);
       if (cleaned.length >= 2) {
@@ -785,7 +886,11 @@ export function MapExplorer() {
         setProviderResults([]);
       }
 
-      setNotice("Đã lọc theo vùng bản đồ đang nhìn.");
+      setNotice(
+        "Đã tìm " +
+          discoveryResult.results.length +
+          " địa điểm thật trong vùng bản đồ."
+      );
     } catch (error) {
       setNotice(
         error instanceof Error
@@ -977,8 +1082,21 @@ export function MapExplorer() {
     }
 
     try {
+      const persistedStops = [];
+      for (const stop of activePlan.stops) {
+        const place = await persistProviderPlace(stop.place);
+        persistedStops.push({ ...stop, place });
+      }
+
+      const persistedPlan: EveningPlan = {
+        ...activePlan,
+        stops: persistedStops
+      };
+
+      await loadSnapshot();
+
       const result = await personalApi.activePlan.start(
-        toActivePlanSnapshot(activePlan)
+        toActivePlanSnapshot(persistedPlan)
       );
       setRunningPlan(result.activePlan);
       planDialogRef.current?.close();
@@ -1073,6 +1191,20 @@ export function MapExplorer() {
     }
   }
 
+  async function persistProviderPlace(place: Place) {
+    if (customIds.has(place.id)) return place;
+
+    if (place.source !== "provider" || !place.providerId) {
+      throw new Error("Địa điểm này chưa thể lưu tự động.");
+    }
+
+    const imported = await personalApi.importProviderPlace(place);
+    if (selected.id === place.id) {
+      setSelectedId(imported.place.id);
+    }
+    return imported.place;
+  }
+
   async function importPoi(result: PoiSearchResult) {
     try {
       const imported = await personalApi.importPoi(result);
@@ -1146,24 +1278,49 @@ export function MapExplorer() {
   }
 
   async function toggleSaved(placeId: string) {
-    const next = !saved.has(placeId);
+    const source =
+      allPlaces.find((place) => place.id === placeId) ?? selected;
+    const wasSaved = saved.has(placeId);
+
     try {
-      await personalApi.setSaved(placeId, next);
+      const target = wasSaved
+        ? source
+        : await persistProviderPlace(source);
+      await personalApi.setSaved(target.id, !wasSaved);
       await loadSnapshot();
+      setSelectedId(target.id);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Không thể lưu.");
     }
   }
 
-  function openRating() {
-    const current = ratings[selected.id];
-    setRatingStars(current?.stars ?? 5);
-    setRatingRevisit(current?.revisit ?? "yes");
-    setRatingContexts(
-      current?.contexts.length ? current.contexts : selected.scenarios.slice(0, 2)
-    );
-    setRatingNote(current?.note ?? "");
-    ratingDialogRef.current?.showModal();
+  async function openRating() {
+    if (!hasSelectedPlace) return;
+
+    try {
+      const target = await persistProviderPlace(selected);
+      if (target.id !== selected.id) {
+        await loadSnapshot();
+        setSelectedId(target.id);
+      }
+
+      const current = ratings[target.id];
+      setRatingStars(current?.stars ?? 5);
+      setRatingRevisit(current?.revisit ?? "yes");
+      setRatingContexts(
+        current?.contexts.length
+          ? current.contexts
+          : target.scenarios.slice(0, 2)
+      );
+      setRatingNote(current?.note ?? "");
+      ratingDialogRef.current?.showModal();
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "Không thể chuẩn bị đánh giá."
+      );
+    }
   }
 
   async function submitRating(event: FormEvent<HTMLFormElement>) {
@@ -1187,11 +1344,15 @@ export function MapExplorer() {
   }
 
   async function checkIn() {
-    try {
-      await personalApi.checkIn(selected.id);
-      await loadSnapshot();
+    if (!hasSelectedPlace) return;
 
-      if (runningCurrentStop?.placeId === selected.id) {
+    try {
+      const target = await persistProviderPlace(selected);
+      await personalApi.checkIn(target.id);
+      await loadSnapshot();
+      setSelectedId(target.id);
+
+      if (runningCurrentStop?.placeId === target.id) {
         setNotice(
           "Đã check-in chặng hiện tại · khi rời đi bấm Xong chặng."
         );
@@ -1199,7 +1360,7 @@ export function MapExplorer() {
       }
 
       const next = suggestWhatNext({
-        current: selected,
+        current: target,
         places: rankedAll,
         signals: { savedIds: saved, ratings, visits },
         maxDistanceKm: 4,
@@ -1361,7 +1522,7 @@ export function MapExplorer() {
 
     try {
       await personalApi.deletePlace(selected.id);
-      setSelectedId(seedPlaces[0]!.id);
+      setSelectedId("");
       await loadSnapshot();
       setNotice("Đã xóa địa điểm cá nhân.");
     } catch (error) {
@@ -1431,14 +1592,21 @@ export function MapExplorer() {
     collection: Collection,
     placeId = selected.id
   ) {
-    const included = !collection.placeIds.includes(placeId);
     try {
+      const source =
+        allPlaces.find((place) => place.id === placeId) ?? selected;
+      const target = customIds.has(placeId)
+        ? source
+        : await persistProviderPlace(source);
+      const included = !collection.placeIds.includes(target.id);
+
       await personalApi.setCollectionPlace(
         collection.id,
-        placeId,
+        target.id,
         included
       );
       await loadSnapshot();
+      setSelectedId(target.id);
     } catch (error) {
       setNotice(
         error instanceof Error
@@ -1834,12 +2002,16 @@ export function MapExplorer() {
               <strong>
                 {view === "collections" && collections.length === 0
                   ? "Chưa có bộ sưu tập."
-                  : "Chưa có địa điểm trong chế độ này."}
+                  : discoveryLoading && view === "discover"
+                    ? "Đang tải địa điểm thật…"
+                    : "Chưa có địa điểm trong chế độ này."}
               </strong>
               <span>
                 {view === "collections"
                   ? "Tạo bộ sưu tập rồi thêm địa điểm từ phần chi tiết."
-                  : "Thử đổi bộ lọc hoặc tìm POI thật ở ô phía trên."}
+                  : discoveryLoading
+                    ? "Đang lấy POI OpenStreetMap trong viewport hiện tại."
+                    : "Pan/zoom bản đồ rồi bấm “Tìm khu vực này”, hoặc tìm theo tên ở ô phía trên."}
               </span>
             </div>
           ) : (
@@ -1880,7 +2052,7 @@ export function MapExplorer() {
                       <span>·</span>
                       <span>{distanceLabel(place.distanceKm)}</span>
                       <span>·</span>
-                      <span>{place.priceLabel}</span>
+                      <span>{priceBadge(place)}</span>
                     </span>
                     <span className="tag-line">
                       {visit ? <i>Đã đi {formatVisitedAt(visit.visitedAt)}</i> : null}
@@ -1946,9 +2118,11 @@ export function MapExplorer() {
           <button
             type="button"
             onClick={() => void searchCurrentArea()}
-            disabled={viewportLoading}
+            disabled={viewportLoading || discoveryLoading}
           >
-            {viewportLoading ? "Đang tìm…" : "Tìm khu vực này"}
+            {viewportLoading || discoveryLoading
+              ? "Đang tìm…"
+              : "Tìm khu vực này"}
           </button>
         </div>
 
@@ -1977,9 +2151,20 @@ export function MapExplorer() {
             ? "GPS chỉ sống trong phiên"
             : "Supabase không lưu GPS hiện tại"}
         </div>
+
+        <a
+          className="osm-attribution"
+          href="https://www.openstreetmap.org/copyright"
+          target="_blank"
+          rel="noreferrer"
+        >
+          © OpenStreetMap contributors
+        </a>
       </section>
 
       <aside className="detail-pane" aria-label="Chi tiết địa điểm">
+        {hasSelectedPlace ? (
+          <>
         <div
           className={
             "detail-hero" +
@@ -2063,7 +2248,7 @@ export function MapExplorer() {
             <span>·</span>
             <span>{distanceLabel(selected.distanceKm)}</span>
             <span>·</span>
-            <span>{selected.priceLabel}</span>
+            <span>{priceBadge(selected)}</span>
           </div>
 
           {selected.address ? (
@@ -2224,7 +2409,7 @@ export function MapExplorer() {
             <button type="button" className="secondary-button" onClick={() => void checkIn()}>
               <PinIcon /> Check-in
             </button>
-            <button type="button" className="secondary-button" onClick={openRating}>
+            <button type="button" className="secondary-button" onClick={() => void openRating()}>
               <StarIcon /> Đánh giá
             </button>
           </div>
@@ -2274,7 +2459,7 @@ export function MapExplorer() {
               <div className="personal-empty">
                 <strong>Chưa có rating cá nhân.</strong>
                 <span>Check-in trước, hoặc đánh giá luôn sau khi đi.</span>
-                <button type="button" onClick={openRating}>Thêm đánh giá</button>
+                <button type="button" onClick={() => void openRating()}>Thêm đánh giá</button>
               </div>
             )}
           </section>
@@ -2348,7 +2533,7 @@ export function MapExplorer() {
             <span className="eyebrow">Cần biết</span>
             <dl className="fact-grid">
               <div><dt>Giá tham khảo</dt><dd>{selected.averageForTwo}</dd></div>
-              <div><dt>Khoảng giá</dt><dd>{priceText(selected.priceLabel)}</dd></div>
+              <div><dt>Khoảng giá</dt><dd>{priceText(selected)}</dd></div>
               <div><dt>Không gian</dt><dd>{selected.noise}</dd></div>
               <div><dt>Đông đúc</dt><dd>{selected.crowd}</dd></div>
               <div><dt>Đi đẹp nhất</dt><dd>{selected.bestTime}</dd></div>
@@ -2357,6 +2542,21 @@ export function MapExplorer() {
             {selected.note ? <blockquote>“{selected.note}”</blockquote> : null}
           </section>
         </div>
+          </>
+        ) : (
+          <div className="detail-empty-state">
+            <span className="detail-empty-state__icon">⌖</span>
+            <strong>
+              {discoveryLoading
+                ? "Đang tìm địa điểm thật…"
+                : "Chọn một địa điểm trên bản đồ"}
+            </strong>
+            <span>
+              ĐiĐâu lấy POI thật trong vùng đang nhìn. Pan/zoom bản đồ rồi bấm
+              “Tìm khu vực này” nếu bạn muốn đổi khu vực.
+            </span>
+          </div>
+        )}
       </aside>
 
       {notice ? (

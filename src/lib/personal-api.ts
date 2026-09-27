@@ -1,3 +1,4 @@
+import { placeFromPoiResult } from "./places";
 import type {
   ActivePlanAdvanceResult,
   ActivePersonalPlan,
@@ -14,7 +15,6 @@ import type {
   Place,
   PoiSearchResult,
   RatingDraft,
-  Scenario,
   UserLocation,
   ViewportPlaceResult,
   VisitRecord,
@@ -188,6 +188,19 @@ export const personalApi = {
       { method: "PUT", body: { included } }
     ),
 
+  discoverPoi: (bounds: MapBounds) => {
+    const params = new URLSearchParams({
+      west: String(bounds.west),
+      south: String(bounds.south),
+      east: String(bounds.east),
+      north: String(bounds.north)
+    });
+
+    return api<{ results: PoiSearchResult[] }>(
+      "/api/poi/discover?" + params.toString()
+    );
+  },
+
   searchPoi: (
     query: string,
     location: UserLocation | null,
@@ -210,31 +223,11 @@ export const personalApi = {
   },
 
   importPoi: (result: PoiSearchResult) => {
-    const scenarios = result.scenarios as Scenario[];
     const place: Place = {
+      ...placeFromPoiResult(result),
       id: crypto.randomUUID(),
-      name: result.name,
-      kind: result.kind,
-      description: result.displayName,
-      latitude: result.latitude,
-      longitude: result.longitude,
-      distanceKm: 0,
-      priceLabel: "$",
-      averageForTwo: "Chưa có dữ liệu",
-      publicRating: 0,
       match: 78,
-      communityNote: "Nhập từ OpenStreetMap",
-      openUntil: "Chưa rõ",
-      bestTime: "Chưa có dữ liệu",
-      noise: "Vừa",
-      crowd: "Vừa",
-      tags: scenarios,
-      scenarios,
-      note: "",
-      accent: result.accent,
-      source: "provider",
-      providerId: result.providerId,
-      address: result.displayName
+      communityNote: "Nhập từ OpenStreetMap"
     };
 
     return api<{ place: Place; duplicate: boolean }>(
@@ -242,6 +235,20 @@ export const personalApi = {
       { method: "POST", body: place }
     );
   },
+
+  importProviderPlace: (place: Place) =>
+    api<{ place: Place; duplicate: boolean }>(
+      "/api/personal/import-poi",
+      {
+        method: "POST",
+        body: {
+          ...place,
+          id: crypto.randomUUID(),
+          match: Math.max(72, place.match),
+          communityNote: "Nhập từ OpenStreetMap"
+        }
+      }
+    ),
 
   nearby: (location: UserLocation, limit = 100) => {
     const params = new URLSearchParams({

@@ -42,6 +42,10 @@ export function errorJson(
       status: 503,
       message: "Nguồn tìm kiếm địa điểm đang tạm thời không khả dụng."
     },
+    POI_DISCOVERY_AREA_TOO_LARGE: {
+      status: 400,
+      message: "Khu vực đang quá rộng. Hãy zoom gần hơn rồi tìm lại."
+    },
     WEATHER_PROVIDER_UNAVAILABLE: {
       status: 503,
       message: "Nguồn thời tiết đang tạm thời không khả dụng."

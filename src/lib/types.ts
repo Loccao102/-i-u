@@ -88,6 +88,8 @@ export type PoiSearchResult = {
   longitude: number;
   scenarios: Scenario[];
   accent: string;
+  address?: string;
+  openingHours?: string;
 };
 
 
