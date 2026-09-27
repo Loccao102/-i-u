@@ -4663,3 +4663,73 @@ textarea:focus-visible {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+
+.profile-reset-section {
+  margin-top: 4px;
+  border: 1px solid #efd4cf;
+  border-radius: 14px;
+  padding: 12px;
+  background: #fff7f5;
+  display: grid;
+  gap: 10px;
+}
+
+.profile-reset-section > div {
+  display: grid;
+  gap: 3px;
+}
+
+.profile-reset-section > div > strong {
+  color: #8f433b;
+  font-size: 11px;
+}
+
+.profile-reset-section > div > small {
+  color: #80635e;
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+.profile-reset-section > label {
+  display: grid;
+  gap: 5px;
+}
+
+.profile-reset-section > label > span {
+  color: #775a55;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.profile-reset-section input {
+  width: 100%;
+  border: 1px solid #e5c4be;
+  border-radius: 11px;
+  padding: 10px 11px;
+  background: white;
+  color: #7d3e36;
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.profile-reset-button {
+  border: 1px solid #bd6257;
+  border-radius: 11px;
+  padding: 10px 12px;
+  background: #b55045;
+  color: white;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.profile-reset-button:hover {
+  background: #9f4339;
+}
+
+.profile-reset-button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
