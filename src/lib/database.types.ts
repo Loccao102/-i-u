@@ -556,6 +556,10 @@ export type Database = {
         Args: { p_owner_key: string; p_place_id: string }
         Returns: boolean
       }
+      delete_personal_profile: {
+        Args: { p_owner_key: string }
+        Returns: undefined
+      }
       increment_personal_planner_metric: {
         Args: { p_metric: string; p_owner_key: string }
         Returns: undefined

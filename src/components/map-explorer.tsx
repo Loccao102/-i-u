@@ -511,6 +511,8 @@ export function MapExplorer() {
   const [profileTransferExpiresAt, setProfileTransferExpiresAt] =
     useState<string | null>(null);
   const [profileTransferInput, setProfileTransferInput] = useState("");
+  const [profileResetConfirm, setProfileResetConfirm] = useState("");
+  const [profileResetLoading, setProfileResetLoading] = useState(false);
   const [viewportBounds, setViewportBounds] = useState<MapBounds | null>(null);
   const [viewportPersonalIds, setViewportPersonalIds] =
     useState<Set<string> | null>(null);
@@ -2517,6 +2519,43 @@ export function MapExplorer() {
       );
     } finally {
       setProfileTransferLoading(false);
+    }
+  }
+
+  async function resetCurrentProfile() {
+    if (profileResetConfirm.trim().toUpperCase() !== "XOA") {
+      setNotice("Nhập XOA để xác nhận reset profile.");
+      return;
+    }
+
+    if (
+      !window.confirm(
+        "Xóa vĩnh viễn toàn bộ dữ liệu profile này? Places, lịch sử, plan, ảnh, link chia sẻ và metrics đều sẽ bị xóa."
+      )
+    ) {
+      return;
+    }
+
+    setProfileResetLoading(true);
+    try {
+      const result = await personalApi.resetProfile();
+      window.sessionStorage.removeItem("di-dau-shortlist");
+      setNotice(
+        "Đã xóa profile" +
+          (result.removedPhotoObjects > 0
+            ? " và " + result.removedPhotoObjects + " ảnh."
+            : ".") +
+          " Đang tạo profile mới…"
+      );
+      window.location.reload();
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "Không thể reset profile."
+      );
+    } finally {
+      setProfileResetLoading(false);
     }
   }
 
@@ -5356,7 +5395,7 @@ export function MapExplorer() {
           <div className="dialog-header">
             <div>
               <span className="eyebrow">Profile continuity</span>
-              <h2>Chuyển profile sang trình duyệt khác</h2>
+              <h2>Profile & dữ liệu</h2>
             </div>
             <button
               className="icon-button"
@@ -5369,7 +5408,7 @@ export function MapExplorer() {
           </div>
 
           <p className="dialog-copy">
-            Mã chỉ dùng một lần và hết hạn sau 10 phút. Máy nhận mã sẽ dùng cùng profile Supabase hiện tại.
+            Chuyển profile sang trình duyệt khác hoặc xóa toàn bộ dữ liệu của profile hiện tại. Mã chuyển chỉ dùng một lần và hết hạn sau 10 phút.
           </p>
 
           <section className="profile-transfer-section">
@@ -5428,6 +5467,55 @@ export function MapExplorer() {
               onClick={() => void redeemProfileTransfer()}
             >
               Dùng profile này
+            </button>
+          </section>
+
+          <section className="profile-reset-section">
+            <div>
+              <span className="eyebrow">Danger zone</span>
+              <strong>Xóa toàn bộ dữ liệu profile</strong>
+              <small>
+                Xóa vĩnh viễn địa điểm, Saved, rating, visits, collections, daily discovery, active/completed plans, ảnh tải lên, planner defaults/metrics, transfer codes và mọi link itinerary đã chia sẻ. Sau đó trình duyệt nhận một anonymous profile mới. Backup JSON chỉ giữ dữ liệu có cấu trúc, không chứa file ảnh tải lên.
+              </small>
+            </div>
+
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={backupLoading || profileResetLoading}
+              onClick={() => void exportBackup()}
+            >
+              {backupLoading ? "Đang xuất…" : "Xuất backup dữ liệu"}
+            </button>
+
+            <label>
+              <span>Nhập XOA để xác nhận</span>
+              <input
+                type="text"
+                value={profileResetConfirm}
+                onChange={(event) =>
+                  setProfileResetConfirm(
+                    event.target.value.toUpperCase().slice(0, 3)
+                  )
+                }
+                placeholder="XOA"
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </label>
+
+            <button
+              type="button"
+              className="profile-reset-button"
+              disabled={
+                profileResetLoading ||
+                profileResetConfirm.trim().toUpperCase() !== "XOA"
+              }
+              onClick={() => void resetCurrentProfile()}
+            >
+              {profileResetLoading
+                ? "Đang xóa dữ liệu…"
+                : "Xóa dữ liệu & tạo profile mới"}
             </button>
           </section>
         </div>
