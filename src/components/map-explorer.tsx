@@ -2623,7 +2623,7 @@ export function MapExplorer() {
 
     try {
       const result = await personalApi.getProviderPlaceDetails(providerId);
-      const openingHours = result.details.openingHours?.trim();
+      const openingHours = result.details?.openingHours?.trim();
 
       if (!openingHours) {
         openPlaceEditor(place);
