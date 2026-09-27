@@ -2013,7 +2013,9 @@ export function MapExplorer() {
           result.ratings +
           " rating, " +
           result.collections +
-          " bộ sưu tập."
+          " bộ sưu tập, " +
+          result.dailyDiscoveries +
+          " bản ghi khám phá."
       );
     } catch (error) {
       setNotice(
