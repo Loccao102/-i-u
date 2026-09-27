@@ -8,18 +8,31 @@ declare global {
   var __diDauSupabaseAdmin: SupabaseClient<Database> | undefined;
 }
 
-function required(name: "SUPABASE_URL" | "SUPABASE_SECRET_KEY") {
-  const value = process.env[name]?.trim();
+function requiredUrl() {
+  const value = process.env.SUPABASE_URL?.trim();
   if (!value) {
-    throw new Error(`Missing required server env: ${name}`);
+    throw new Error("Missing required server env: SUPABASE_URL");
   }
   return value;
 }
 
+function requiredSecretKey() {
+  const modern = process.env.SUPABASE_SECRET_KEY?.trim();
+  if (modern) return modern;
+
+  // Backward-compatible Vercel deployments may still use the legacy name.
+  const legacy = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (legacy) return legacy;
+
+  throw new Error(
+    "Missing required server env: SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY"
+  );
+}
+
 export function getSupabaseAdmin() {
   globalThis.__diDauSupabaseAdmin ??= createClient<Database>(
-    required("SUPABASE_URL"),
-    required("SUPABASE_SECRET_KEY"),
+    requiredUrl(),
+    requiredSecretKey(),
     {
       auth: {
         persistSession: false,
