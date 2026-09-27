@@ -493,6 +493,11 @@ export type ActivePersonalPlan = {
   updatedAt: string;
 };
 
+export type ActivePlanStartResult = {
+  activePlan: ActivePersonalPlan;
+  created: boolean;
+};
+
 export type CompletedPersonalPlan = {
   id: string;
   plan: ActivePlanSnapshot;

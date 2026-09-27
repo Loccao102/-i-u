@@ -532,6 +532,7 @@ export function MapExplorer() {
   const [planVariant, setPlanVariant] = useState(0);
   const [planWeather, setPlanWeather] = useState<WeatherContext | null>(null);
   const [planWeatherLoading, setPlanWeatherLoading] = useState(false);
+  const [planStartLoading, setPlanStartLoading] = useState(false);
   const [planReplayTemplate, setPlanReplayTemplate] =
     useState<PlannerReplayTemplate | null>(null);
   const [plannerMetrics, setPlannerMetrics] =
@@ -574,6 +575,7 @@ export function MapExplorer() {
   const [collectionName, setCollectionName] = useState("");
   const [collectionDescription, setCollectionDescription] = useState("");
 
+  const planStartInFlightRef = useRef(false);
   const mapNodeRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markerRefs = useRef<MapLibreMarker[]>([]);
@@ -2263,7 +2265,7 @@ export function MapExplorer() {
   }
 
   async function startRunningPlan() {
-    if (!activePlan) return;
+    if (!activePlan || planStartInFlightRef.current) return;
 
     if (
       runningPlan &&
@@ -2273,6 +2275,9 @@ export function MapExplorer() {
     ) {
       return;
     }
+
+    planStartInFlightRef.current = true;
+    setPlanStartLoading(true);
 
     try {
       const persistedStops = [];
@@ -2303,9 +2308,11 @@ export function MapExplorer() {
       if (first) focusRunningStop(first);
 
       setNotice(
-        "Đã bắt đầu plan · " +
-          result.activePlan.plan.stops.length +
-          " chặng."
+        result.created
+          ? "Đã bắt đầu plan · " +
+              result.activePlan.plan.stops.length +
+              " chặng."
+          : "Plan này đã được bắt đầu trước đó · đã đồng bộ lại."
       );
     } catch (error) {
       setNotice(
@@ -2313,6 +2320,9 @@ export function MapExplorer() {
           ? error.message
           : "Không thể bắt đầu kế hoạch."
       );
+    } finally {
+      planStartInFlightRef.current = false;
+      setPlanStartLoading(false);
     }
   }
 
@@ -6312,9 +6322,10 @@ export function MapExplorer() {
                 <button
                   type="button"
                   className="primary-button"
+                  disabled={planStartLoading}
                   onClick={() => void startRunningPlan()}
                 >
-                  Bắt đầu plan
+                  {planStartLoading ? "Đang bắt đầu…" : "Bắt đầu plan"}
                 </button>
               </div>
             </div>

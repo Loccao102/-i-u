@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import type { Json } from "../database.types";
 import type {
   ActivePlanAdvanceResult,
+  ActivePlanStartResult,
   ActivePersonalPlan,
   ActivePlanSnapshot
 } from "../types";
@@ -57,32 +58,55 @@ export async function getActivePlan(
 export async function startActivePlan(
   ownerKey: string,
   plan: ActivePlanSnapshot
-): Promise<ActivePersonalPlan> {
-  const id = randomUUID();
-  const now = new Date().toISOString();
-
-  const { data, error } = await getSupabaseAdmin()
-    .from("active_personal_plans")
-    .upsert(
-      {
-        owner_key: ownerKey,
-        id,
-        plan: plan as unknown as Json,
-        current_stop_index: 0,
-        completed_stop_ids: [],
-        skipped_stop_ids: [],
-        started_at: now,
-        updated_at: now
-      },
-      { onConflict: "owner_key" }
-    )
-    .select(
-      "id,plan,current_stop_index,completed_stop_ids,skipped_stop_ids,started_at,updated_at"
-    )
-    .single();
+): Promise<ActivePlanStartResult> {
+  const { data, error } = await getSupabaseAdmin().rpc(
+    "start_active_personal_plan",
+    {
+      p_owner_key: ownerKey,
+      p_id: randomUUID(),
+      p_plan: plan as unknown as Json
+    }
+  );
 
   dbError(error, "Start active plan");
-  return mapActivePlan(data as ActivePlanRow);
+
+  const result =
+    data && typeof data === "object" && !Array.isArray(data)
+      ? (data as Record<string, unknown>)
+      : {};
+  const rawActivePlan =
+    result.activePlan &&
+    typeof result.activePlan === "object" &&
+    !Array.isArray(result.activePlan)
+      ? (result.activePlan as Record<string, unknown>)
+      : null;
+
+  if (!rawActivePlan) {
+    throw new Error("Start active plan: invalid database response");
+  }
+
+  const activePlan: ActivePersonalPlan = {
+    id: String(rawActivePlan.id ?? ""),
+    plan: parseActivePlanSnapshot(rawActivePlan.plan),
+    currentStopIndex: Number(rawActivePlan.currentStopIndex ?? 0),
+    completedStopIds: Array.isArray(rawActivePlan.completedStopIds)
+      ? rawActivePlan.completedStopIds.map(String)
+      : [],
+    skippedStopIds: Array.isArray(rawActivePlan.skippedStopIds)
+      ? rawActivePlan.skippedStopIds.map(String)
+      : [],
+    startedAt: String(rawActivePlan.startedAt ?? ""),
+    updatedAt: String(rawActivePlan.updatedAt ?? "")
+  };
+
+  if (!activePlan.id || !activePlan.startedAt || !activePlan.updatedAt) {
+    throw new Error("Start active plan: incomplete database response");
+  }
+
+  return {
+    activePlan,
+    created: result.created === true
+  };
 }
 
 async function hasRecentVisit(ownerKey: string, placeId: string) {

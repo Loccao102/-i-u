@@ -39,16 +39,18 @@ export async function PUT(request: NextRequest) {
     const body = await readJsonObject(request);
     const plan = parseActivePlanSnapshot(body.plan);
     const replayed = body.replayed === true;
-    const activePlan = await startActivePlan(profile.ownerKey, plan);
+    const result = await startActivePlan(profile.ownerKey, plan);
 
-    await Promise.allSettled([
-      recordPlannerMetric(profile.ownerKey, "started"),
-      ...(replayed
-        ? [recordPlannerMetric(profile.ownerKey, "replayed")]
-        : [])
-    ]);
+    if (result.created) {
+      await Promise.allSettled([
+        recordPlannerMetric(profile.ownerKey, "started"),
+        ...(replayed
+          ? [recordPlannerMetric(profile.ownerKey, "replayed")]
+          : [])
+      ]);
+    }
 
-    return profileJson(profile, { activePlan });
+    return profileJson(profile, result);
   } catch (error) {
     return errorJson(profile, error, "Không thể bắt đầu kế hoạch.");
   }

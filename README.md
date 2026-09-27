@@ -68,6 +68,7 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - multi-stop Google Maps route handoff; walking plans open as walking directions, while motorcycle/car plans use driving handoff because Maps URLs do not expose a motorcycle travel mode;
 - **What next?** recommendations after a recent check-in, using transition type, time of day, cost and current personal ranking; the top heuristic candidates are re-ranked with a tiny road-routing matrix using the current plan/travel mode when available;
 - persisted **active plan lifecycle**: start → resume after reload → complete/skip each stop → auto-finish;
+- active-plan start is transactionally idempotent: retrying the same pristine plan returns the same active-plan ID and does not double-count start/replay telemetry; client-side in-flight locking also blocks accidental double-clicks;
 - completed plan history is archived atomically when the final stop is completed/skipped, keeping mood, route snapshot, completed/skipped stops, cost, duration and completion time;
 - completed outings can be replayed as **templates**, not frozen copies: original stops get a controlled preference bonus but still pass fresh weather, opening-hours, routing, budget, distance and duration checks, with unsuitable stops replaced automatically;
 - 30-day planner telemetry separates initial generation, rerolls, failed generation, starts, completions, replays and cancellations; **Planner Health** only surfaces friction after minimum sample thresholds and never auto-tunes ranking from tiny samples; legacy pre-semantics counters are reset once because they mixed rerolls into generation conversion;
@@ -203,6 +204,7 @@ supabase/migrations/20260927095409_encrypt_profile_transfer_tokens.sql
 supabase/migrations/20260927152302_planner_telemetry.sql
 supabase/migrations/20260927172009_planner_telemetry_semantics.sql
 supabase/migrations/20260927172409_reset_planner_telemetry_after_semantics_change.sql
+supabase/migrations/20260927173434_idempotent_active_plan_start.sql
 supabase/migrations/20260927153331_profile_data_reset.sql
 ```
 
@@ -294,6 +296,6 @@ To deploy:
 1. Open GitHub → Actions → **Deploy Vercel (Manual)**.
 2. Click **Run workflow** on branch `main`.
 3. Enter `DEPLOY`.
-4. The workflow reruns typecheck + production build before triggering Vercel.
+4. The workflow reruns typecheck + core tests + production build before triggering Vercel.
 
 The deploy hook URL is a secret and must never be committed to the repository.

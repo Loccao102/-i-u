@@ -32,6 +32,7 @@ supabase/migrations/20260927095409_encrypt_profile_transfer_tokens.sql
 supabase/migrations/20260927152302_planner_telemetry.sql
 supabase/migrations/20260927172009_planner_telemetry_semantics.sql
 supabase/migrations/20260927172409_reset_planner_telemetry_after_semantics_change.sql
+supabase/migrations/20260927173434_idempotent_active_plan_start.sql
 supabase/migrations/20260927153331_profile_data_reset.sql
 ```
 
@@ -258,3 +259,16 @@ Current counters:
 
 Planner Health is derived in the app only after minimum sample thresholds.
 These counters do not automatically modify ranking, budget or radius.
+
+
+### Idempotent active-plan start
+
+`start_active_personal_plan` serializes starts per anonymous owner with a
+transaction-scoped advisory lock. If the same plan snapshot is retried while
+the active plan is still pristine (first stop, no completed/skipped stops), the
+RPC returns the existing active-plan ID with `created=false`.
+
+Only a genuinely new/replaced active plan returns `created=true`, so
+`started` and `replayed` telemetry are not inflated by network retries,
+double-clicks or concurrent tabs. Starting the same route after progress has
+already been made is treated as an intentional restart and creates a new ID.
