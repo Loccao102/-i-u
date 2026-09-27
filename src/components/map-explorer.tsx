@@ -495,6 +495,7 @@ export function MapExplorer() {
   const [providerDetailsLoading, setProviderDetailsLoading] =
     useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [checkInLoading, setCheckInLoading] = useState(false);
   const [placeCovers, setPlaceCovers] = useState<Record<string, string>>({});
   const [shortlist, setShortlist] = useState<Place[]>([]);
   const [dailyPlace, setDailyPlace] = useState<Place | null>(null);
@@ -576,6 +577,7 @@ export function MapExplorer() {
   const [collectionDescription, setCollectionDescription] = useState("");
 
   const planStartInFlightRef = useRef(false);
+  const checkInInFlightRef = useRef(false);
   const mapNodeRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markerRefs = useRef<MapLibreMarker[]>([]);
@@ -2807,13 +2809,23 @@ export function MapExplorer() {
   }
 
   async function checkIn() {
-    if (!hasSelectedPlace) return;
+    if (!hasSelectedPlace || checkInInFlightRef.current) return;
+
+    checkInInFlightRef.current = true;
+    setCheckInLoading(true);
 
     try {
       const target = await persistProviderPlace(selected);
-      await personalApi.checkIn(target.id);
+      const result = await personalApi.checkIn(target.id);
       await loadSnapshot();
       setSelectedId(target.id);
+
+      if (!result.created) {
+        setNotice(
+          "Bạn đã check-in địa điểm này trong 2 giờ gần nhất · không tạo bản ghi trùng."
+        );
+        return;
+      }
 
       if (runningCurrentStop?.placeId === target.id) {
         setNotice(
@@ -2850,6 +2862,9 @@ export function MapExplorer() {
       setNotice(
         error instanceof Error ? error.message : "Không thể check-in."
       );
+    } finally {
+      checkInInFlightRef.current = false;
+      setCheckInLoading(false);
     }
   }
 
@@ -4742,8 +4757,13 @@ export function MapExplorer() {
             >
               <LocationIcon /> Chỉ đường
             </button>
-            <button type="button" className="secondary-button" onClick={() => void checkIn()}>
-              <PinIcon /> Check-in
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={checkInLoading}
+              onClick={() => void checkIn()}
+            >
+              <PinIcon /> {checkInLoading ? "Đang check-in…" : "Check-in"}
             </button>
             <button type="button" className="secondary-button" onClick={() => void openRating()}>
               <StarIcon /> Đánh giá
