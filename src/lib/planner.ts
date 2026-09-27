@@ -18,6 +18,7 @@ import type {
 import { parseCostAmount } from "./cost-estimation";
 import { openingStatus } from "./opening-hours";
 import { scorePlanOutcomeMatch } from "./plan-outcomes";
+import { analyzePlanQuality } from "./plan-quality";
 import { haversineKm } from "./search";
 
 type PlannerSignals = {
@@ -886,6 +887,8 @@ export function suggestWhatNext(input: {
 export function toActivePlanSnapshot(
   plan: EveningPlan
 ): ActivePlanSnapshot {
+  const quality = analyzePlanQuality(plan);
+
   return {
     scenario: plan.scenario,
     summary: plan.summary,
@@ -894,6 +897,14 @@ export function toActivePlanSnapshot(
     routeKm: plan.routeKm,
     totalDurationMinutes: plan.totalDurationMinutes,
     averageMatch: plan.averageMatch,
+    quality: {
+      score: quality.score,
+      level: quality.level,
+      routingCoverage: quality.routingCoverage,
+      openingCoverage: quality.openingCoverage,
+      estimatedCostStops: quality.estimatedCostStops,
+      issues: quality.issues.slice(0, 5)
+    },
     stops: plan.stops.map((stop) => ({
       placeId: stop.place.id,
       name: stop.place.name,
