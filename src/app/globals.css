@@ -1781,6 +1781,22 @@ textarea:focus-visible {
   line-height: 1.45;
 }
 
+.plan-warning--neutral {
+  background: #f5f5f1;
+  color: #696d66;
+}
+
+.plan-opening-confirmed {
+  margin-top: 10px;
+  border-radius: 12px;
+  padding: 9px 10px;
+  background: #edf7ef;
+  color: #3e6d4c;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
 .plan-timeline {
   margin-top: 14px;
   display: grid;
