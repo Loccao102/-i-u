@@ -348,6 +348,14 @@ export type TasteProfile = {
 };
 
 
+export type PlanOutcomeProfile = {
+  sampleSize: number;
+  successfulPlanCount: number;
+  scenarioScores: Partial<Record<Scenario, number>>;
+  placeScores: Record<string, number>;
+};
+
+
 export type ActivePlanStopSnapshot = {
   placeId: string;
   name: string;
