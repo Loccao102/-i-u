@@ -1877,20 +1877,53 @@ export function MapExplorer() {
         travelMatrix
       });
 
-    let result = build(preferredSource);
+    const betterPlan = (
+      current: EveningPlan | null,
+      candidate: EveningPlan | null
+    ) => {
+      if (!candidate) return current;
+      if (!current) return candidate;
+
+      if (candidate.stops.length !== current.stops.length) {
+        return candidate.stops.length > current.stops.length
+          ? candidate
+          : current;
+      }
+
+      if (candidate.complete !== current.complete) {
+        return candidate.complete ? candidate : current;
+      }
+
+      const currentQuality = analyzePlanQuality(current).score;
+      const candidateQuality = analyzePlanQuality(candidate).score;
+      if (candidateQuality !== currentQuality) {
+        return candidateQuality > currentQuality
+          ? candidate
+          : current;
+      }
+
+      return candidate.averageMatch > current.averageMatch
+        ? candidate
+        : current;
+    };
+
+    // Prefer candidates covered by the road matrix first. Only widen back to
+    // the full ranked pool when that road-aware subset cannot make a complete
+    // plan, preserving quality without sacrificing plan availability.
+    let result =
+      travelMatrix && routingCandidates.length > 0
+        ? build(routingCandidates)
+        : null;
+
+    if (!result || !result.complete) {
+      result = betterPlan(result, build(preferredSource));
+    }
 
     if (
       preferredSource.length < source.length &&
       (!result || !result.complete)
     ) {
-      const relaxedNoveltyResult = build(source);
-      if (
-        !result ||
-        (relaxedNoveltyResult &&
-          relaxedNoveltyResult.stops.length > result.stops.length)
-      ) {
-        result = relaxedNoveltyResult;
-      }
+      result = betterPlan(result, build(source));
     }
 
     setPlanWeatherLoading(false);
