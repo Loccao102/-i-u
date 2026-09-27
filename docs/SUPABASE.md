@@ -8,10 +8,16 @@ Choose a region close to the expected primary users.
 
 ## 2. Apply the schema
 
-Migration:
+Apply all files in `supabase/migrations/` in order. The baseline is:
 
 ```text
 supabase/migrations/0001_personal_core.sql
+```
+
+Current daily-discovery persistence is added by:
+
+```text
+supabase/migrations/20260927063759_daily_discovery_history.sql
 ```
 
 Apply with one of:
@@ -119,14 +125,19 @@ where schemaname = 'public'
     'personal_ratings',
     'visits',
     'collections',
-    'collection_places'
+    'collection_places',
+    'active_personal_plans',
+    'place_user_photos',
+    'recommendation_feedback',
+    'daily_discoveries'
   );
 ```
 
 Expected:
 
 - PostGIS exists in the dedicated extensions schema;
-- all six personal tables show RLS enabled.
+- all personal tables, including `daily_discoveries`, show RLS enabled;
+- `anon` and `authenticated` remain revoked from personal tables while the server secret role owns CRUD.
 
 ## 9. Do not enable Auth yet just because Supabase provides it
 
