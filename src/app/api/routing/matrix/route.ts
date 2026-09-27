@@ -7,7 +7,10 @@ import {
   isRoutingConfigured
 } from "@/lib/server/routing-provider";
 import { cleanPlainText } from "@/lib/validation";
-import type { RoutingMatrixPoint } from "@/lib/types";
+import type {
+  RoutingMatrixPoint,
+  RoutingMode
+} from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -26,6 +29,18 @@ function coordinate(
     throw new Error("INVALID_BODY");
   }
   return number;
+}
+
+function parseRoutingMode(value: unknown): RoutingMode {
+  if (
+    value === "motorcycle" ||
+    value === "drive" ||
+    value === "walk"
+  ) {
+    return value;
+  }
+
+  return "motorcycle";
 }
 
 function parsePoints(value: unknown): RoutingMatrixPoint[] {
@@ -66,17 +81,18 @@ export async function POST(request: NextRequest) {
   try {
     const body = await readJsonObject(request);
     const points = parsePoints(body.points);
+    const mode = parseRoutingMode(body.mode);
 
     if (!isRoutingConfigured()) {
       return profileJson(profile, {
         matrix: null,
         provider: null,
-        mode: "motorcycle",
+        mode,
         configured: false
       });
     }
 
-    const result = await getRoadRouteMatrix(points);
+    const result = await getRoadRouteMatrix(points, mode);
 
     return profileJson(profile, result, {
       headers: {

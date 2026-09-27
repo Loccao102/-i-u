@@ -274,15 +274,18 @@ export type RoutingMatrixPoint = {
   longitude: number;
 };
 
+export type RoutingMode = "motorcycle" | "drive" | "walk";
+
 export type RoutingMatrixResult = {
   matrix: PlannerTravelMatrix | null;
   provider: "geoapify" | null;
-  mode: "motorcycle";
+  mode: RoutingMode;
   configured: boolean;
 };
 
 export type EveningPlanPreferences = {
   scenario: Scenario;
+  routeMode: RoutingMode;
   budgetForTwo: number;
   maxDistanceKm: number;
   durationHours: 2 | 3 | 4;
@@ -307,6 +310,7 @@ export type EveningPlanStop = {
 
 export type EveningPlan = {
   scenario: Scenario;
+  routeMode: RoutingMode;
   stops: EveningPlanStop[];
   totalEstimatedCostForTwo: number;
   budgetRemainingForTwo: number;
@@ -394,6 +398,7 @@ export type ActivePlanStopSnapshot = {
 
 export type ActivePlanSnapshot = {
   scenario: Scenario | null;
+  routeMode: RoutingMode;
   summary: string;
   totalEstimatedCostForTwo: number;
   budgetRemainingForTwo: number;

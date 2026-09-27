@@ -19,6 +19,7 @@ import type {
   ProviderPlaceDetails,
   RoutingMatrixPoint,
   RoutingMatrixResult,
+  RoutingMode,
   PlaceMedia,
   PlaceUserPhoto,
   PersonalSnapshot,
@@ -390,10 +391,13 @@ export const personalApi = {
     );
   },
 
-  routeMatrix: (points: RoutingMatrixPoint[]) =>
+  routeMatrix: (
+    points: RoutingMatrixPoint[],
+    mode: RoutingMode = "motorcycle"
+  ) =>
     api<RoutingMatrixResult>("/api/routing/matrix", {
       method: "POST",
-      body: { points }
+      body: { points, mode }
     }),
 
   weather: (location: UserLocation, targetAt?: string) => {
