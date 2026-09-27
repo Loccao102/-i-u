@@ -582,6 +582,12 @@ export function MapExplorer() {
       setCollections(snapshot.collections);
       setDailyDiscoveries(snapshot.dailyDiscoveries ?? []);
       setCompletedPlans(snapshot.completedPlans ?? []);
+      if (snapshot.plannerDefaults) {
+        setPlanRoutingMode(snapshot.plannerDefaults.routeMode);
+        setPlanBudget(snapshot.plannerDefaults.budgetForTwo);
+        setPlanDistance(snapshot.plannerDefaults.maxDistanceKm);
+        setPlanDuration(snapshot.plannerDefaults.durationHours);
+      }
       setRunningPlan(activeResult.activePlan);
       setDataStatus("ready");
     } catch (error) {
@@ -1908,6 +1914,32 @@ export function MapExplorer() {
         weeklyRevisitCandidate.stars +
         "/5."
     );
+  }
+
+  async function persistPlannerDefaults(input: {
+    routeMode?: RoutingMode;
+    budgetForTwo?: number;
+    maxDistanceKm?: 3 | 5 | 8 | 12;
+    durationHours?: 2 | 3 | 4;
+  }) {
+    const next = {
+      routeMode: input.routeMode ?? planRoutingMode,
+      budgetForTwo: input.budgetForTwo ?? planBudget,
+      maxDistanceKm:
+        input.maxDistanceKm ??
+        (planDistance as 3 | 5 | 8 | 12),
+      durationHours: input.durationHours ?? planDuration
+    };
+
+    try {
+      await personalApi.savePlannerDefaults(next);
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "Không thể lưu thiết lập planner."
+      );
+    }
   }
 
   function plannerOrigin(): UserLocation {
@@ -5072,8 +5104,10 @@ export function MapExplorer() {
               <select
                 value={planRoutingMode}
                 onChange={(event) => {
-                  setPlanRoutingMode(event.target.value as RoutingMode);
+                  const value = event.target.value as RoutingMode;
+                  setPlanRoutingMode(value);
                   setActivePlan(null);
+                  void persistPlannerDefaults({ routeMode: value });
                 }}
               >
                 <option value="motorcycle">Xe máy</option>
@@ -5087,9 +5121,11 @@ export function MapExplorer() {
               <select
                 value={planBudget}
                 onChange={(event) => {
-                  setPlanBudget(Number(event.target.value));
+                  const value = Number(event.target.value);
+                  setPlanBudget(value);
                   setActivePlan(null);
                   setPlanWeather(null);
+                  void persistPlannerDefaults({ budgetForTwo: value });
                 }}
               >
                 <option value={400000}>400k</option>
@@ -5104,9 +5140,11 @@ export function MapExplorer() {
               <select
                 value={planDuration}
                 onChange={(event) => {
-                  setPlanDuration(Number(event.target.value) as 2 | 3 | 4);
+                  const value = Number(event.target.value) as 2 | 3 | 4;
+                  setPlanDuration(value);
                   setActivePlan(null);
                   setPlanWeather(null);
+                  void persistPlannerDefaults({ durationHours: value });
                 }}
               >
                 <option value={2}>2 giờ</option>
@@ -5120,9 +5158,11 @@ export function MapExplorer() {
               <select
                 value={planDistance}
                 onChange={(event) => {
-                  setPlanDistance(Number(event.target.value));
+                  const value = Number(event.target.value) as 3 | 5 | 8 | 12;
+                  setPlanDistance(value);
                   setActivePlan(null);
                   setPlanWeather(null);
+                  void persistPlannerDefaults({ maxDistanceKm: value });
                 }}
               >
                 <option value={3}>3 km</option>
@@ -5132,6 +5172,9 @@ export function MapExplorer() {
               </select>
             </label>
           </div>
+          <small className="planner-defaults-note">
+            Di chuyển, budget, bán kính và thời lượng được lưu theo profile này.
+          </small>
 
           {providerCostCalibration.sampleSize > 0 ? (
             <section className="cost-calibration-strip">
