@@ -3988,3 +3988,64 @@ textarea:focus-visible {
   font-size: 8px;
   line-height: 1.4;
 }
+
+
+.profile-transfer-card {
+  max-width: 520px;
+}
+
+.profile-transfer-section {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+  display: grid;
+  gap: 9px;
+  background: var(--surface-soft);
+}
+
+.profile-transfer-section > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.profile-transfer-section input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 10px 11px;
+  background: white;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-weight: 800;
+}
+
+.profile-transfer-code {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.profile-transfer-code code {
+  flex: 1;
+  border: 1px dashed #cfd7cf;
+  border-radius: 11px;
+  padding: 11px;
+  background: white;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-align: center;
+}
+
+.profile-transfer-code button {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 10px;
+  background: white;
+  cursor: pointer;
+}
+
+.profile-transfer-section > small {
+  color: var(--muted);
+  font-size: 8px;
+}
