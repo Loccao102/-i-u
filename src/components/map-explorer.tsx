@@ -66,6 +66,7 @@ import type {
   PersonalBackup,
   PersonalRating,
   PlannerReplayTemplate,
+  PlannerMetricsSummary,
   PlannerTravelMatrix,
   RecommendationFeedback,
   RecommendationFeedbackReason,
@@ -530,6 +531,8 @@ export function MapExplorer() {
   const [planWeatherLoading, setPlanWeatherLoading] = useState(false);
   const [planReplayTemplate, setPlanReplayTemplate] =
     useState<PlannerReplayTemplate | null>(null);
+  const [plannerMetrics, setPlannerMetrics] =
+    useState<PlannerMetricsSummary | null>(null);
   const [activePlan, setActivePlan] = useState<EveningPlan | null>(null);
   const [runningPlan, setRunningPlan] =
     useState<ActivePersonalPlan | null>(null);
@@ -586,11 +589,13 @@ export function MapExplorer() {
 
   const loadSnapshot = useCallback(async () => {
     try {
-      const [snapshot, activeResult, shareResult] = await Promise.all([
-        personalApi.snapshot(),
-        personalApi.activePlan.get(),
-        personalApi.listItineraryShares()
-      ]);
+      const [snapshot, activeResult, shareResult, metricsResult] =
+        await Promise.all([
+          personalApi.snapshot(),
+          personalApi.activePlan.get(),
+          personalApi.listItineraryShares(),
+          personalApi.plannerMetrics.get()
+        ]);
       setCustomPlaces(snapshot.customPlaces);
       setSaved(new Set(snapshot.savedIds));
       setRatings(snapshot.ratings);
@@ -600,6 +605,7 @@ export function MapExplorer() {
       setDailyDiscoveries(snapshot.dailyDiscoveries ?? []);
       setCompletedPlans(snapshot.completedPlans ?? []);
       setItineraryShares(shareResult.shares);
+      setPlannerMetrics(metricsResult.metrics);
       if (snapshot.plannerDefaults) {
         setPlanRoutingMode(snapshot.plannerDefaults.routeMode);
         setPlanBudget(snapshot.plannerDefaults.budgetForTwo);
@@ -2117,6 +2123,13 @@ export function MapExplorer() {
     setPlanVariant(nextVariant);
     setActivePlan(result);
 
+    if (result) {
+      void personalApi.plannerMetrics
+        .recordGenerated()
+        .then(({ metrics }) => setPlannerMetrics(metrics))
+        .catch(() => undefined);
+    }
+
     if (!result) {
       setNotice(
         "Chưa đủ địa điểm phù hợp. Thử tăng bán kính hoặc đổi mood."
@@ -2257,9 +2270,14 @@ export function MapExplorer() {
       await loadSnapshot();
 
       const result = await personalApi.activePlan.start(
-        toActivePlanSnapshot(persistedPlan)
+        toActivePlanSnapshot(persistedPlan),
+        Boolean(activePlan.replay)
       );
       setRunningPlan(result.activePlan);
+      void personalApi.plannerMetrics
+        .get()
+        .then(({ metrics }) => setPlannerMetrics(metrics))
+        .catch(() => undefined);
       planDialogRef.current?.close();
 
       const first = result.activePlan.plan.stops[0];
