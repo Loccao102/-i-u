@@ -14,6 +14,7 @@ import type {
   NearbyPlaceResult,
   PersonalBackup,
   PersonalRating,
+  PlannerDefaults,
   RecommendationFeedback,
   RecommendationFeedbackReason,
   ProviderPlaceDetails,
@@ -106,6 +107,14 @@ async function api<T>(
 
 export const personalApi = {
   snapshot: () => api<PersonalSnapshot>("/api/personal"),
+
+  savePlannerDefaults: (
+    input: Omit<PlannerDefaults, "updatedAt">
+  ) =>
+    api<{ plannerDefaults: PlannerDefaults }>(
+      "/api/personal/planner-defaults",
+      { method: "PUT", body: input }
+    ),
 
   saveDailyDiscovery: (input: {
     day: string;
