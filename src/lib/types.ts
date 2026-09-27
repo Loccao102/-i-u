@@ -400,6 +400,16 @@ export type CompletedPersonalPlan = {
   skippedStopIds: string[];
   startedAt: string;
   completedAt: string;
+  outcomeRating: number | null;
+  wouldRepeat: boolean | null;
+  feedbackNote: string;
+  feedbackAt: string | null;
+};
+
+export type CompletedPlanFeedbackInput = {
+  outcomeRating: number;
+  wouldRepeat: boolean | null;
+  feedbackNote: string;
 };
 
 export type ActivePlanAdvanceResult = {

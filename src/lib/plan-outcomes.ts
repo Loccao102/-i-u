@@ -26,6 +26,29 @@ function recencyWeight(completedAt: string, nowMs: number) {
   return Math.max(0.35, 1 - ageDays / 180);
 }
 
+function enjoymentWeight(plan: CompletedPersonalPlan) {
+  const ratingWeight =
+    plan.outcomeRating === 5
+      ? 1.15
+      : plan.outcomeRating === 4
+        ? 1
+        : plan.outcomeRating === 3
+          ? 0.55
+          : plan.outcomeRating === 2
+            ? 0.15
+            : plan.outcomeRating === 1
+              ? 0
+              : 0.72;
+
+  if (plan.wouldRepeat === true) {
+    return Math.min(1.2, ratingWeight + 0.1);
+  }
+  if (plan.wouldRepeat === false) {
+    return ratingWeight * 0.35;
+  }
+  return ratingWeight;
+}
+
 export function derivePlanOutcomeProfile(
   completedPlans: ReadonlyArray<CompletedPersonalPlan>,
   nowMs = Date.now()
@@ -51,33 +74,40 @@ export function derivePlanOutcomeProfile(
       completed.has(stop.placeId)
     ).length;
     const completionRatio = completedCount / totalStops;
-    const weight = recencyWeight(item.completedAt, nowMs);
+    const recency = recencyWeight(item.completedAt, nowMs);
+    const enjoyment = enjoymentWeight(item);
+    const weight = recency * enjoyment;
+    const effectiveSuccess = completionRatio * enjoyment;
 
-    // Outcome history is positive-only. A skipped stop is not interpreted
-    // as dislike; explicit feedback/rating remains the negative signal.
-    if (completionRatio >= 0.67) {
+    // Skips stay neutral. Explicit post-plan feedback can reduce or remove
+    // a positive completion signal without inventing a dislike signal.
+    if (
+      completionRatio >= 0.67 &&
+      (item.outcomeRating === null || item.outcomeRating >= 4) &&
+      item.wouldRepeat !== false
+    ) {
       successfulPlanCount += 1;
     }
 
-    if (item.plan.scenario && completionRatio > 0) {
+    if (item.plan.scenario && effectiveSuccess > 0) {
       const current = scenarioTotals.get(item.plan.scenario) ?? {
         weightedSuccess: 0,
         weight: 0
       };
-      current.weightedSuccess += completionRatio * weight;
-      current.weight += weight;
+      current.weightedSuccess += effectiveSuccess * recency;
+      current.weight += recency;
       scenarioTotals.set(item.plan.scenario, current);
     }
 
     for (const stop of item.plan.stops) {
-      if (!completed.has(stop.placeId)) continue;
+      if (!completed.has(stop.placeId) || weight <= 0) continue;
 
       const current = placeTotals.get(stop.placeId) ?? {
         completed: 0,
         weight: 0
       };
       current.completed += weight;
-      current.weight += weight;
+      current.weight += recency;
       placeTotals.set(stop.placeId, current);
     }
   }

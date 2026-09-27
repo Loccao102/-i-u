@@ -8,6 +8,7 @@ import type {
   BackupImportResult,
   Collection,
   CompletedPersonalPlan,
+  CompletedPlanFeedbackInput,
   DailyDiscoveryKind,
   DailyDiscoveryRecord,
   MapBounds,
@@ -328,7 +329,7 @@ async function listCompletedPlans(
   const { data, error } = await getSupabaseAdmin()
     .from("completed_personal_plans")
     .select(
-      "id,plan,completed_stop_ids,skipped_stop_ids,started_at,completed_at"
+      "id,plan,completed_stop_ids,skipped_stop_ids,started_at,completed_at,outcome_rating,would_repeat,feedback_note,feedback_at"
     )
     .eq("owner_key", ownerKey)
     .order("completed_at", { ascending: false })
@@ -342,8 +343,57 @@ async function listCompletedPlans(
     completedStopIds: row.completed_stop_ids ?? [],
     skippedStopIds: row.skipped_stop_ids ?? [],
     startedAt: String(row.started_at),
-    completedAt: String(row.completed_at)
+    completedAt: String(row.completed_at),
+    outcomeRating:
+      row.outcome_rating === null || row.outcome_rating === undefined
+        ? null
+        : Number(row.outcome_rating),
+    wouldRepeat:
+      typeof row.would_repeat === "boolean" ? row.would_repeat : null,
+    feedbackNote:
+      typeof row.feedback_note === "string" ? row.feedback_note : "",
+    feedbackAt:
+      typeof row.feedback_at === "string" ? row.feedback_at : null
   }));
+}
+
+export async function saveCompletedPlanFeedback(
+  ownerKey: string,
+  planId: string,
+  input: CompletedPlanFeedbackInput
+): Promise<CompletedPersonalPlan> {
+  const now = new Date().toISOString();
+  const { data, error } = await getSupabaseAdmin()
+    .from("completed_personal_plans")
+    .update({
+      outcome_rating: input.outcomeRating,
+      would_repeat: input.wouldRepeat,
+      feedback_note: input.feedbackNote || null,
+      feedback_at: now
+    })
+    .eq("owner_key", ownerKey)
+    .eq("id", planId)
+    .select(
+      "id,plan,completed_stop_ids,skipped_stop_ids,started_at,completed_at,outcome_rating,would_repeat,feedback_note,feedback_at"
+    )
+    .single();
+
+  dbError(error, "Save completed plan feedback");
+
+  return {
+    id: String(data!.id),
+    plan: parseActivePlanSnapshot(data!.plan),
+    completedStopIds: data!.completed_stop_ids ?? [],
+    skippedStopIds: data!.skipped_stop_ids ?? [],
+    startedAt: String(data!.started_at),
+    completedAt: String(data!.completed_at),
+    outcomeRating: Number(data!.outcome_rating),
+    wouldRepeat:
+      typeof data!.would_repeat === "boolean" ? data!.would_repeat : null,
+    feedbackNote:
+      typeof data!.feedback_note === "string" ? data!.feedback_note : "",
+    feedbackAt: String(data!.feedback_at)
+  };
 }
 
 async function listCollections(ownerKey: string): Promise<Collection[]> {
@@ -952,7 +1002,11 @@ export async function mergePersonalBackup(
         completed_stop_ids: item.completedStopIds.map(mapPlaceId),
         skipped_stop_ids: item.skippedStopIds.map(mapPlaceId),
         started_at: item.startedAt,
-        completed_at: item.completedAt
+        completed_at: item.completedAt,
+        outcome_rating: item.outcomeRating,
+        would_repeat: item.wouldRepeat,
+        feedback_note: item.feedbackNote || null,
+        feedback_at: item.feedbackAt
       };
     }
   );

@@ -519,6 +519,12 @@ export function MapExplorer() {
     useState<RatingDraft["revisit"]>("yes");
   const [ratingContexts, setRatingContexts] = useState<Scenario[]>(["date"]);
   const [ratingNote, setRatingNote] = useState("");
+  const [pendingPlanFeedbackId, setPendingPlanFeedbackId] =
+    useState<string | null>(null);
+  const [planOutcomeRating, setPlanOutcomeRating] = useState(5);
+  const [planWouldRepeat, setPlanWouldRepeat] =
+    useState<boolean | null>(true);
+  const [planFeedbackNote, setPlanFeedbackNote] = useState("");
 
   const [editName, setEditName] = useState("");
   const [editNote, setEditNote] = useState("");
@@ -539,6 +545,7 @@ export function MapExplorer() {
   const addDialogRef = useRef<HTMLDialogElement | null>(null);
   const editDialogRef = useRef<HTMLDialogElement | null>(null);
   const ratingDialogRef = useRef<HTMLDialogElement | null>(null);
+  const planFeedbackDialogRef = useRef<HTMLDialogElement | null>(null);
   const collectionDialogRef = useRef<HTMLDialogElement | null>(null);
   const planDialogRef = useRef<HTMLDialogElement | null>(null);
   const dailyDialogRef = useRef<HTMLDialogElement | null>(null);
@@ -2060,10 +2067,19 @@ export function MapExplorer() {
       }
 
       if (result.finished) {
+        const finishedPlanId = runningPlan.id;
+        setPendingPlanFeedbackId(finishedPlanId);
+        setPlanOutcomeRating(5);
+        setPlanWouldRepeat(true);
+        setPlanFeedbackNote("");
         setNotice(
           action === "complete"
-            ? "Đã hoàn thành plan. Lịch sử chuyến đi đã được cập nhật."
-            : "Plan đã kết thúc."
+            ? "Đã hoàn thành plan. Cho ĐiĐâu biết buổi này có thực sự ổn không nhé."
+            : "Plan đã kết thúc. Feedback cuối buổi giúp planner học chính xác hơn."
+        );
+        window.setTimeout(
+          () => planFeedbackDialogRef.current?.showModal(),
+          0
         );
         return;
       }
@@ -2085,6 +2101,42 @@ export function MapExplorer() {
         error instanceof Error
           ? error.message
           : "Không thể cập nhật kế hoạch."
+      );
+    }
+  }
+
+  async function submitPlanFeedback(
+    event: FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+    if (!pendingPlanFeedbackId) return;
+
+    try {
+      const result = await personalApi.saveCompletedPlanFeedback(
+        pendingPlanFeedbackId,
+        {
+          outcomeRating: planOutcomeRating,
+          wouldRepeat: planWouldRepeat,
+          feedbackNote: cleanPlainText(planFeedbackNote, 300)
+        }
+      );
+
+      setCompletedPlans((current) => [
+        result.completedPlan,
+        ...current.filter(
+          (item) => item.id !== result.completedPlan.id
+        )
+      ]);
+      setPendingPlanFeedbackId(null);
+      planFeedbackDialogRef.current?.close();
+      setNotice(
+        "Đã ghi nhận cảm nhận về buổi đi. Outcome learning sẽ dùng tín hiệu này ở mức nhẹ."
+      );
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "Không thể lưu đánh giá buổi đi."
       );
     }
   }
@@ -3111,6 +3163,11 @@ export function MapExplorer() {
                       ) : null}
                       <span>· ~{moneyLabel(plan.plan.totalEstimatedCostForTwo)}</span>
                       <span>· {plan.plan.totalDurationMinutes} phút</span>
+                      {plan.outcomeRating ? (
+                        <span>· ★ {plan.outcomeRating}/5</span>
+                      ) : (
+                        <span>· chưa feedback</span>
+                      )}
                     </span>
                   </button>
                 );
@@ -4428,6 +4485,93 @@ export function MapExplorer() {
             <textarea value={ratingNote} onChange={(e) => setRatingNote(e.target.value.slice(0,240))} rows={3} />
           </label>
           <button className="primary-button primary-button--wide" type="submit">Lưu đánh giá</button>
+        </form>
+      </dialog>
+
+      <dialog className="app-dialog" ref={planFeedbackDialogRef}>
+        <form className="dialog-card plan-feedback-card" onSubmit={submitPlanFeedback}>
+          <div className="dialog-header">
+            <div>
+              <span className="eyebrow">Outcome thật</span>
+              <h2>Buổi đi vừa rồi thế nào?</h2>
+            </div>
+            <button
+              className="icon-button"
+              type="button"
+              onClick={() => planFeedbackDialogRef.current?.close()}
+              aria-label="Đóng"
+            >
+              <CloseIcon />
+            </button>
+          </div>
+
+          <p className="dialog-copy">
+            Hoàn thành route chưa chắc đồng nghĩa là thích. Feedback này giúp ĐiĐâu tránh học sai từ việc bạn chỉ “đi cho xong”.
+          </p>
+
+          <div className="rating-stars plan-feedback-stars">
+            {[1, 2, 3, 4, 5].map((star) => (
+              <button
+                key={star}
+                type="button"
+                aria-label={star + " sao"}
+                className={
+                  planOutcomeRating >= star
+                    ? "rating-star rating-star--active"
+                    : "rating-star"
+                }
+                onClick={() => setPlanOutcomeRating(star)}
+              >
+                <StarIcon />
+              </button>
+            ))}
+          </div>
+
+          <fieldset className="dialog-fieldset">
+            <legend>Có muốn đi một route kiểu này lần nữa?</legend>
+            <div className="segmented">
+              <button
+                type="button"
+                className={planWouldRepeat === true ? "is-active" : ""}
+                onClick={() => setPlanWouldRepeat(true)}
+              >
+                Có
+              </button>
+              <button
+                type="button"
+                className={planWouldRepeat === null ? "is-active" : ""}
+                onClick={() => setPlanWouldRepeat(null)}
+              >
+                Chưa chắc
+              </button>
+              <button
+                type="button"
+                className={planWouldRepeat === false ? "is-active" : ""}
+                onClick={() => setPlanWouldRepeat(false)}
+              >
+                Không
+              </button>
+            </div>
+          </fieldset>
+
+          <label className="field">
+            <span>Điều gì đáng nhớ? (không bắt buộc)</span>
+            <textarea
+              rows={3}
+              value={planFeedbackNote}
+              onChange={(event) =>
+                setPlanFeedbackNote(event.target.value.slice(0, 300))
+              }
+              placeholder="Ví dụ: route hợp lý nhưng quán cuối quá ồn…"
+            />
+          </label>
+
+          <button
+            className="primary-button primary-button--wide"
+            type="submit"
+          >
+            Lưu cảm nhận
+          </button>
         </form>
       </dialog>
 

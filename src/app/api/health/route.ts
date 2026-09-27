@@ -28,7 +28,7 @@ function classify(error: unknown) {
   }
 
   if (
-    /google_place_id|cost_source|cost_confidence|place_user_photos|active_personal_plans|completed_personal_plans|daily_discoveries|personal_places/i.test(
+    /google_place_id|cost_source|cost_confidence|outcome_rating|would_repeat|feedback_note|feedback_at|place_user_photos|active_personal_plans|completed_personal_plans|daily_discoveries|personal_places/i.test(
       raw
     ) &&
     /column|relation|schema|does not exist|cache/i.test(raw)
@@ -80,7 +80,7 @@ export async function GET() {
         .limit(1),
       client
         .from("completed_personal_plans")
-        .select("id,completed_at")
+        .select("id,completed_at,outcome_rating,would_repeat,feedback_at")
         .limit(1)
     ]);
 
