@@ -14,11 +14,16 @@ Apply all files in `supabase/migrations/` in order. The baseline is:
 supabase/migrations/0001_personal_core.sql
 ```
 
-Current daily-discovery persistence is added by:
+Recent incremental migrations:
 
 ```text
 supabase/migrations/20260927063759_daily_discovery_history.sql
+supabase/migrations/20260927065815_provider_cost_estimates.sql
 ```
+
+The provider-cost migration adds `cost_source` and `cost_confidence` to
+`personal_places`. Existing non-empty costs are backfilled as user-entered;
+new provider estimates remain explicitly distinguishable from real prices.
 
 Apply with one of:
 
