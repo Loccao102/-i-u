@@ -206,6 +206,7 @@ supabase/migrations/20260927172009_planner_telemetry_semantics.sql
 supabase/migrations/20260927172409_reset_planner_telemetry_after_semantics_change.sql
 supabase/migrations/20260927173434_idempotent_active_plan_start.sql
 supabase/migrations/20260927174110_idempotent_personal_visits.sql
+supabase/migrations/20260927174553_idempotent_personal_visits_optional_rating.sql
 supabase/migrations/20260927153331_profile_data_reset.sql
 ```
 
