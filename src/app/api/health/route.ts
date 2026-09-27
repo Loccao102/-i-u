@@ -28,7 +28,7 @@ function classify(error: unknown) {
   }
 
   if (
-    /google_place_id|place_user_photos|active_personal_plans|personal_places/i.test(
+    /google_place_id|place_user_photos|active_personal_plans|daily_discoveries|personal_places/i.test(
       raw
     ) &&
     /column|relation|schema|does not exist|cache/i.test(raw)
@@ -61,7 +61,7 @@ export async function GET() {
     const client = getSupabaseAdmin();
     const keyKind = getSupabaseServerKeyKind();
 
-    const [places, photos, activePlans] = await Promise.all([
+    const [places, photos, activePlans, dailyDiscoveries] = await Promise.all([
       client
         .from("personal_places")
         .select("id,google_place_id")
@@ -73,6 +73,10 @@ export async function GET() {
       client
         .from("active_personal_plans")
         .select("id,current_stop_index")
+        .limit(1),
+      client
+        .from("daily_discoveries")
+        .select("day,kind,place_keys")
         .limit(1)
     ]);
 
@@ -85,6 +89,11 @@ export async function GET() {
     if (activePlans.error) {
       throw new Error(
         "Health active_personal_plans: " + activePlans.error.message
+      );
+    }
+    if (dailyDiscoveries.error) {
+      throw new Error(
+        "Health daily_discoveries: " + dailyDiscoveries.error.message
       );
     }
 
@@ -101,7 +110,8 @@ export async function GET() {
         schema: {
           personalPlacesGooglePlaceId: true,
           placeUserPhotos: true,
-          activePersonalPlans: true
+          activePersonalPlans: true,
+          dailyDiscoveries: true
         }
       },
       {
