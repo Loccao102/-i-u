@@ -103,6 +103,36 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_discoveries: {
+        Row: {
+          created_at: string
+          day: string
+          kind: string
+          owner_key: string
+          place_keys: string[]
+          scenario: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          day: string
+          kind: string
+          owner_key: string
+          place_keys: string[]
+          scenario?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          day?: string
+          kind?: string
+          owner_key?: string
+          place_keys?: string[]
+          scenario?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       personal_places: {
         Row: {
           accent: string
