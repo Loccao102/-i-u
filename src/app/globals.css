@@ -2097,6 +2097,89 @@ textarea:focus-visible {
   line-height: 1.45;
 }
 
+.plan-quality-card {
+  margin-top: 11px;
+  border: 1px solid #dfe4df;
+  border-radius: 14px;
+  padding: 10px 11px;
+  background: #f8faf8;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.plan-quality-card__score {
+  flex: 0 0 auto;
+  min-width: 58px;
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+}
+
+.plan-quality-card__score span {
+  color: var(--muted);
+  font-size: 7px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.plan-quality-card__score strong {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.plan-quality-card__score small {
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.plan-quality-card__body {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.plan-quality-card__body > strong {
+  font-size: 10px;
+}
+
+.plan-quality-card__body > span,
+.plan-quality-card__body > small {
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.4;
+}
+
+.plan-quality-card--high {
+  border-color: #cfe2d3;
+  background: #f1f8f2;
+}
+
+.plan-quality-card--high .plan-quality-card__score strong,
+.plan-quality-card--high .plan-quality-card__body > strong {
+  color: #39704a;
+}
+
+.plan-quality-card--medium {
+  border-color: #e7dfc7;
+  background: #fffaf0;
+}
+
+.plan-quality-card--medium .plan-quality-card__score strong,
+.plan-quality-card--medium .plan-quality-card__body > strong {
+  color: #81692b;
+}
+
+.plan-quality-card--low {
+  border-color: #ead6d2;
+  background: #fff6f4;
+}
+
+.plan-quality-card--low .plan-quality-card__score strong,
+.plan-quality-card--low .plan-quality-card__body > strong {
+  color: #9b554a;
+}
+
 .plan-routing-status {
   margin-top: 10px;
   border: 1px solid #e5e6e2;
