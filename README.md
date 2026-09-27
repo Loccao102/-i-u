@@ -217,8 +217,8 @@ http://localhost:3000
 
 1. improve real-world price/budget estimates from personal history and explicit user input;
 2. add richer provider category presets for more types of outings;
-5. Supabase Auth only when account recovery/multi-device sync is worth the friction;
-6. Groups and group voting after the personal loop is mature.
+3. Supabase Auth only when account recovery/multi-device sync is worth the friction;
+4. Groups and group voting after the personal loop is mature.
 
 
 ## Manual Vercel deployment
