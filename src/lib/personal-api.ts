@@ -1,3 +1,4 @@
+import type { ProviderCostCalibration } from "./cost-estimation";
 import { placeFromPoiResult } from "./places";
 import type {
   ActivePlanAdvanceResult,
@@ -328,9 +329,12 @@ export const personalApi = {
     );
   },
 
-  importPoi: (result: PoiSearchResult) => {
+  importPoi: (
+    result: PoiSearchResult,
+    calibration?: ProviderCostCalibration
+  ) => {
     const place: Place = {
-      ...placeFromPoiResult(result),
+      ...placeFromPoiResult(result, calibration),
       id: crypto.randomUUID(),
       match: 78,
       communityNote:

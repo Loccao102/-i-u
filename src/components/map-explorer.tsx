@@ -26,6 +26,7 @@ import {
 import { personalApi } from "@/lib/personal-api";
 import {
   costBadgeLabel,
+  deriveProviderCostCalibration,
   priceLabelForCost
 } from "@/lib/cost-estimation";
 import {
@@ -655,6 +656,11 @@ export function MapExplorer() {
     }
   }, []);
 
+  const providerCostCalibration = useMemo(
+    () => deriveProviderCostCalibration(customPlaces),
+    [customPlaces]
+  );
+
   const importedProviderIds = useMemo(
     () =>
       new Set(
@@ -674,12 +680,15 @@ export function MapExplorer() {
             !discoveryFilters.openNow ||
             openingStatus(item.openingHours, clock).state === "open"
         )
-        .map(placeFromPoiResult),
+        .map((item) =>
+          placeFromPoiResult(item, providerCostCalibration)
+        ),
     [
       discoveredPoiResults,
       importedProviderIds,
       discoveryFilters.openNow,
-      clock
+      clock,
+      providerCostCalibration
     ]
   );
 
@@ -2210,7 +2219,10 @@ export function MapExplorer() {
 
   async function importPoi(result: PoiSearchResult) {
     try {
-      const imported = await personalApi.importPoi(result);
+      const imported = await personalApi.importPoi(
+        result,
+        providerCostCalibration
+      );
       await loadSnapshot();
       setSelectedId(imported.place.id);
       setProviderResults((current) =>
@@ -4865,6 +4877,25 @@ export function MapExplorer() {
               </select>
             </label>
           </div>
+
+          {providerCostCalibration.sampleSize > 0 ? (
+            <section className="cost-calibration-strip">
+              <div>
+                <span className="eyebrow">Giá provider đang học</span>
+                <strong>
+                  {providerCostCalibration.sampleSize} giá thật đã đối chiếu
+                </strong>
+              </div>
+              <small>
+                {Object.keys(providerCostCalibration.byFamily).length > 0
+                  ? Object.keys(providerCostCalibration.byFamily).length +
+                    " nhóm đã đủ mẫu để hiệu chỉnh"
+                  : providerCostCalibration.overallMultiplier
+                    ? "Đã đủ mẫu để hiệu chỉnh baseline chung"
+                    : "Cần thêm vài giá thật để tự hiệu chỉnh baseline"}
+              </small>
+            </section>
+          ) : null}
 
           {plannerCostProfile.sampleSize > 0 ? (
             <div className="plan-cost-learning">

@@ -15,6 +15,7 @@ import type {
   UserLocation,
   VisitRecord
 } from "./types";
+import { parseCostAmount } from "./cost-estimation";
 import { openingStatus } from "./opening-hours";
 import { scorePlanOutcomeMatch } from "./plan-outcomes";
 import { haversineKm } from "./search";
@@ -42,54 +43,6 @@ const fallbackCost: Record<Place["priceLabel"], number> = {
 
 function normalize(value: string) {
   return value.toLocaleLowerCase("vi-VN");
-}
-
-function parseMoney(value: string) {
-  const plain = /^\s*([\d.,]+)\s*(?:₫|đ|vnd)?\s*$/i.exec(value);
-  if (plain) {
-    const digits = plain[1]!.replace(/[.,]/g, "");
-    const number = Number(digits);
-    if (Number.isFinite(number) && number >= 10_000) {
-      return Math.round(number);
-    }
-  }
-
-  const range = /(\d+(?:[.,]\d+)?)\s*[-–—]\s*(\d+(?:[.,]\d+)?)\s*(k|nghìn|ngàn|triệu|tr)\b/i.exec(
-    value
-  );
-
-  if (range) {
-    const low = Number(range[1]!.replace(",", "."));
-    const high = Number(range[2]!.replace(",", "."));
-    const unit = normalize(range[3]!);
-    if (Number.isFinite(low) && Number.isFinite(high)) {
-      const multiplier =
-        unit === "triệu" || unit === "tr" ? 1_000_000 : 1_000;
-      return Math.round(((low + high) / 2) * multiplier);
-    }
-  }
-
-  const matches = Array.from(
-    value.matchAll(/(\d+(?:[.,]\d+)?)\s*(k|nghìn|ngàn|triệu|tr)\b/gi)
-  );
-
-  if (matches.length === 0) return null;
-
-  const values = matches
-    .map((match) => {
-      const raw = Number(match[1]!.replace(",", "."));
-      if (!Number.isFinite(raw)) return null;
-      const unit = normalize(match[2]!);
-      return unit === "triệu" || unit === "tr"
-        ? raw * 1_000_000
-        : raw * 1_000;
-    })
-    .filter((item): item is number => item !== null);
-
-  if (values.length === 0) return null;
-  return Math.round(
-    values.reduce((sum, item) => sum + item, 0) / values.length
-  );
 }
 
 function costStage(place: Place): PlanStage {
@@ -123,7 +76,7 @@ export function derivePlannerCostProfile(
   };
 
   for (const place of places) {
-    const explicit = parseMoney(place.averageForTwo);
+    const explicit = parseCostAmount(place.averageForTwo);
     if (explicit === null) continue;
 
     // Only real user-entered/legacy costs train the personal spending profile.
@@ -151,7 +104,7 @@ export function estimateCostForTwo(
   place: Place,
   costProfile?: PlannerCostProfile
 ) {
-  const explicit = parseMoney(place.averageForTwo);
+  const explicit = parseCostAmount(place.averageForTwo);
   const learned =
     costProfile?.byStage[costStage(place)] ??
     costProfile?.overallMedian;

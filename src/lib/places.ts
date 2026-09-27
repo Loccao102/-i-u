@@ -1,6 +1,7 @@
 import {
   estimateProviderCost,
-  formatProviderCostEstimate
+  formatProviderCostEstimate,
+  type ProviderCostCalibration
 } from "./cost-estimation";
 import type { Place, PoiSearchResult, Scenario } from "./types";
 
@@ -13,9 +14,12 @@ export const scenarioLabels: Record<Scenario, string> = {
   chill: "Chill"
 };
 
-export function placeFromPoiResult(result: PoiSearchResult): Place {
+export function placeFromPoiResult(
+  result: PoiSearchResult,
+  calibration?: ProviderCostCalibration
+): Place {
   const scenarios = result.scenarios;
-  const cost = estimateProviderCost(result);
+  const cost = estimateProviderCost(result, calibration);
 
   return {
     id: "provider:" + result.providerId,

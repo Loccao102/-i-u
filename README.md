@@ -52,6 +52,8 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - editable real-world "chi phí 2 người" on personal/saved places;
 - provider-derived cost estimates for common food / cafe / bar / activity / culture / sport / outdoor categories, clearly labeled as estimates rather than live prices;
 - one-tap cost correction on estimated POIs: lower / near estimate / higher choices are persisted as user-confirmed cost and become eligible for personal budget learning;
+- provider price baselines self-calibrate from confirmed provider-place prices using robust median ratios, requiring multiple samples and clamping adjustments to avoid overfitting;
+- family-level calibration needs at least 2 matching corrections; overall fallback calibration needs at least 3 corrections;
 - cost provenance + confidence stored per place so provider estimates never train the personal spending profile as if they were real user-entered prices;
 - planner blends provider estimates with learned user medians when enough real spending data exists, while real user-entered cost always wins;
 - learned budget medians by outing type (food / activity / cafe-chill) for places without explicit prices, with fixed price tiers only as the final fallback;
@@ -237,11 +239,10 @@ http://localhost:3000
 
 ## Next
 
-1. validate provider cost heuristics against accumulated user corrections and tune category baselines;
-2. add data-quality repair prompts for saved places that repeatedly cause low-confidence plans;
-3. add lightweight itinerary sharing before full Groups;
-4. Supabase Auth only when account recovery/multi-device sync is worth the friction;
-5. Groups and group voting after the personal loop is mature.
+1. add data-quality repair prompts for saved places that repeatedly cause low-confidence plans;
+2. add lightweight itinerary sharing before full Groups;
+3. Supabase Auth only when account recovery/multi-device sync is worth the friction;
+4. Groups and group voting after the personal loop is mature.
 
 
 ## Manual Vercel deployment
