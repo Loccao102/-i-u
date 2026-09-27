@@ -15,6 +15,7 @@ import type {
   NearbyPlaceResult,
   PersonalRating,
   PersonalSnapshot,
+  PlannerDefaults,
   RecommendationFeedback,
   Place,
   Scenario,
@@ -396,6 +397,93 @@ export async function saveCompletedPlanFeedback(
   };
 }
 
+async function getPlannerDefaults(
+  ownerKey: string
+): Promise<PlannerDefaults | undefined> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("personal_planner_defaults")
+    .select(
+      "route_mode,budget_for_two,max_distance_km,duration_hours,updated_at"
+    )
+    .eq("owner_key", ownerKey)
+    .maybeSingle();
+
+  dbError(error, "Get planner defaults");
+  if (!data) return undefined;
+
+  const routeMode =
+    data.route_mode === "drive" ||
+    data.route_mode === "walk" ||
+    data.route_mode === "motorcycle"
+      ? data.route_mode
+      : "motorcycle";
+
+  const maxDistanceKm =
+    data.max_distance_km === 3 ||
+    data.max_distance_km === 8 ||
+    data.max_distance_km === 12
+      ? data.max_distance_km
+      : 5;
+
+  const durationHours =
+    data.duration_hours === 2 || data.duration_hours === 3
+      ? data.duration_hours
+      : 4;
+
+  return {
+    routeMode,
+    budgetForTwo: Number(data.budget_for_two),
+    maxDistanceKm,
+    durationHours,
+    updatedAt: String(data.updated_at)
+  };
+}
+
+export async function upsertPlannerDefaults(
+  ownerKey: string,
+  defaults: PlannerDefaults
+): Promise<PlannerDefaults> {
+  const now = new Date().toISOString();
+  const { data, error } = await getSupabaseAdmin()
+    .from("personal_planner_defaults")
+    .upsert(
+      {
+        owner_key: ownerKey,
+        route_mode: defaults.routeMode,
+        budget_for_two: defaults.budgetForTwo,
+        max_distance_km: defaults.maxDistanceKm,
+        duration_hours: defaults.durationHours,
+        updated_at: now
+      },
+      { onConflict: "owner_key" }
+    )
+    .select(
+      "route_mode,budget_for_two,max_distance_km,duration_hours,updated_at"
+    )
+    .single();
+
+  dbError(error, "Upsert planner defaults");
+
+  return {
+    routeMode:
+      data!.route_mode === "drive" || data!.route_mode === "walk"
+        ? data!.route_mode
+        : "motorcycle",
+    budgetForTwo: Number(data!.budget_for_two),
+    maxDistanceKm:
+      data!.max_distance_km === 3 ||
+      data!.max_distance_km === 8 ||
+      data!.max_distance_km === 12
+        ? data!.max_distance_km
+        : 5,
+    durationHours:
+      data!.duration_hours === 2 || data!.duration_hours === 3
+        ? data!.duration_hours
+        : 4,
+    updatedAt: String(data!.updated_at)
+  };
+}
+
 async function listCollections(ownerKey: string): Promise<Collection[]> {
   const client = getSupabaseAdmin();
   const [collectionsResult, linksResult] = await Promise.all([
@@ -443,7 +531,8 @@ export async function getPersonalSnapshot(
     visits,
     collections,
     dailyDiscoveries,
-    completedPlans
+    completedPlans,
+    plannerDefaults
   ] = await Promise.all([
     listPlaces(ownerKey),
     listSaved(ownerKey),
@@ -452,7 +541,8 @@ export async function getPersonalSnapshot(
     listVisits(ownerKey),
     listCollections(ownerKey),
     listDailyDiscoveries(ownerKey),
-    listCompletedPlans(ownerKey)
+    listCompletedPlans(ownerKey),
+    getPlannerDefaults(ownerKey)
   ]);
 
   return {
@@ -464,7 +554,8 @@ export async function getPersonalSnapshot(
     visits,
     collections,
     dailyDiscoveries,
-    completedPlans
+    completedPlans,
+    plannerDefaults
   };
 }
 
@@ -1021,6 +1112,12 @@ export async function mergePersonalBackup(
     dbError(error, "Import completed plans");
   }
 
+  let plannerDefaultsImported = 0;
+  if (snapshot.plannerDefaults) {
+    await upsertPlannerDefaults(ownerKey, snapshot.plannerDefaults);
+    plannerDefaultsImported = 1;
+  }
+
   return {
     places,
     saved: savedRows.length,
@@ -1030,7 +1127,8 @@ export async function mergePersonalBackup(
     collections: collectionRows.length,
     collectionPlaces: collectionPlaceRows.length,
     dailyDiscoveries: dailyDiscoveryRows.length,
-    completedPlans: completedPlanRows.length
+    completedPlans: completedPlanRows.length,
+    plannerDefaults: plannerDefaultsImported
   };
 }
 
