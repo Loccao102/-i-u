@@ -1156,6 +1156,20 @@ export function MapExplorer() {
     }
   }
 
+  async function persistProviderPlace(place: Place) {
+    if (customIds.has(place.id)) return place;
+
+    if (place.source !== "provider" || !place.providerId) {
+      throw new Error("Địa điểm này chưa thể lưu tự động.");
+    }
+
+    const imported = await personalApi.importProviderPlace(place);
+    if (selected.id === place.id) {
+      setSelectedId(imported.place.id);
+    }
+    return imported.place;
+  }
+
   async function importPoi(result: PoiSearchResult) {
     try {
       const imported = await personalApi.importPoi(result);
@@ -1229,24 +1243,49 @@ export function MapExplorer() {
   }
 
   async function toggleSaved(placeId: string) {
-    const next = !saved.has(placeId);
+    const source =
+      allPlaces.find((place) => place.id === placeId) ?? selected;
+    const wasSaved = saved.has(placeId);
+
     try {
-      await personalApi.setSaved(placeId, next);
+      const target = wasSaved
+        ? source
+        : await persistProviderPlace(source);
+      await personalApi.setSaved(target.id, !wasSaved);
       await loadSnapshot();
+      setSelectedId(target.id);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Không thể lưu.");
     }
   }
 
-  function openRating() {
-    const current = ratings[selected.id];
-    setRatingStars(current?.stars ?? 5);
-    setRatingRevisit(current?.revisit ?? "yes");
-    setRatingContexts(
-      current?.contexts.length ? current.contexts : selected.scenarios.slice(0, 2)
-    );
-    setRatingNote(current?.note ?? "");
-    ratingDialogRef.current?.showModal();
+  async function openRating() {
+    if (!hasSelectedPlace) return;
+
+    try {
+      const target = await persistProviderPlace(selected);
+      if (target.id !== selected.id) {
+        await loadSnapshot();
+        setSelectedId(target.id);
+      }
+
+      const current = ratings[target.id];
+      setRatingStars(current?.stars ?? 5);
+      setRatingRevisit(current?.revisit ?? "yes");
+      setRatingContexts(
+        current?.contexts.length
+          ? current.contexts
+          : target.scenarios.slice(0, 2)
+      );
+      setRatingNote(current?.note ?? "");
+      ratingDialogRef.current?.showModal();
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "Không thể chuẩn bị đánh giá."
+      );
+    }
   }
 
   async function submitRating(event: FormEvent<HTMLFormElement>) {
@@ -1270,11 +1309,15 @@ export function MapExplorer() {
   }
 
   async function checkIn() {
-    try {
-      await personalApi.checkIn(selected.id);
-      await loadSnapshot();
+    if (!hasSelectedPlace) return;
 
-      if (runningCurrentStop?.placeId === selected.id) {
+    try {
+      const target = await persistProviderPlace(selected);
+      await personalApi.checkIn(target.id);
+      await loadSnapshot();
+      setSelectedId(target.id);
+
+      if (runningCurrentStop?.placeId === target.id) {
         setNotice(
           "Đã check-in chặng hiện tại · khi rời đi bấm Xong chặng."
         );
@@ -1282,7 +1325,7 @@ export function MapExplorer() {
       }
 
       const next = suggestWhatNext({
-        current: selected,
+        current: target,
         places: rankedAll,
         signals: { savedIds: saved, ratings, visits },
         maxDistanceKm: 4,
@@ -2309,7 +2352,7 @@ export function MapExplorer() {
             <button type="button" className="secondary-button" onClick={() => void checkIn()}>
               <PinIcon /> Check-in
             </button>
-            <button type="button" className="secondary-button" onClick={openRating}>
+            <button type="button" className="secondary-button" onClick={() => void openRating()}>
               <StarIcon /> Đánh giá
             </button>
           </div>
@@ -2359,7 +2402,7 @@ export function MapExplorer() {
               <div className="personal-empty">
                 <strong>Chưa có rating cá nhân.</strong>
                 <span>Check-in trước, hoặc đánh giá luôn sau khi đi.</span>
-                <button type="button" onClick={openRating}>Thêm đánh giá</button>
+                <button type="button" onClick={() => void openRating()}>Thêm đánh giá</button>
               </div>
             )}
           </section>
