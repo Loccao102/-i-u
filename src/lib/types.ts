@@ -107,6 +107,24 @@ export type PlannerDefaults = {
   updatedAt: string | null;
 };
 
+export type PlannerMetric =
+  | "generated"
+  | "started"
+  | "completed"
+  | "replayed";
+
+export type PlannerMetricsSummary = {
+  windowDays: 30;
+  activeDays: number;
+  generated: number;
+  started: number;
+  completed: number;
+  replayed: number;
+  startRate: number | null;
+  completionRate: number | null;
+  replayRate: number | null;
+};
+
 export type PersonalSnapshot = {
   version: 3;
   customPlaces: Place[];
