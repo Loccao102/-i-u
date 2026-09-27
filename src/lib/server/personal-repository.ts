@@ -28,6 +28,8 @@ type PlaceRow = {
   distance_km: number;
   price_label: "$" | "$$" | "$$$";
   average_for_two: string;
+  cost_source: "unknown" | "user" | "provider_estimate";
+  cost_confidence: number;
   public_rating: number;
   match_score: number;
   community_note: string;
@@ -62,6 +64,8 @@ function mapPlace(row: PlaceRow): Place {
     distanceKm: row.distance_km,
     priceLabel: row.price_label,
     averageForTwo: row.average_for_two,
+    costSource: row.cost_source,
+    costConfidence: row.cost_confidence,
     publicRating: row.public_rating,
     match: row.match_score,
     communityNote: row.community_note,
@@ -92,7 +96,7 @@ async function listPlaces(ownerKey: string): Promise<Place[]> {
   const { data, error } = await getSupabaseAdmin()
     .from("personal_places")
     .select(
-      "id,name,kind,description,latitude,longitude,distance_km,price_label,average_for_two,public_rating,match_score,community_note,open_until,best_time,noise,crowd,tags,scenarios,note,accent,source,provider_id,google_place_id,address"
+      "id,name,kind,description,latitude,longitude,distance_km,price_label,average_for_two,cost_source,cost_confidence,public_rating,match_score,community_note,open_until,best_time,noise,crowd,tags,scenarios,note,accent,source,provider_id,google_place_id,address"
     )
     .eq("owner_key", ownerKey)
     .order("updated_at", { ascending: false })
@@ -400,6 +404,11 @@ export async function upsertPlace(ownerKey: string, place: Place) {
         distance_km: place.distanceKm,
         price_label: place.priceLabel,
         average_for_two: place.averageForTwo,
+        cost_source: place.costSource ?? "unknown",
+        cost_confidence: Math.max(
+          0,
+          Math.min(100, Math.round(place.costConfidence ?? 0))
+        ),
         public_rating: place.publicRating,
         match_score: place.match,
         community_note: place.communityNote,
@@ -684,7 +693,7 @@ export async function findProviderPlace(
   const { data, error } = await getSupabaseAdmin()
     .from("personal_places")
     .select(
-      "id,name,kind,description,latitude,longitude,distance_km,price_label,average_for_two,public_rating,match_score,community_note,open_until,best_time,noise,crowd,tags,scenarios,note,accent,source,provider_id,google_place_id,address"
+      "id,name,kind,description,latitude,longitude,distance_km,price_label,average_for_two,cost_source,cost_confidence,public_rating,match_score,community_note,open_until,best_time,noise,crowd,tags,scenarios,note,accent,source,provider_id,google_place_id,address"
     )
     .eq("owner_key", ownerKey)
     .eq("source", "PROVIDER")
@@ -943,7 +952,7 @@ export async function getPersonalPlace(
   const { data, error } = await getSupabaseAdmin()
     .from("personal_places")
     .select(
-      "id,name,kind,description,latitude,longitude,distance_km,price_label,average_for_two,public_rating,match_score,community_note,open_until,best_time,noise,crowd,tags,scenarios,note,accent,source,provider_id,google_place_id,address"
+      "id,name,kind,description,latitude,longitude,distance_km,price_label,average_for_two,cost_source,cost_confidence,public_rating,match_score,community_note,open_until,best_time,noise,crowd,tags,scenarios,note,accent,source,provider_id,google_place_id,address"
     )
     .eq("owner_key", ownerKey)
     .eq("id", placeId)
