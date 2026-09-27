@@ -94,6 +94,25 @@ export type PersonalSnapshot = {
   collections: Collection[];
 };
 
+export type PoiDiscoveryCategory =
+  | "all"
+  | "food"
+  | "cafe"
+  | "drink"
+  | "activity";
+
+export type PoiDiscoveryAmenity =
+  | "any"
+  | "wifi"
+  | "wheelchair";
+
+export type PoiDiscoveryFilters = {
+  category: PoiDiscoveryCategory;
+  amenity: PoiDiscoveryAmenity;
+  radiusKm: 0 | 1 | 3 | 5 | 10;
+  openNow: boolean;
+};
+
 export type PoiSearchResult = {
   provider: "openstreetmap" | "geoapify";
   providerId: string;

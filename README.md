@@ -19,6 +19,8 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - collections;
 - real Geoapify POI discovery for cafe / food / bar / activity places in the visible map viewport;
 - Geoapify text search + import for named places;
+- discovery filters for place type, Wi-Fi, wheelchair access and 1/3/5/10 km radius from the current map center;
+- "Đang mở" filtering from available provider `opening_hours` without bulk detail requests;
 - lazy Geoapify Place Details on selection: website, phone/email, opening hours, facilities, wheelchair and parking metadata;
 - 30-minute server cache for place details so opening the same place repeatedly does not burn free-tier credits;
 - OpenStreetMap Nominatim/Overpass remain as a no-key fallback so the current deployment keeps working;
@@ -210,8 +212,8 @@ http://localhost:3000
 ## Next
 
 1. add weather forecast awareness for future plans, not only current conditions;
-2. add stronger discovery filters (open now, facilities, accessibility, distance);
-3. improve real-world price/budget estimates from personal history and explicit user input;
+2. improve real-world price/budget estimates from personal history and explicit user input;
+3. add provider pagination/refresh controls for denser city areas;
 4. Supabase Auth only when account recovery/multi-device sync is worth the friction;
 5. Groups and group voting after the personal loop is mature.
 

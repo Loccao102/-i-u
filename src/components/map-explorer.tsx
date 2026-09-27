@@ -53,6 +53,7 @@ import type {
   ProviderPlaceDetails,
   Place,
   PlaceMedia,
+  PoiDiscoveryFilters,
   PoiSearchResult,
   RatingDraft,
   RecommendationContext,
@@ -112,6 +113,37 @@ const scenarioEmoji: Record<Scenario, string> = {
 };
 
 type PersonalView = "discover" | "saved" | "history" | "collections";
+
+const discoveryCategoryOptions: Array<{
+  value: PoiDiscoveryFilters["category"];
+  label: string;
+}> = [
+  { value: "all", label: "Tất cả loại" },
+  { value: "food", label: "Ăn uống" },
+  { value: "cafe", label: "Cafe" },
+  { value: "drink", label: "Bar / Pub" },
+  { value: "activity", label: "Vui chơi" }
+];
+
+const discoveryAmenityOptions: Array<{
+  value: PoiDiscoveryFilters["amenity"];
+  label: string;
+}> = [
+  { value: "any", label: "Mọi tiện ích" },
+  { value: "wifi", label: "Có Wi-Fi" },
+  { value: "wheelchair", label: "Hỗ trợ xe lăn" }
+];
+
+const discoveryRadiusOptions: Array<{
+  value: PoiDiscoveryFilters["radiusKm"];
+  label: string;
+}> = [
+  { value: 0, label: "Theo bản đồ" },
+  { value: 1, label: "Trong 1 km" },
+  { value: 3, label: "Trong 3 km" },
+  { value: 5, label: "Trong 5 km" },
+  { value: 10, label: "Trong 10 km" }
+];
 
 function distanceLabel(value: number) {
   if (value < 1) return Math.round(value * 1000) + " m";
@@ -298,6 +330,13 @@ export function MapExplorer() {
     useState<PoiSearchResult[]>([]);
   const [providerLoading, setProviderLoading] = useState(false);
   const [discoveryLoading, setDiscoveryLoading] = useState(false);
+  const [discoveryFilters, setDiscoveryFilters] =
+    useState<PoiDiscoveryFilters>({
+      category: "all",
+      amenity: "any",
+      radiusKm: 0,
+      openNow: false
+    });
   const [placeMedia, setPlaceMedia] = useState<PlaceMedia | null>(null);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [providerDetails, setProviderDetails] =
@@ -477,8 +516,18 @@ export function MapExplorer() {
     () =>
       discoveredPoiResults
         .filter((item) => !importedProviderIds.has(item.providerId))
+        .filter(
+          (item) =>
+            !discoveryFilters.openNow ||
+            openingStatus(item.openingHours, clock).state === "open"
+        )
         .map(placeFromPoiResult),
-    [discoveredPoiResults, importedProviderIds]
+    [
+      discoveredPoiResults,
+      importedProviderIds,
+      discoveryFilters.openNow,
+      clock
+    ]
   );
 
   const allPlaces = useMemo(
@@ -855,6 +904,33 @@ export function MapExplorer() {
   }, []);
 
   useEffect(() => {
+    if (!mapReady || !mapRef.current || view !== "discover") return;
+
+    const timer = window.setTimeout(() => {
+      const raw = mapRef.current?.getBounds();
+      if (!raw) return;
+
+      void refreshDiscovery(
+        {
+          west: raw.getWest(),
+          south: raw.getSouth(),
+          east: raw.getEast(),
+          north: raw.getNorth()
+        },
+        false
+      );
+    }, 180);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    discoveryFilters.category,
+    discoveryFilters.amenity,
+    discoveryFilters.radiusKm,
+    mapReady,
+    view
+  ]);
+
+  useEffect(() => {
     if (!mapReady || !mapRef.current) return;
     const center = mapRef.current.getCenter();
     void refreshWeather({
@@ -1030,7 +1106,10 @@ export function MapExplorer() {
   ) {
     setDiscoveryLoading(true);
     try {
-      const result = await personalApi.discoverPoi(bounds);
+      const result = await personalApi.discoverPoi(
+        bounds,
+        discoveryFilters
+      );
       setDiscoveredPoiResults(result.results);
       if (announce) {
         setNotice(
@@ -1112,7 +1191,7 @@ export function MapExplorer() {
     try {
       const [viewportResult, discoveryResult] = await Promise.all([
         personalApi.viewport(bounds),
-        personalApi.discoverPoi(bounds),
+        personalApi.discoverPoi(bounds, discoveryFilters),
         refreshWeather({
           latitude: center.lat,
           longitude: center.lng
@@ -2112,6 +2191,110 @@ export function MapExplorer() {
             </button>
           ))}
         </div>
+
+        {view === "discover" ? (
+          <div className="discovery-filter-row">
+            <label>
+              <span>Loại</span>
+              <select
+                value={discoveryFilters.category}
+                onChange={(event) =>
+                  setDiscoveryFilters((current) => ({
+                    ...current,
+                    category: event.target
+                      .value as PoiDiscoveryFilters["category"]
+                  }))
+                }
+              >
+                {discoveryCategoryOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              <span>Tiện ích</span>
+              <select
+                value={discoveryFilters.amenity}
+                onChange={(event) =>
+                  setDiscoveryFilters((current) => ({
+                    ...current,
+                    amenity: event.target
+                      .value as PoiDiscoveryFilters["amenity"]
+                  }))
+                }
+              >
+                {discoveryAmenityOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              <span>Bán kính</span>
+              <select
+                value={String(discoveryFilters.radiusKm)}
+                onChange={(event) =>
+                  setDiscoveryFilters((current) => ({
+                    ...current,
+                    radiusKm: Number(
+                      event.target.value
+                    ) as PoiDiscoveryFilters["radiusKm"]
+                  }))
+                }
+              >
+                {discoveryRadiusOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <button
+              type="button"
+              className={
+                "discovery-open-toggle" +
+                (discoveryFilters.openNow
+                  ? " discovery-open-toggle--active"
+                  : "")
+              }
+              onClick={() =>
+                setDiscoveryFilters((current) => ({
+                  ...current,
+                  openNow: !current.openNow
+                }))
+              }
+            >
+              <span className="discovery-open-dot" />
+              Đang mở
+            </button>
+
+            {discoveryFilters.category !== "all" ||
+            discoveryFilters.amenity !== "any" ||
+            discoveryFilters.radiusKm !== 0 ||
+            discoveryFilters.openNow ? (
+              <button
+                type="button"
+                className="discovery-filter-reset"
+                onClick={() =>
+                  setDiscoveryFilters({
+                    category: "all",
+                    amenity: "any",
+                    radiusKm: 0,
+                    openNow: false
+                  })
+                }
+              >
+                Xóa lọc
+              </button>
+            ) : null}
+          </div>
+        ) : null}
 
         {runningPlan && runningCurrentStop ? (
           <div className="active-plan-strip">
