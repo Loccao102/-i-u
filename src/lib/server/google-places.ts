@@ -25,7 +25,15 @@ type GooglePhoto = {
   }>;
 };
 
+function enrichmentEnabled() {
+  return (
+    process.env.ENABLE_GOOGLE_PLACES_ENRICHMENT?.trim().toLowerCase() ===
+    "true"
+  );
+}
+
 function apiKey() {
+  if (!enrichmentEnabled()) return null;
   return process.env.GOOGLE_PLACES_API_KEY?.trim() || null;
 }
 

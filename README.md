@@ -109,11 +109,15 @@ The key stays server-only. Geoapify is used for POI search/discovery and results
 are cached in-memory to reduce free-tier usage. Google Maps URLs are used only
 for handoff/navigation and do not require this key.
 
-Optional Google Places live enrichment (legacy, not required for discovery):
+Optional Google Places live enrichment (legacy, disabled by default):
 
 ```bash
+ENABLE_GOOGLE_PLACES_ENRICHMENT=true
 GOOGLE_PLACES_API_KEY=...
 ```
+
+Without the explicit enable flag, the app never calls Google Places even if an
+old `GOOGLE_PLACES_API_KEY` is still present in the deployment environment.
 
 The key stays server-only. When absent, user-uploaded photos continue to work normally.
 
