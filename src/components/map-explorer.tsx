@@ -26,6 +26,7 @@ import {
 import { personalApi } from "@/lib/personal-api";
 import {
   buildEveningPlan,
+  derivePlannerCostProfile,
   suggestWhatNext,
   toActivePlanSnapshot
 } from "@/lib/planner";
@@ -492,7 +493,8 @@ export function MapExplorer() {
   const [editName, setEditName] = useState("");
   const [editNote, setEditNote] = useState("");
   const [editAddress, setEditAddress] = useState("");
-  const [editPrice, setEditPrice] = useState<Place["priceLabel"]>("$$");
+  const [editPrice, setEditPrice] = useState<Place["priceLabel"]>("$");
+  const [editAverageForTwo, setEditAverageForTwo] = useState("");
   const [editBestTime, setEditBestTime] = useState("");
   const [editOpenUntil, setEditOpenUntil] = useState("");
 
@@ -646,6 +648,11 @@ export function MapExplorer() {
     [customPlaces, discoveredPlaces]
   );
 
+  const plannerCostProfile = useMemo(
+    () => derivePlannerCostProfile(customPlaces),
+    [customPlaces]
+  );
+
   const tasteProfile = useMemo(
     () =>
       deriveTasteProfile(
@@ -695,7 +702,8 @@ export function MapExplorer() {
         savedIds: saved,
         ratings,
         feedbacks: recommendationFeedbacks,
-        visits
+        visits,
+        costProfile: plannerCostProfile
       },
       serverDistances,
       recommendationContext,
@@ -763,7 +771,8 @@ export function MapExplorer() {
         savedIds: saved,
         ratings,
         feedbacks: recommendationFeedbacks,
-        visits
+        visits,
+        costProfile: plannerCostProfile
       },
         serverDistances,
         recommendationContext,
@@ -791,7 +800,8 @@ export function MapExplorer() {
         savedIds: saved,
         ratings,
         feedbacks: recommendationFeedbacks,
-        visits
+        visits,
+        costProfile: plannerCostProfile
       },
       4
     );
@@ -869,7 +879,8 @@ export function MapExplorer() {
         savedIds: saved,
         ratings,
         feedbacks: recommendationFeedbacks,
-        visits
+        visits,
+        costProfile: plannerCostProfile
       },
           maxDistanceKm: 4,
           limit: 3,
@@ -1561,7 +1572,8 @@ export function MapExplorer() {
         savedIds: saved,
         ratings,
         feedbacks: recommendationFeedbacks,
-        visits
+        visits,
+        costProfile: plannerCostProfile
       },
       undefined,
       planContext,
@@ -1591,7 +1603,8 @@ export function MapExplorer() {
         savedIds: saved,
         ratings,
         feedbacks: recommendationFeedbacks,
-        visits
+        visits,
+        costProfile: plannerCostProfile
       },
       origin,
       variant: nextVariant
@@ -2001,7 +2014,8 @@ export function MapExplorer() {
         savedIds: saved,
         ratings,
         feedbacks: recommendationFeedbacks,
-        visits
+        visits,
+        costProfile: plannerCostProfile
       },
         maxDistanceKm: 4,
         limit: 1,
@@ -2179,6 +2193,11 @@ export function MapExplorer() {
     setEditNote(selected.note);
     setEditAddress(selected.address ?? "");
     setEditPrice(selected.priceLabel);
+    setEditAverageForTwo(
+      selected.averageForTwo === "Chưa có dữ liệu"
+        ? ""
+        : selected.averageForTwo
+    );
     setEditBestTime(selected.bestTime);
     setEditOpenUntil(selected.openUntil);
     editDialogRef.current?.showModal();
@@ -2196,6 +2215,8 @@ export function MapExplorer() {
         description: cleanPlainText(editNote, 500) || selected.description,
         address: cleanPlainText(editAddress, 260) || undefined,
         priceLabel: editPrice,
+        averageForTwo:
+          cleanPlainText(editAverageForTwo, 100) || "Chưa có dữ liệu",
         bestTime: cleanPlainText(editBestTime, 100) || "Chưa có dữ liệu",
         openUntil: cleanPlainText(editOpenUntil, 60) || "Chưa rõ",
         scenarios: suggestScenarios(editNote || selected.kind),
@@ -3865,9 +3886,19 @@ export function MapExplorer() {
           <label className="field"><span>Tên</span><input value={editName} onChange={(e) => setEditName(e.target.value)} maxLength={100} required /></label>
           <label className="field"><span>Địa chỉ</span><input value={editAddress} onChange={(e) => setEditAddress(e.target.value)} maxLength={260} /></label>
           <div className="two-fields">
-            <label className="field"><span>Giá</span><select value={editPrice} onChange={(e) => setEditPrice(e.target.value as Place["priceLabel"])}><option value="$">$</option><option value="$$">$$</option><option value="$$$">$$$</option></select></label>
-            <label className="field"><span>Đóng cửa</span><input value={editOpenUntil} onChange={(e) => setEditOpenUntil(e.target.value)} maxLength={60} /></label>
+            <label className="field"><span>Khoảng giá</span><select value={editPrice} onChange={(e) => setEditPrice(e.target.value as Place["priceLabel"])}><option value="$">$</option><option value="$">$</option><option value="$$">$$</option></select></label>
+            <label className="field"><span>Đóng cửa</span><input value={editOpenUntil} onChange={(e) => setEditOpenUntil(e.target.value)} maxLength={60} placeholder="Mo-Su 08:00-22:00" /></label>
           </div>
+          <label className="field">
+            <span>Chi phí 2 người</span>
+            <input
+              value={editAverageForTwo}
+              onChange={(e) => setEditAverageForTwo(e.target.value)}
+              maxLength={100}
+              placeholder="Ví dụ: 350k hoặc 300-450k"
+            />
+            <small>Giá bạn nhập sẽ được ưu tiên; planner dùng các mẫu này để học budget cho nơi chưa có giá.</small>
+          </label>
           <label className="field"><span>Thời gian đẹp nhất</span><input value={editBestTime} onChange={(e) => setEditBestTime(e.target.value)} maxLength={100} /></label>
           <label className="field"><span>Ghi chú</span><textarea value={editNote} onChange={(e) => setEditNote(e.target.value)} rows={4} maxLength={500} /></label>
           <button className="primary-button primary-button--wide" type="submit">Lưu thay đổi</button>
@@ -4146,6 +4177,37 @@ export function MapExplorer() {
               </select>
             </label>
           </div>
+
+          {plannerCostProfile.sampleSize > 0 ? (
+            <div className="plan-cost-learning">
+              <div>
+                <span className="eyebrow">Budget đang học</span>
+                <strong>
+                  {plannerCostProfile.sampleSize} địa điểm có chi phí thực
+                </strong>
+              </div>
+              <div className="plan-cost-learning__chips">
+                {plannerCostProfile.byStage.food ? (
+                  <span>Ăn ~{moneyLabel(plannerCostProfile.byStage.food)}</span>
+                ) : null}
+                {plannerCostProfile.byStage.activity ? (
+                  <span>Chơi ~{moneyLabel(plannerCostProfile.byStage.activity)}</span>
+                ) : null}
+                {plannerCostProfile.byStage.coffee ? (
+                  <span>Cafe ~{moneyLabel(plannerCostProfile.byStage.coffee)}</span>
+                ) : null}
+              </div>
+              <small>
+                Nơi chưa có giá riêng sẽ dùng median theo loại trải nghiệm trước khi dùng mức mặc định.
+              </small>
+            </div>
+          ) : (
+            <div className="plan-cost-learning plan-cost-learning--empty">
+              <span>
+                Thêm “Chi phí 2 người” ở các địa điểm đã lưu để planner ước lượng budget sát thực tế hơn.
+              </span>
+            </div>
+          )}
 
           <button
             className="primary-button primary-button--wide"
