@@ -8,6 +8,7 @@ import type {
   DailyDiscoveryRecord,
   PersonalBackup,
   PersonalRating,
+  PlannerDefaults,
   PersonalSnapshot,
   RecommendationFeedback,
   RecommendationFeedbackReason,
@@ -248,6 +249,48 @@ export function parseRecommendationFeedback(
     distanceKm,
     createdAt: now,
     updatedAt: now
+  };
+}
+
+export function parsePlannerDefaults(
+  body: Record<string, unknown>
+): PlannerDefaults {
+  const routeMode =
+    body.routeMode === "drive" ||
+    body.routeMode === "walk" ||
+    body.routeMode === "motorcycle"
+      ? body.routeMode
+      : "motorcycle";
+
+  const budgetForTwo = Math.round(
+    finiteNumber(body.budgetForTwo ?? 700_000, 100_000, 10_000_000)
+  );
+
+  const rawDistance = Math.round(
+    finiteNumber(body.maxDistanceKm ?? 5, 3, 12)
+  );
+  const maxDistanceKm =
+    rawDistance === 3 ||
+    rawDistance === 5 ||
+    rawDistance === 8 ||
+    rawDistance === 12
+      ? rawDistance
+      : 5;
+
+  const rawDuration = Math.round(
+    finiteNumber(body.durationHours ?? 4, 2, 4)
+  );
+  const durationHours =
+    rawDuration === 2 || rawDuration === 3 || rawDuration === 4
+      ? rawDuration
+      : 4;
+
+  return {
+    routeMode,
+    budgetForTwo,
+    maxDistanceKm,
+    durationHours,
+    updatedAt: new Date().toISOString()
   };
 }
 
@@ -519,6 +562,26 @@ export function parsePersonalBackup(value: unknown): PersonalSnapshot {
       };
     });
 
+  let plannerDefaults: PlannerDefaults | undefined;
+  if (
+    data.plannerDefaults &&
+    typeof data.plannerDefaults === "object" &&
+    !Array.isArray(data.plannerDefaults)
+  ) {
+    const rawPlannerDefaults =
+      data.plannerDefaults as Record<string, unknown>;
+    const parsedPlannerDefaults =
+      parsePlannerDefaults(rawPlannerDefaults);
+
+    plannerDefaults = {
+      ...parsedPlannerDefaults,
+      updatedAt:
+        typeof rawPlannerDefaults.updatedAt === "string"
+          ? isoDate(rawPlannerDefaults.updatedAt)
+          : parsedPlannerDefaults.updatedAt
+    };
+  }
+
   return {
     version: 3,
     customPlaces,
@@ -528,7 +591,8 @@ export function parsePersonalBackup(value: unknown): PersonalSnapshot {
     visits,
     collections,
     dailyDiscoveries,
-    completedPlans
+    completedPlans,
+    plannerDefaults
   };
 }
 

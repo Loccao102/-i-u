@@ -186,6 +186,7 @@ supabase/migrations/20260927072239_archive_completed_plan_atomically.sql
 supabase/migrations/20260927072447_completed_plan_owner_scope.sql
 supabase/migrations/20260927072518_archive_completed_plan_owner_scope.sql
 supabase/migrations/20260927073327_completed_plan_feedback.sql
+supabase/migrations/20260927081109_personal_planner_defaults.sql
 ```
 
 Apply migrations through the Supabase SQL Editor, Supabase CLI, or the connected Supabase tooling.
@@ -242,8 +243,8 @@ http://localhost:3000
 
 ## Next
 
-1. persist planner defaults (travel mode / budget / radius / duration) per anonymous profile so the core adapts across sessions;
-2. add lightweight itinerary sharing before full Groups;
+1. add lightweight itinerary sharing before full Groups;
+2. add a planner preset layer (for example “date gần”, “đi bộ chill”, “ăn + cafe”) only after real defaults usage shows repeated patterns;
 3. Supabase Auth only when account recovery/multi-device sync is worth the friction;
 4. Groups and group voting after the personal loop is mature.
 

@@ -62,6 +62,7 @@ import type {
   MapBounds,
   PersonalBackup,
   PersonalRating,
+  PlannerDefaults,
   PlannerTravelMatrix,
   RecommendationFeedback,
   RecommendationFeedbackReason,
@@ -582,6 +583,12 @@ export function MapExplorer() {
       setCollections(snapshot.collections);
       setDailyDiscoveries(snapshot.dailyDiscoveries ?? []);
       setCompletedPlans(snapshot.completedPlans ?? []);
+      if (snapshot.plannerDefaults) {
+        setPlanRoutingMode(snapshot.plannerDefaults.routeMode);
+        setPlanBudget(snapshot.plannerDefaults.budgetForTwo);
+        setPlanDistance(snapshot.plannerDefaults.maxDistanceKm);
+        setPlanDuration(snapshot.plannerDefaults.durationHours);
+      }
       setRunningPlan(activeResult.activePlan);
       setDataStatus("ready");
     } catch (error) {
@@ -1910,6 +1917,41 @@ export function MapExplorer() {
     );
   }
 
+  async function savePlannerDefaults(
+    patch: Partial<Omit<PlannerDefaults, "updatedAt">>
+  ) {
+    const next: Omit<PlannerDefaults, "updatedAt"> = {
+      routeMode: patch.routeMode ?? planRoutingMode,
+      budgetForTwo: patch.budgetForTwo ?? planBudget,
+      maxDistanceKm:
+        patch.maxDistanceKm ??
+        (planDistance as PlannerDefaults["maxDistanceKm"]),
+      durationHours: patch.durationHours ?? planDuration
+    };
+
+    setPlanRoutingMode(next.routeMode);
+    setPlanBudget(next.budgetForTwo);
+    setPlanDistance(next.maxDistanceKm);
+    setPlanDuration(next.durationHours);
+    setActivePlan(null);
+    setPlanWeather(null);
+
+    try {
+      const savedDefaults =
+        await personalApi.savePlannerDefaults(next);
+      setPlanRoutingMode(savedDefaults.routeMode);
+      setPlanBudget(savedDefaults.budgetForTwo);
+      setPlanDistance(savedDefaults.maxDistanceKm);
+      setPlanDuration(savedDefaults.durationHours);
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "Không thể lưu mặc định planner."
+      );
+    }
+  }
+
   function plannerOrigin(): UserLocation {
     if (userLocation) return userLocation;
     const center = mapRef.current?.getCenter();
@@ -2444,7 +2486,10 @@ export function MapExplorer() {
           result.dailyDiscoveries +
           " bản ghi khám phá, " +
           result.completedPlans +
-          " plan đã hoàn thành."
+          " plan đã hoàn thành" +
+          (result.plannerDefaults > 0
+            ? ", kèm mặc định planner."
+            : ".")
       );
     } catch (error) {
       setNotice(
@@ -5071,10 +5116,11 @@ export function MapExplorer() {
               <span>Di chuyển</span>
               <select
                 value={planRoutingMode}
-                onChange={(event) => {
-                  setPlanRoutingMode(event.target.value as RoutingMode);
-                  setActivePlan(null);
-                }}
+                onChange={(event) =>
+                  void savePlannerDefaults({
+                    routeMode: event.target.value as RoutingMode
+                  })
+                }
               >
                 <option value="motorcycle">Xe máy</option>
                 <option value="drive">Ô tô</option>
@@ -5086,11 +5132,11 @@ export function MapExplorer() {
               <span>Budget / 2 người</span>
               <select
                 value={planBudget}
-                onChange={(event) => {
-                  setPlanBudget(Number(event.target.value));
-                  setActivePlan(null);
-                  setPlanWeather(null);
-                }}
+                onChange={(event) =>
+                  void savePlannerDefaults({
+                    budgetForTwo: Number(event.target.value)
+                  })
+                }
               >
                 <option value={400000}>400k</option>
                 <option value={700000}>700k</option>
@@ -5103,11 +5149,13 @@ export function MapExplorer() {
               <span>Thời lượng</span>
               <select
                 value={planDuration}
-                onChange={(event) => {
-                  setPlanDuration(Number(event.target.value) as 2 | 3 | 4);
-                  setActivePlan(null);
-                  setPlanWeather(null);
-                }}
+                onChange={(event) =>
+                  void savePlannerDefaults({
+                    durationHours: Number(
+                      event.target.value
+                    ) as PlannerDefaults["durationHours"]
+                  })
+                }
               >
                 <option value={2}>2 giờ</option>
                 <option value={3}>3 giờ</option>
@@ -5119,11 +5167,13 @@ export function MapExplorer() {
               <span>Bán kính</span>
               <select
                 value={planDistance}
-                onChange={(event) => {
-                  setPlanDistance(Number(event.target.value));
-                  setActivePlan(null);
-                  setPlanWeather(null);
-                }}
+                onChange={(event) =>
+                  void savePlannerDefaults({
+                    maxDistanceKm: Number(
+                      event.target.value
+                    ) as PlannerDefaults["maxDistanceKm"]
+                  })
+                }
               >
                 <option value={3}>3 km</option>
                 <option value={5}>5 km</option>
@@ -5132,6 +5182,10 @@ export function MapExplorer() {
               </select>
             </label>
           </div>
+
+          <small className="planner-defaults-note">
+            Mode di chuyển, budget, bán kính và thời lượng được lưu theo profile này.
+          </small>
 
           {providerCostCalibration.sampleSize > 0 ? (
             <section className="cost-calibration-strip">

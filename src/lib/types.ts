@@ -109,6 +109,7 @@ export type PersonalSnapshot = {
   collections: Collection[];
   dailyDiscoveries?: DailyDiscoveryRecord[];
   completedPlans?: CompletedPersonalPlan[];
+  plannerDefaults?: PlannerDefaults;
 };
 
 export type PoiDiscoveryCategory =
@@ -204,6 +205,7 @@ export type BackupImportResult = {
   collectionPlaces: number;
   dailyDiscoveries: number;
   completedPlans: number;
+  plannerDefaults: number;
 };
 
 
@@ -291,6 +293,14 @@ export type EveningPlanPreferences = {
   durationHours: 2 | 3 | 4;
   startTime: string;
   startAt?: string;
+};
+
+export type PlannerDefaults = {
+  routeMode: RoutingMode;
+  budgetForTwo: number;
+  maxDistanceKm: 3 | 5 | 8 | 12;
+  durationHours: 2 | 3 | 4;
+  updatedAt: string;
 };
 
 export type EveningPlanStop = {
