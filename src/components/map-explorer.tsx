@@ -546,6 +546,19 @@ export function MapExplorer() {
     );
   }, [selectedCollection, rankedAll, saved, ratings, visits]);
 
+  const shortlistView = useMemo(
+    () =>
+      shortlist.map(
+        (item) => rankedAll.find((place) => place.id === item.id) ?? item
+      ),
+    [shortlist, rankedAll]
+  );
+
+  const shortlistIds = useMemo(
+    () => new Set(shortlist.map((item) => item.id)),
+    [shortlist]
+  );
+
   const runningCurrentStop =
     runningPlan?.plan.stops[runningPlan.currentStopIndex] ?? null;
   const runningNextStop =
@@ -2101,55 +2114,142 @@ export function MapExplorer() {
             visiblePlaces.map((place) => {
               const rating = ratings[place.id];
               const visit = recentVisitByPlace.get(place.id);
+              const status = openingStatus(place.openUntil, clock);
+              const cover = placeCovers[place.id];
+              const shortlisted = shortlistIds.has(place.id);
+
               return (
-                <button
-                  type="button"
+                <div
                   key={place.id}
                   className={
                     "place-card" +
                     (selected.id === place.id ? " place-card--active" : "")
                   }
-                  onClick={() => setSelectedId(place.id)}
                 >
-                  <span
-                    className="place-thumb"
-                    style={{ "--place-accent": place.accent } as CSSProperties}
-                    aria-hidden="true"
+                  <button
+                    type="button"
+                    className="place-card__main"
+                    onClick={() => setSelectedId(place.id)}
                   >
-                    {placeIcon(place)}
-                  </span>
-                  <span className="place-card__content">
-                    <span className="place-card__top">
-                      <strong>{place.name}</strong>
-                      <small>{place.match}%</small>
+                    <span
+                      className={
+                        "place-thumb" +
+                        (cover ? " place-thumb--photo" : "")
+                      }
+                      style={{ "--place-accent": place.accent } as CSSProperties}
+                      aria-hidden="true"
+                    >
+                      {cover ? (
+                        <img src={cover} alt="" />
+                      ) : (
+                        placeIcon(place)
+                      )}
                     </span>
-                    <span className="place-card__meta">
-                      <b>
-                        ★{" "}
-                        {rating
-                          ? rating.stars.toFixed(1) + " của bạn"
-                          : place.publicRating > 0
-                            ? place.publicRating.toFixed(1)
-                            : "Mới"}
-                      </b>
-                      <span>·</span>
-                      <span>{distanceLabel(place.distanceKm)}</span>
-                      <span>·</span>
-                      <span>{priceBadge(place)}</span>
+
+                    <span className="place-card__content">
+                      <span className="place-card__top">
+                        <strong>{place.name}</strong>
+                        <small>{place.match}%</small>
+                      </span>
+
+                      <span className="place-card__meta">
+                        <b>
+                          ★{" "}
+                          {rating
+                            ? rating.stars.toFixed(1) + " của bạn"
+                            : place.publicRating > 0
+                              ? place.publicRating.toFixed(1)
+                              : "Mới"}
+                        </b>
+                        <span>·</span>
+                        <span>{distanceLabel(place.distanceKm)}</span>
+                        <span>·</span>
+                        <span>{priceBadge(place)}</span>
+                      </span>
+
+                      <span className="place-card__status-row">
+                        <i
+                          className={
+                            "opening-badge opening-badge--" + status.state
+                          }
+                        >
+                          {status.label}
+                          {status.detail && status.state === "open"
+                            ? " · " + status.detail
+                            : ""}
+                        </i>
+                        {place.source === "provider" ? (
+                          <em>OSM</em>
+                        ) : null}
+                      </span>
+
+                      <span className="tag-line">
+                        {visit ? (
+                          <i>Đã đi {formatVisitedAt(visit.visitedAt)}</i>
+                        ) : null}
+                        {place.recommendationReasons?.[0] ? (
+                          <i>{place.recommendationReasons[0]}</i>
+                        ) : null}
+                      </span>
                     </span>
-                    <span className="tag-line">
-                      {visit ? <i>Đã đi {formatVisitedAt(visit.visitedAt)}</i> : null}
-                      {place.recommendationReasons?.[0] ? (
-                        <i>{place.recommendationReasons[0]}</i>
-                      ) : null}
-                      {place.tags.slice(0, 1).map((tag) => <i key={tag}>{tag}</i>)}
-                    </span>
-                  </span>
-                </button>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={
+                      "shortlist-toggle" +
+                      (shortlisted ? " shortlist-toggle--active" : "")
+                    }
+                    aria-label={
+                      shortlisted
+                        ? "Bỏ khỏi shortlist"
+                        : "Thêm vào shortlist"
+                    }
+                    onClick={() => toggleShortlist(place)}
+                  >
+                    {shortlisted ? "✓" : "+"}
+                  </button>
+                </div>
               );
             })
           )}
         </div>
+
+        {shortlist.length > 0 ? (
+          <div className="shortlist-tray">
+            <div>
+              <span>Shortlist</span>
+              <strong>{shortlist.length}/3 địa điểm</strong>
+            </div>
+            <div className="shortlist-tray__names">
+              {shortlistView.map((place) => (
+                <button
+                  type="button"
+                  key={place.id}
+                  onClick={() => setSelectedId(place.id)}
+                >
+                  {place.name}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="shortlist-tray__compare"
+              disabled={shortlist.length < 2}
+              onClick={openCompare}
+            >
+              So sánh
+            </button>
+            <button
+              type="button"
+              className="shortlist-tray__clear"
+              aria-label="Xóa shortlist"
+              onClick={() => setShortlist([])}
+            >
+              ×
+            </button>
+          </div>
+        ) : null}
 
         <button
           className="wide-secondary"
@@ -2332,6 +2432,46 @@ export function MapExplorer() {
             <span>{distanceLabel(selected.distanceKm)}</span>
             <span>·</span>
             <span>{priceBadge(selected)}</span>
+          </div>
+
+          <div className="detail-opening-row">
+            {placeMedia?.google?.openNow !== null &&
+            placeMedia?.google?.openNow !== undefined ? (
+              <span
+                className={
+                  "opening-badge opening-badge--" +
+                  (placeMedia.google.openNow ? "open" : "closed")
+                }
+              >
+                {placeMedia.google.openNow ? "Đang mở" : "Đang đóng"} · Google
+              </span>
+            ) : (
+              <span
+                className={
+                  "opening-badge opening-badge--" + selectedOpening.state
+                }
+              >
+                {selectedOpening.label}
+                {selectedOpening.detail && selectedOpening.state === "open"
+                  ? " · " + selectedOpening.detail
+                  : ""}
+              </span>
+            )}
+
+            <button
+              type="button"
+              className={
+                "detail-shortlist-button" +
+                (shortlistIds.has(selected.id)
+                  ? " detail-shortlist-button--active"
+                  : "")
+              }
+              onClick={() => toggleShortlist(selected)}
+            >
+              {shortlistIds.has(selected.id)
+                ? "✓ Đã shortlist"
+                : "+ Shortlist"}
+            </button>
           </div>
 
           {selected.address ? (
