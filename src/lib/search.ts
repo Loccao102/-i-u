@@ -538,6 +538,83 @@ export function pickSurprisePlace(
   return weighted[weighted.length - 1]!.place;
 }
 
+function deterministicUnit(value: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) / 4294967295;
+}
+
+function stablePlaceKey(place: Place) {
+  return place.providerId ?? place.id;
+}
+
+export function pickDailyDiscoveryPlace(
+  source: Place[],
+  signals: PersonalSignals,
+  input: {
+    seed: string;
+    avoidPlaceKeys?: ReadonlySet<string>;
+  }
+): Place | null {
+  const accepted = source.filter((place) => {
+    if (signals.ratings[place.id]?.revisit === "no") return false;
+
+    const feedback = signals.feedbacks?.[place.id];
+    if (feedback?.reason === "not_taste") return false;
+
+    if (feedback?.reason === "not_now") {
+      const time = new Date(feedback.updatedAt).getTime();
+      if (
+        Number.isFinite(time) &&
+        Date.now() - time <= 24 * 60 * 60 * 1000
+      ) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  const base = accepted.length > 0 ? accepted : source;
+  if (base.length === 0) return null;
+
+  const avoid = input.avoidPlaceKeys ?? new Set<string>();
+  const fresh = base.filter(
+    (place) => !avoid.has(stablePlaceKey(place))
+  );
+  const candidates = (fresh.length > 0 ? fresh : base).slice(0, 30);
+  const stats = visitStats(signals.visits);
+
+  return (
+    candidates
+      .map((place) => {
+        const count = stats.get(place.id)?.count ?? 0;
+        const neverVisitedBonus = count === 0 ? 30 : Math.max(0, 8 - count * 2);
+        const unsavedBonus = signals.savedIds.has(place.id) ? 0 : 4;
+        const dailyShuffle =
+          deterministicUnit(input.seed + ":" + stablePlaceKey(place)) * 36;
+
+        return {
+          place,
+          score:
+            place.match * 0.8 +
+            neverVisitedBonus +
+            unsavedBonus +
+            dailyShuffle
+        };
+      })
+      .sort(
+        (a, b) =>
+          b.score - a.score ||
+          b.place.match - a.place.match ||
+          a.place.distanceKm - b.place.distanceKm
+      )[0]?.place ?? null
+  );
+}
+
 export function recommendForCollection(
   collection: Collection,
   source: Place[],
