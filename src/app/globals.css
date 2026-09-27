@@ -4641,6 +4641,75 @@ textarea:focus-visible {
   font-size: 15px;
 }
 
+.planner-health {
+  border: 1px solid #e0e5df;
+  border-radius: 12px;
+  padding: 9px 10px;
+  background: white;
+  display: grid;
+  gap: 4px;
+}
+
+.planner-health__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.planner-health__head strong {
+  font-size: 9px;
+}
+
+.planner-health__head span {
+  border-radius: 999px;
+  padding: 4px 6px;
+  background: #f0f2ee;
+  color: #6d766e;
+  font-size: 7px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.planner-health > p {
+  margin: 0;
+  color: #626a63;
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.planner-health > small {
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.planner-health--pre_start_friction,
+.planner-health--completion_friction {
+  border-color: #eadcc7;
+  background: #fffaf1;
+}
+
+.planner-health--pre_start_friction .planner-health__head strong,
+.planner-health--completion_friction .planner-health__head strong {
+  color: #82672d;
+}
+
+.planner-health--replay_value,
+.planner-health--healthy {
+  border-color: #d4e3d6;
+  background: #f4faf5;
+}
+
+.planner-health--replay_value .planner-health__head strong,
+.planner-health--healthy .planner-health__head strong {
+  color: #416a4c;
+}
+
+.planner-health--collecting {
+  background: #f7f7f4;
+}
+
 .planner-metrics-card > p {
   margin: 0;
   color: var(--muted);

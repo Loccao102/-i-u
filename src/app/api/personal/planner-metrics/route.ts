@@ -33,11 +33,18 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await readJsonObject(request);
-    if (body.metric !== "generated") {
+    const metric =
+      body.metric === "generated_initial" ||
+      body.metric === "rerolled" ||
+      body.metric === "generation_failed"
+        ? body.metric
+        : null;
+
+    if (!metric) {
       throw new Error("INVALID_BODY");
     }
 
-    await recordPlannerMetric(profile.ownerKey, "generated");
+    await recordPlannerMetric(profile.ownerKey, metric);
     const metrics = await getPlannerMetrics(profile.ownerKey);
     return profileJson(profile, { metrics });
   } catch (error) {

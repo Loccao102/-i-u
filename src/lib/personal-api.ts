@@ -157,10 +157,12 @@ export const personalApi = {
       api<{ metrics: PlannerMetricsSummary }>(
         "/api/personal/planner-metrics"
       ),
-    recordGenerated: () =>
+    recordGeneration: (
+      metric: "generated_initial" | "rerolled" | "generation_failed"
+    ) =>
       api<{ metrics: PlannerMetricsSummary }>(
         "/api/personal/planner-metrics",
-        { method: "POST", body: { metric: "generated" } }
+        { method: "POST", body: { metric } }
       )
   },
 

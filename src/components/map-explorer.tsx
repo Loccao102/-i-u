@@ -41,6 +41,7 @@ import { placeFromPoiResult, scenarioLabels } from "@/lib/places";
 import { derivePlanOutcomeProfile } from "@/lib/plan-outcomes";
 import { deriveDataRepairPrompts } from "@/lib/data-quality";
 import { analyzePlanQuality } from "@/lib/plan-quality";
+import { derivePlannerHealth } from "@/lib/planner-health";
 import { openingStatus } from "@/lib/opening-hours";
 import {
   deriveTasteProfile,
@@ -759,6 +760,11 @@ export function MapExplorer() {
   const activePlanQuality = useMemo(
     () => (activePlan ? analyzePlanQuality(activePlan) : null),
     [activePlan]
+  );
+
+  const plannerHealth = useMemo(
+    () => (plannerMetrics ? derivePlannerHealth(plannerMetrics) : null),
+    [plannerMetrics]
   );
 
   const dataRepairPrompts = useMemo(
@@ -1902,7 +1908,8 @@ export function MapExplorer() {
       routeScenario,
       routeStartTime,
       recentRouteKeys,
-      null
+      null,
+      "generated_initial"
     );
 
     if (!result || result.stops.length === 0) return;
@@ -1986,7 +1993,9 @@ export function MapExplorer() {
     scenarioOverride: Scenario = planScenario,
     startTimeOverride = planStartTime,
     avoidPlaceKeys?: ReadonlySet<string>,
-    replayTemplateOverride?: PlannerReplayTemplate | null
+    replayTemplateOverride?: PlannerReplayTemplate | null,
+    telemetryKind: "generated_initial" | "rerolled" =
+      nextVariant === 0 ? "generated_initial" : "rerolled"
   ) {
     const replayTemplate =
       replayTemplateOverride === undefined
@@ -2131,12 +2140,16 @@ export function MapExplorer() {
 
     if (result) {
       void personalApi.plannerMetrics
-        .recordGenerated()
+        .recordGeneration(telemetryKind)
         .then(({ metrics }) => setPlannerMetrics(metrics))
         .catch(() => undefined);
     }
 
     if (!result) {
+      void personalApi.plannerMetrics
+        .recordGeneration("generation_failed")
+        .then(({ metrics }) => setPlannerMetrics(metrics))
+        .catch(() => undefined);
       setNotice(
         "Chưa đủ địa điểm phù hợp. Thử tăng bán kính hoặc đổi mood."
       );
@@ -3741,7 +3754,11 @@ export function MapExplorer() {
 
         {view === "history" &&
         plannerMetrics &&
-        plannerMetrics.generated > 0 ? (
+        plannerMetrics.generated +
+          plannerMetrics.generationFailed +
+          plannerMetrics.started +
+          plannerMetrics.canceled >
+          0 ? (
           <section className="planner-metrics-card">
             <div className="planner-metrics-card__head">
               <div>
@@ -3759,16 +3776,19 @@ export function MapExplorer() {
 
             <div className="planner-metrics-grid">
               <div>
-                <span>Đã tạo</span>
+                <span>Tạo thành công</span>
                 <strong>{plannerMetrics.generated}</strong>
-                <small>phương án</small>
+                <small>
+                  {plannerMetrics.initialGenerated} lần đầu ·{" "}
+                  {plannerMetrics.rerolled} reroll
+                </small>
               </div>
               <div>
                 <span>Đã bắt đầu</span>
                 <strong>{plannerMetrics.started}</strong>
                 <small>
                   {plannerMetrics.startRate !== null
-                    ? plannerMetrics.startRate + "% / generated"
+                    ? plannerMetrics.startRate + "% / lần tạo đầu"
                     : "chưa đủ mẫu"}
                 </small>
               </div>
@@ -3782,15 +3802,33 @@ export function MapExplorer() {
                 </small>
               </div>
               <div>
-                <span>Replay</span>
-                <strong>{plannerMetrics.replayed}</strong>
+                <span>Fail / Hủy</span>
+                <strong>
+                  {plannerMetrics.generationFailed} / {plannerMetrics.canceled}
+                </strong>
                 <small>
-                  {plannerMetrics.replayRate !== null
-                    ? plannerMetrics.replayRate + "% / started"
-                    : "chưa có replay"}
+                  {plannerMetrics.generationSuccessRate !== null
+                    ? plannerMetrics.generationSuccessRate + "% tạo thành công"
+                    : "chưa đủ mẫu"}
                 </small>
               </div>
             </div>
+
+            {plannerHealth ? (
+              <div
+                className={
+                  "planner-health planner-health--" +
+                  plannerHealth.state
+                }
+              >
+                <div className="planner-health__head">
+                  <strong>{plannerHealth.title}</strong>
+                  <span>{plannerHealth.confidence} confidence</span>
+                </div>
+                <p>{plannerHealth.detail}</p>
+                <small>{plannerHealth.action}</small>
+              </div>
+            ) : null}
 
             <p>
               Chỉ là counter theo ngày; ĐiĐâu không lưu GPS trace cho thống kê này.
@@ -6238,7 +6276,16 @@ export function MapExplorer() {
                   type="button"
                   className="secondary-button"
                   disabled={planWeatherLoading}
-                  onClick={() => void generatePlan(planVariant + 1)}
+                  onClick={() =>
+                    void generatePlan(
+                      planVariant + 1,
+                      planScenario,
+                      planStartTime,
+                      undefined,
+                      undefined,
+                      "rerolled"
+                    )
+                  }
                 >
                   Đổi phương án
                 </button>
