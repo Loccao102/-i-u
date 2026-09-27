@@ -904,7 +904,10 @@ export function suggestWhatNext(input: {
     .filter(
       (
         item
-      ): item is NextPlaceSuggestion & { score: number } => item !== null
+      ): item is NextPlaceSuggestion & {
+        score: number;
+        travelSource: "road" | "heuristic";
+      } => item !== null
     )
     .sort(
       (a, b) =>
