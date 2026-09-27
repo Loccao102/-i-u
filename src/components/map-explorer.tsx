@@ -57,6 +57,7 @@ import type {
   MapBounds,
   PersonalBackup,
   PersonalRating,
+  PlannerTravelMatrix,
   RecommendationFeedback,
   RecommendationFeedbackReason,
   ProviderPlaceDetails,
@@ -1800,7 +1801,7 @@ export function MapExplorer() {
       startAt: targetAt.toISOString()
     } as const;
 
-    let travelMatrix = undefined;
+    let travelMatrix: PlannerTravelMatrix | undefined;
     const routingSource =
       preferredSource.length > 0 ? preferredSource : source;
     const routingCandidates = plannerRoutingCandidates(
