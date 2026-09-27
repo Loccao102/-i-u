@@ -191,3 +191,24 @@ http://localhost:3000
 4. add weather forecast awareness for future plans, not only current conditions;
 5. Supabase Auth only when account recovery/multi-device sync is worth the friction;
 6. Groups and group voting after the personal loop is mature.
+
+
+## Manual Vercel deployment
+
+Automatic Git deployments are disabled in `vercel.json`. GitHub CI still runs on pull requests and pushes to `main`, but production is deployed only from the manual **Deploy Vercel (Manual)** workflow.
+
+One-time setup:
+
+1. In Vercel: Project → Settings → Git → Deploy Hooks.
+2. Create a Production deploy hook for branch `main`.
+3. In GitHub: Repository → Settings → Secrets and variables → Actions.
+4. Add the hook URL as the repository secret `VERCEL_DEPLOY_HOOK`.
+
+To deploy:
+
+1. Open GitHub → Actions → **Deploy Vercel (Manual)**.
+2. Click **Run workflow** on branch `main`.
+3. Enter `DEPLOY`.
+4. The workflow reruns typecheck + production build before triggering Vercel.
+
+The deploy hook URL is a secret and must never be committed to the repository.
