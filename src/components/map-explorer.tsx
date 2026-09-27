@@ -1538,6 +1538,55 @@ export function MapExplorer() {
           ))}
         </div>
 
+        {runningPlan && runningCurrentStop ? (
+          <div className="active-plan-strip">
+            <button
+              type="button"
+              className="active-plan-strip__main"
+              onClick={() => focusRunningStop(runningCurrentStop)}
+            >
+              <span>
+                Đang đi · Chặng {runningPlan.currentStopIndex + 1}/
+                {runningPlan.plan.stops.length}
+              </span>
+              <strong>{runningCurrentStop.name}</strong>
+              <small>
+                {runningCurrentStop.startTime}–{runningCurrentStop.endTime} · ~
+                {moneyLabel(runningCurrentStop.estimatedCostForTwo)}
+              </small>
+            </button>
+            <div className="active-plan-strip__actions">
+              <button
+                type="button"
+                onClick={() => openRunningStopRoute(runningCurrentStop)}
+              >
+                Chỉ đường
+              </button>
+              <button
+                type="button"
+                className="active-plan-strip__done"
+                onClick={() => void advanceRunningPlan("complete")}
+              >
+                ✓ Xong
+              </button>
+              <button
+                type="button"
+                onClick={() => void advanceRunningPlan("skip")}
+              >
+                Bỏ qua
+              </button>
+              <button
+                type="button"
+                className="active-plan-strip__cancel"
+                aria-label="Hủy plan"
+                onClick={() => void cancelRunningPlan()}
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         {view === "collections" ? (
           <div className="collection-strip">
             <div className="collection-strip__scroll">
@@ -1660,7 +1709,8 @@ export function MapExplorer() {
           </div>
         ) : null}
 
-        {selectedVisitedRecently && whatNextSuggestions[0] ? (
+        {(selectedVisitedRecently || Boolean(runningPlan)) &&
+        whatNextSuggestions[0] ? (
           <div className="what-next-strip">
             <div>
               <span className="eyebrow">Đi đâu tiếp?</span>
@@ -1977,7 +2027,8 @@ export function MapExplorer() {
             )}
           </section>
 
-          {selectedVisitedRecently && whatNextSuggestions.length > 0 ? (
+          {(selectedVisitedRecently || Boolean(runningPlan)) &&
+          whatNextSuggestions.length > 0 ? (
             <section className="detail-section">
               <span className="eyebrow">Đi đâu tiếp?</span>
               <div className="what-next-list">
@@ -2397,7 +2448,7 @@ export function MapExplorer() {
                 </div>
               </div>
 
-              <div className="plan-actions">
+              <div className="plan-actions plan-actions--three">
                 <button
                   type="button"
                   className="secondary-button"
@@ -2407,10 +2458,17 @@ export function MapExplorer() {
                 </button>
                 <button
                   type="button"
-                  className="primary-button"
+                  className="secondary-button"
                   onClick={openPlanRoute}
                 >
-                  <LocationIcon /> Mở tuyến đường
+                  <LocationIcon /> Xem tuyến
+                </button>
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => void startRunningPlan()}
+                >
+                  Bắt đầu plan
                 </button>
               </div>
             </div>
