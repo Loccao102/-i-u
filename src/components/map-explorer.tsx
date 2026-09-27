@@ -41,6 +41,7 @@ import { placeFromPoiResult, scenarioLabels } from "@/lib/places";
 import { derivePlanOutcomeProfile } from "@/lib/plan-outcomes";
 import { deriveDataRepairPrompts } from "@/lib/data-quality";
 import { analyzePlanQuality } from "@/lib/plan-quality";
+import { derivePlannerHealth } from "@/lib/planner-health";
 import { openingStatus } from "@/lib/opening-hours";
 import {
   deriveTasteProfile,
@@ -759,6 +760,11 @@ export function MapExplorer() {
   const activePlanQuality = useMemo(
     () => (activePlan ? analyzePlanQuality(activePlan) : null),
     [activePlan]
+  );
+
+  const plannerHealth = useMemo(
+    () => (plannerMetrics ? derivePlannerHealth(plannerMetrics) : null),
+    [plannerMetrics]
   );
 
   const dataRepairPrompts = useMemo(
@@ -3798,6 +3804,22 @@ export function MapExplorer() {
                 </small>
               </div>
             </div>
+
+            {plannerHealth ? (
+              <div
+                className={
+                  "planner-health planner-health--" +
+                  plannerHealth.state
+                }
+              >
+                <div className="planner-health__head">
+                  <strong>{plannerHealth.title}</strong>
+                  <span>{plannerHealth.confidence} confidence</span>
+                </div>
+                <p>{plannerHealth.detail}</p>
+                <small>{plannerHealth.action}</small>
+              </div>
+            ) : null}
 
             <p>
               Chỉ là counter theo ngày; ĐiĐâu không lưu GPS trace cho thống kê này.
