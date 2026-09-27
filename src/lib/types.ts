@@ -128,6 +128,11 @@ export type PoiSearchResult = {
 };
 
 
+export type PoiDiscoveryPage = {
+  results: PoiSearchResult[];
+  nextOffset: number | null;
+};
+
 export type ProviderPlaceDetails = {
   provider: "geoapify";
   providerId: string;
