@@ -17,8 +17,9 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - visit history and check-in;
 - edit/delete personal places;
 - collections;
-- real OpenStreetMap discovery: Overpass loads cafe / food / bar / activity POIs from the visible map viewport;
-- Nominatim text search + import for named places;
+- real Geoapify POI discovery for cafe / food / bar / activity places in the visible map viewport;
+- Geoapify text search + import for named places;
+- OpenStreetMap Nominatim/Overpass remain as a no-key fallback so the current deployment keeps working;
 - safe client-side interpretation of common OSM opening_hours formats;
 - temporary 2–3 place shortlist with quick comparison for match, distance, price, opening state and rating;
 - recommendation feedback loop: "Không hợp gu", "Không phải lúc này", "Quá xa", "Quá đắt";
@@ -98,7 +99,17 @@ SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
 SUPABASE_SECRET_KEY=sb_secret_...
 ```
 
-Optional Google Places live enrichment:
+Recommended real-place provider:
+
+```bash
+GEOAPIFY_API_KEY=...
+```
+
+The key stays server-only. Geoapify is used for POI search/discovery and results
+are cached in-memory to reduce free-tier usage. Google Maps URLs are used only
+for handoff/navigation and do not require this key.
+
+Optional Google Places live enrichment (legacy, not required for discovery):
 
 ```bash
 GOOGLE_PLACES_API_KEY=...
@@ -120,7 +131,9 @@ OPEN_METEO_API_KEY=...
 
 The server then switches to Open-Meteo's customer endpoint. Weather data is attributed in the map UI.
 
-Real POI discovery defaults to the public OpenStreetMap Overpass endpoint for the current personal MVP. For a more controlled production deployment, configure:
+If `GEOAPIFY_API_KEY` is missing or Geoapify is temporarily unavailable,
+POI discovery falls back to the public OpenStreetMap endpoints. To override the
+Overpass fallback endpoint, configure:
 
 ```bash
 OVERPASS_API_URL=https://your-overpass-instance.example/api/interpreter

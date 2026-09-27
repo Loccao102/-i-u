@@ -92,7 +92,10 @@ export async function GET() {
       {
         ok: true,
         services: {
-          supabase: "ok"
+          supabase: "ok",
+          poiProvider: process.env.GEOAPIFY_API_KEY?.trim()
+            ? "geoapify"
+            : "openstreetmap-fallback"
         },
         serverKeyKind: keyKind,
         schema: {

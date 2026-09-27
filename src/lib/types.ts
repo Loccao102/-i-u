@@ -95,7 +95,7 @@ export type PersonalSnapshot = {
 };
 
 export type PoiSearchResult = {
-  provider: "openstreetmap";
+  provider: "openstreetmap" | "geoapify";
   providerId: string;
   name: string;
   displayName: string;

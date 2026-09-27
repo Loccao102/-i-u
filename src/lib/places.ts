@@ -24,7 +24,10 @@ export function placeFromPoiResult(result: PoiSearchResult): Place {
     averageForTwo: "Chưa có dữ liệu",
     publicRating: 0,
     match: 72,
-    communityNote: "Dữ liệu OpenStreetMap",
+    communityNote:
+      result.provider === "geoapify"
+        ? "Dữ liệu Geoapify"
+        : "Dữ liệu OpenStreetMap",
     openUntil: result.openingHours ?? "Chưa rõ",
     bestTime: "Chưa có dữ liệu",
     noise: "Vừa",
