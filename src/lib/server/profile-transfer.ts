@@ -46,11 +46,18 @@ export async function createProfileTransferCode(input: {
   const now = new Date();
   const expiresAt = new Date(now.getTime() + CODE_TTL_MS);
 
-  await client
+  const expired = await client
+    .from("profile_transfer_codes")
+    .delete()
+    .lt("expires_at", now.toISOString());
+  dbError(expired.error, "Cleanup expired profile transfer codes");
+
+  const previous = await client
     .from("profile_transfer_codes")
     .delete()
     .eq("owner_key", input.ownerKey)
     .is("used_at", null);
+  dbError(previous.error, "Replace profile transfer code");
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const code = rawCode();
