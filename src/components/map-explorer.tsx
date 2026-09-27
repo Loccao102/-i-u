@@ -5475,7 +5475,7 @@ export function MapExplorer() {
               <span className="eyebrow">Danger zone</span>
               <strong>Xóa toàn bộ dữ liệu profile</strong>
               <small>
-                Xóa vĩnh viễn địa điểm, Saved, rating, visits, collections, daily discovery, active/completed plans, ảnh tải lên, planner defaults/metrics, transfer codes và mọi link itinerary đã chia sẻ. Sau đó trình duyệt nhận một anonymous profile mới.
+                Xóa vĩnh viễn địa điểm, Saved, rating, visits, collections, daily discovery, active/completed plans, ảnh tải lên, planner defaults/metrics, transfer codes và mọi link itinerary đã chia sẻ. Sau đó trình duyệt nhận một anonymous profile mới. Backup JSON chỉ giữ dữ liệu có cấu trúc, không chứa file ảnh tải lên.
               </small>
             </div>
 
@@ -5485,7 +5485,7 @@ export function MapExplorer() {
               disabled={backupLoading || profileResetLoading}
               onClick={() => void exportBackup()}
             >
-              {backupLoading ? "Đang xuất…" : "Xuất backup trước"}
+              {backupLoading ? "Đang xuất…" : "Xuất backup dữ liệu"}
             </button>
 
             <label>
