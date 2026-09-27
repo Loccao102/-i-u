@@ -458,6 +458,10 @@ export type PublicItineraryShare = {
   createdAt: string;
 };
 
+export type OwnedItineraryShare = PublicItineraryShare & {
+  sourcePlanId: string | null;
+};
+
 export type ActivePlanAdvanceResult = {
   activePlan: ActivePersonalPlan | null;
   finished: boolean;
