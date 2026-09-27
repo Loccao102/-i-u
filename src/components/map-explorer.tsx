@@ -3754,7 +3754,11 @@ export function MapExplorer() {
 
         {view === "history" &&
         plannerMetrics &&
-        plannerMetrics.generated > 0 ? (
+        plannerMetrics.generated +
+          plannerMetrics.generationFailed +
+          plannerMetrics.started +
+          plannerMetrics.canceled >
+          0 ? (
           <section className="planner-metrics-card">
             <div className="planner-metrics-card__head">
               <div>
