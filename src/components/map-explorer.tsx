@@ -1060,8 +1060,19 @@ export function MapExplorer() {
     }
 
     try {
+      const persistedStops = [];
+      for (const stop of activePlan.stops) {
+        const place = await persistProviderPlace(stop.place);
+        persistedStops.push({ ...stop, place });
+      }
+
+      const persistedPlan: EveningPlan = {
+        ...activePlan,
+        stops: persistedStops
+      };
+
       const result = await personalApi.activePlan.start(
-        toActivePlanSnapshot(activePlan)
+        toActivePlanSnapshot(persistedPlan)
       );
       setRunningPlan(result.activePlan);
       planDialogRef.current?.close();
@@ -1557,14 +1568,21 @@ export function MapExplorer() {
     collection: Collection,
     placeId = selected.id
   ) {
-    const included = !collection.placeIds.includes(placeId);
     try {
+      const source =
+        allPlaces.find((place) => place.id === placeId) ?? selected;
+      const target = customIds.has(placeId)
+        ? source
+        : await persistProviderPlace(source);
+      const included = !collection.placeIds.includes(target.id);
+
       await personalApi.setCollectionPlace(
         collection.id,
-        placeId,
+        target.id,
         included
       );
       await loadSnapshot();
+      setSelectedId(target.id);
     } catch (error) {
       setNotice(
         error instanceof Error
