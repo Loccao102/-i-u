@@ -2,6 +2,7 @@ import type { ProviderCostCalibration } from "./cost-estimation";
 import { placeFromPoiResult } from "./places";
 import type {
   ActivePlanAdvanceResult,
+  ActivePlanStartResult,
   ActivePersonalPlan,
   ActivePlanSnapshot,
   BackupImportResult,
@@ -506,7 +507,7 @@ export const personalApi = {
       ),
 
     start: (plan: ActivePlanSnapshot, replayed = false) =>
-      api<{ activePlan: ActivePersonalPlan }>(
+      api<ActivePlanStartResult>(
         "/api/personal/active-plan",
         { method: "PUT", body: { plan, replayed } }
       ),
