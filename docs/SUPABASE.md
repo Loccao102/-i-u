@@ -27,6 +27,8 @@ supabase/migrations/20260927072518_archive_completed_plan_owner_scope.sql
 supabase/migrations/20260927073327_completed_plan_feedback.sql
 supabase/migrations/20260927081109_personal_planner_defaults.sql
 supabase/migrations/20260927083839_profile_transfer_codes.sql
+supabase/migrations/20260927094900_public_itinerary_shares.sql
+supabase/migrations/20260927095409_encrypt_profile_transfer_tokens.sql
 supabase/migrations/20260927073327_completed_plan_feedback.sql
 ```
 
@@ -146,7 +148,8 @@ where schemaname = 'public'
     'daily_discoveries',
     'completed_personal_plans',
     'personal_planner_defaults',
-    'profile_transfer_codes'
+    'profile_transfer_codes',
+    'public_itinerary_shares'
   );
 ```
 
@@ -167,3 +170,22 @@ Add Auth when one of these becomes necessary:
 - shared groups;
 - invitations;
 - public/private profiles.
+
+
+### Public itinerary shares
+
+Public itinerary shares are capability links. The browser never receives the
+owner key or Supabase service key. The public page reads a sanitized plan
+snapshot server-side and exposes only route/timeline fields required to view
+the itinerary.
+
+The share page is marked `noindex`. Anyone who has the URL can view it until
+the owner revokes the share. Browser roles still have deny-all RLS on
+`public_itinerary_shares`.
+
+### Profile transfer token hardening
+
+The profile transfer table stores only AES-GCM ciphertext derived from the
+one-time transfer code. Raw profile tokens are not stored in the database.
+Redeeming a code deletes the matching row and returns the ciphertext in one
+database mutation, so a successful code cannot be redeemed twice.

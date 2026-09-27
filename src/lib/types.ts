@@ -449,6 +449,15 @@ export type CompletedPlanFeedbackInput = {
   feedbackNote: string;
 };
 
+export type ItineraryShareSource = "generated" | "active" | "completed";
+
+export type PublicItineraryShare = {
+  slug: string;
+  plan: ActivePlanSnapshot;
+  sourceKind: ItineraryShareSource;
+  createdAt: string;
+};
+
 export type ActivePlanAdvanceResult = {
   activePlan: ActivePersonalPlan | null;
   finished: boolean;

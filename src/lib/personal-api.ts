@@ -9,6 +9,7 @@ import type {
   CompletedPersonalPlan,
   CompletedPlanFeedbackInput,
   DailyDiscoveryKind,
+  ItineraryShareSource,
   DailyDiscoveryRecord,
   MapBounds,
   NearbyPlaceResult,
@@ -24,6 +25,7 @@ import type {
   PlaceMedia,
   PlaceUserPhoto,
   PersonalSnapshot,
+  PublicItineraryShare,
   Place,
   PoiDiscoveryFilters,
   PoiDiscoveryPage,
@@ -107,6 +109,22 @@ async function api<T>(
 
 export const personalApi = {
   snapshot: () => api<PersonalSnapshot>("/api/personal"),
+
+  createItineraryShare: (input: {
+    plan: ActivePlanSnapshot;
+    sourceKind: ItineraryShareSource;
+    sourcePlanId?: string | null;
+  }) =>
+    api<{ share: PublicItineraryShare }>(
+      "/api/personal/itinerary-shares",
+      { method: "POST", body: input }
+    ),
+
+  revokeItineraryShare: (slug: string) =>
+    api<{ revoked: true }>("/api/personal/itinerary-shares", {
+      method: "DELETE",
+      body: { slug }
+    }),
 
   profileTransfer: {
     create: () =>

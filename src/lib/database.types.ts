@@ -378,24 +378,51 @@ export type Database = {
           created_at: string
           expires_at: string
           owner_key: string
-          profile_token: string
-          used_at: string | null
+          token_ciphertext: string
         }
         Insert: {
           code_hash: string
           created_at?: string
           expires_at: string
           owner_key: string
-          profile_token: string
-          used_at?: string | null
+          token_ciphertext: string
         }
         Update: {
           code_hash?: string
           created_at?: string
           expires_at?: string
           owner_key?: string
-          profile_token?: string
-          used_at?: string | null
+          token_ciphertext?: string
+        }
+        Relationships: []
+      }
+      public_itinerary_shares: {
+        Row: {
+          created_at: string
+          owner_key: string
+          plan: Json
+          revoked_at: string | null
+          slug: string
+          source_kind: string
+          source_plan_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          owner_key: string
+          plan: Json
+          revoked_at?: string | null
+          slug: string
+          source_kind: string
+          source_plan_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          owner_key?: string
+          plan?: Json
+          revoked_at?: string | null
+          slug?: string
+          source_kind?: string
+          source_plan_id?: string | null
         }
         Relationships: []
       }

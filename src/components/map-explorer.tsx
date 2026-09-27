@@ -54,11 +54,13 @@ import {
 } from "@/lib/search";
 import type {
   ActivePersonalPlan,
+  ActivePlanSnapshot,
   ActivePlanStopSnapshot,
   Collection,
   CompletedPersonalPlan,
   DailyDiscoveryRecord,
   EveningPlan,
+  ItineraryShareSource,
   MapBounds,
   PersonalBackup,
   PersonalRating,
@@ -498,6 +500,7 @@ export function MapExplorer() {
     useState<CompletedPersonalPlan[]>([]);
   const [serverDistances, setServerDistances] = useState<Record<string, number>>({});
   const [backupLoading, setBackupLoading] = useState(false);
+  const [shareLoading, setShareLoading] = useState(false);
   const [profileTransferLoading, setProfileTransferLoading] = useState(false);
   const [profileTransferCode, setProfileTransferCode] = useState("");
   const [profileTransferExpiresAt, setProfileTransferExpiresAt] =
@@ -2477,6 +2480,63 @@ export function MapExplorer() {
     }
   }
 
+  async function sharePlanSnapshot(
+    plan: ActivePlanSnapshot,
+    sourceKind: ItineraryShareSource,
+    sourcePlanId?: string | null
+  ) {
+    setShareLoading(true);
+
+    try {
+      const result = await personalApi.createItineraryShare({
+        plan,
+        sourceKind,
+        sourcePlanId
+      });
+      const url = new URL(
+        "/s/" + result.share.slug,
+        window.location.origin
+      ).toString();
+      const title =
+        (plan.scenario ? scenarioLabels[plan.scenario] : "Itinerary") +
+        " · ĐiĐâu";
+
+      if (typeof navigator.share === "function") {
+        try {
+          await navigator.share({
+            title,
+            text: plan.summary,
+            url
+          });
+          setNotice("Đã mở chia sẻ itinerary.");
+          return;
+        } catch (error) {
+          if (
+            error instanceof DOMException &&
+            error.name === "AbortError"
+          ) {
+            return;
+          }
+        }
+      }
+
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+        setNotice("Đã copy link itinerary.");
+      } else {
+        window.prompt("Copy link itinerary:", url);
+      }
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "Không thể tạo link chia sẻ itinerary."
+      );
+    } finally {
+      setShareLoading(false);
+    }
+  }
+
   async function exportBackup() {
     setBackupLoading(true);
     try {
@@ -3368,6 +3428,19 @@ export function MapExplorer() {
               </button>
               <button
                 type="button"
+                disabled={shareLoading}
+                onClick={() =>
+                  void sharePlanSnapshot(
+                    runningPlan.plan,
+                    "active",
+                    runningPlan.id
+                  )
+                }
+              >
+                Chia sẻ
+              </button>
+              <button
+                type="button"
                 className="active-plan-strip__done"
                 onClick={() => void advanceRunningPlan("complete")}
               >
@@ -3467,49 +3540,68 @@ export function MapExplorer() {
                 const completedCount = plan.completedStopIds.length;
                 const skippedCount = plan.skippedStopIds.length;
                 return (
-                  <button
-                    type="button"
+                  <div
+                    className="completed-plan-history__item"
                     key={plan.id}
-                    onClick={() => focusCompletedPlan(plan)}
                   >
-                    <span className="completed-plan-history__top">
-                      <strong>
-                        {plan.plan.scenario
-                          ? scenarioLabels[plan.plan.scenario]
-                          : "Plan cá nhân"}
-                      </strong>
-                      <small>{formatVisitedAt(plan.completedAt)}</small>
-                    </span>
-                    <span className="completed-plan-history__route">
-                      {plan.plan.stops
-                        .map((stop) => stop.name)
-                        .join(" → ")}
-                    </span>
-                    <span className="completed-plan-history__meta">
-                      <b>{completedCount}/{plan.plan.stops.length} chặng xong</b>
-                      {skippedCount > 0 ? (
-                        <span>· {skippedCount} bỏ qua</span>
-                      ) : null}
-                      <span>· ~{moneyLabel(plan.plan.totalEstimatedCostForTwo)}</span>
-                      <span>· {plan.plan.totalDurationMinutes} phút</span>
-                      <span>· {routingModeLabels[plan.plan.routeMode]}</span>
-                      {plan.plan.quality ? (
-                        <span
-                          className={
-                            "completed-plan-quality completed-plan-quality--" +
-                            plan.plan.quality.level
-                          }
-                        >
-                          · Q{plan.plan.quality.score}
-                        </span>
-                      ) : null}
-                      {plan.outcomeRating ? (
-                        <span>· ★ {plan.outcomeRating}/5</span>
-                      ) : (
-                        <span>· chưa feedback</span>
-                      )}
-                    </span>
-                  </button>
+                    <button
+                      type="button"
+                      className="completed-plan-history__main"
+                      onClick={() => focusCompletedPlan(plan)}
+                    >
+                      <span className="completed-plan-history__top">
+                        <strong>
+                          {plan.plan.scenario
+                            ? scenarioLabels[plan.plan.scenario]
+                            : "Plan cá nhân"}
+                        </strong>
+                        <small>{formatVisitedAt(plan.completedAt)}</small>
+                      </span>
+                      <span className="completed-plan-history__route">
+                        {plan.plan.stops
+                          .map((stop) => stop.name)
+                          .join(" → ")}
+                      </span>
+                      <span className="completed-plan-history__meta">
+                        <b>{completedCount}/{plan.plan.stops.length} chặng xong</b>
+                        {skippedCount > 0 ? (
+                          <span>· {skippedCount} bỏ qua</span>
+                        ) : null}
+                        <span>· ~{moneyLabel(plan.plan.totalEstimatedCostForTwo)}</span>
+                        <span>· {plan.plan.totalDurationMinutes} phút</span>
+                        <span>· {routingModeLabels[plan.plan.routeMode]}</span>
+                        {plan.plan.quality ? (
+                          <span
+                            className={
+                              "completed-plan-quality completed-plan-quality--" +
+                              plan.plan.quality.level
+                            }
+                          >
+                            · Q{plan.plan.quality.score}
+                          </span>
+                        ) : null}
+                        {plan.outcomeRating ? (
+                          <span>· ★ {plan.outcomeRating}/5</span>
+                        ) : (
+                          <span>· chưa feedback</span>
+                        )}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="completed-plan-history__share"
+                      disabled={shareLoading}
+                      onClick={() =>
+                        void sharePlanSnapshot(
+                          plan.plan,
+                          "completed",
+                          plan.id
+                        )
+                      }
+                    >
+                      Chia sẻ
+                    </button>
+                  </div>
                 );
               })}
             </div>
@@ -5644,7 +5736,7 @@ export function MapExplorer() {
                 </div>
               </div>
 
-              <div className="plan-actions plan-actions--three">
+              <div className="plan-actions plan-actions--four">
                 <button
                   type="button"
                   className="secondary-button"
@@ -5659,6 +5751,19 @@ export function MapExplorer() {
                   onClick={openPlanRoute}
                 >
                   <LocationIcon /> Xem tuyến
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={shareLoading}
+                  onClick={() =>
+                    void sharePlanSnapshot(
+                      toActivePlanSnapshot(activePlan),
+                      "generated"
+                    )
+                  }
+                >
+                  Chia sẻ
                 </button>
                 <button
                   type="button"
