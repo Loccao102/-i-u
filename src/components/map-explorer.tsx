@@ -1902,7 +1902,8 @@ export function MapExplorer() {
       routeScenario,
       routeStartTime,
       recentRouteKeys,
-      null
+      null,
+      "generated_initial"
     );
 
     if (!result || result.stops.length === 0) return;
@@ -1986,7 +1987,9 @@ export function MapExplorer() {
     scenarioOverride: Scenario = planScenario,
     startTimeOverride = planStartTime,
     avoidPlaceKeys?: ReadonlySet<string>,
-    replayTemplateOverride?: PlannerReplayTemplate | null
+    replayTemplateOverride?: PlannerReplayTemplate | null,
+    telemetryKind: "generated_initial" | "rerolled" =
+      nextVariant === 0 ? "generated_initial" : "rerolled"
   ) {
     const replayTemplate =
       replayTemplateOverride === undefined
@@ -2131,12 +2134,16 @@ export function MapExplorer() {
 
     if (result) {
       void personalApi.plannerMetrics
-        .recordGenerated()
+        .recordGeneration(telemetryKind)
         .then(({ metrics }) => setPlannerMetrics(metrics))
         .catch(() => undefined);
     }
 
     if (!result) {
+      void personalApi.plannerMetrics
+        .recordGeneration("generation_failed")
+        .then(({ metrics }) => setPlannerMetrics(metrics))
+        .catch(() => undefined);
       setNotice(
         "Chưa đủ địa điểm phù hợp. Thử tăng bán kính hoặc đổi mood."
       );
@@ -6238,7 +6245,16 @@ export function MapExplorer() {
                   type="button"
                   className="secondary-button"
                   disabled={planWeatherLoading}
-                  onClick={() => void generatePlan(planVariant + 1)}
+                  onClick={() =>
+                    void generatePlan(
+                      planVariant + 1,
+                      planScenario,
+                      planStartTime,
+                      undefined,
+                      undefined,
+                      "rerolled"
+                    )
+                  }
                 >
                   Đổi phương án
                 </button>
