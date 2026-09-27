@@ -103,7 +103,7 @@ export type PersonalSnapshot = {
   recommendationFeedbacks: Record<string, RecommendationFeedback>;
   visits: VisitRecord[];
   collections: Collection[];
-  dailyDiscoveries: DailyDiscoveryRecord[];
+  dailyDiscoveries?: DailyDiscoveryRecord[];
 };
 
 export type PoiDiscoveryCategory =
