@@ -45,6 +45,14 @@ export function errorJson(
     WEATHER_PROVIDER_UNAVAILABLE: {
       status: 503,
       message: "Nguồn thời tiết đang tạm thời không khả dụng."
+    },
+    UNSUPPORTED_IMAGE_TYPE: {
+      status: 415,
+      message: "Chỉ hỗ trợ ảnh JPEG, PNG, WebP hoặc AVIF."
+    },
+    IMAGE_TOO_LARGE: {
+      status: 413,
+      message: "Ảnh phải nhỏ hơn hoặc bằng 8 MB."
     }
   };
 

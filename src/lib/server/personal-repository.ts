@@ -38,6 +38,7 @@ type PlaceRow = {
   accent: string;
   source: "PERSONAL" | "PROVIDER";
   provider_id: string | null;
+  google_place_id: string | null;
   address: string | null;
 };
 
@@ -79,6 +80,7 @@ function mapPlace(row: PlaceRow): Place {
     accent: row.accent,
     source: row.source === "PROVIDER" ? "provider" : "personal",
     providerId: row.provider_id ?? undefined,
+    googlePlaceId: row.google_place_id ?? undefined,
     address: row.address ?? undefined
   };
 }
@@ -87,7 +89,7 @@ async function listPlaces(ownerKey: string): Promise<Place[]> {
   const { data, error } = await getSupabaseAdmin()
     .from("personal_places")
     .select(
-      "id,name,kind,description,latitude,longitude,distance_km,price_label,average_for_two,public_rating,match_score,community_note,open_until,best_time,noise,crowd,tags,scenarios,note,accent,source,provider_id,address"
+      "id,name,kind,description,latitude,longitude,distance_km,price_label,average_for_two,public_rating,match_score,community_note,open_until,best_time,noise,crowd,tags,scenarios,note,accent,source,provider_id,google_place_id,address"
     )
     .eq("owner_key", ownerKey)
     .order("updated_at", { ascending: false })
@@ -254,6 +256,9 @@ export async function upsertPlace(ownerKey: string, place: Place) {
         accent: place.accent,
         source: place.source === "provider" ? "PROVIDER" : "PERSONAL",
         provider_id: place.providerId ?? null,
+        ...(place.googlePlaceId
+          ? { google_place_id: place.googlePlaceId }
+          : {}),
         address: place.address ?? null,
         updated_at: now
       },
@@ -486,7 +491,7 @@ export async function findProviderPlace(
   const { data, error } = await getSupabaseAdmin()
     .from("personal_places")
     .select(
-      "id,name,kind,description,latitude,longitude,distance_km,price_label,average_for_two,public_rating,match_score,community_note,open_until,best_time,noise,crowd,tags,scenarios,note,accent,source,provider_id,address"
+      "id,name,kind,description,latitude,longitude,distance_km,price_label,average_for_two,public_rating,match_score,community_note,open_until,best_time,noise,crowd,tags,scenarios,note,accent,source,provider_id,google_place_id,address"
     )
     .eq("owner_key", ownerKey)
     .eq("source", "PROVIDER")
@@ -693,4 +698,39 @@ export async function listViewportPersonalPlaces(
     latitude: Number(row.latitude),
     longitude: Number(row.longitude)
   }));
+}
+
+
+export async function getPersonalPlace(
+  ownerKey: string,
+  placeId: string
+): Promise<Place | null> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("personal_places")
+    .select(
+      "id,name,kind,description,latitude,longitude,distance_km,price_label,average_for_two,public_rating,match_score,community_note,open_until,best_time,noise,crowd,tags,scenarios,note,accent,source,provider_id,google_place_id,address"
+    )
+    .eq("owner_key", ownerKey)
+    .eq("id", placeId)
+    .maybeSingle();
+
+  dbError(error, "Get personal place");
+  return data ? mapPlace(data as PlaceRow) : null;
+}
+
+export async function setGooglePlaceId(
+  ownerKey: string,
+  placeId: string,
+  googlePlaceId: string
+) {
+  const { error } = await getSupabaseAdmin()
+    .from("personal_places")
+    .update({
+      google_place_id: googlePlaceId,
+      updated_at: new Date().toISOString()
+    })
+    .eq("owner_key", ownerKey)
+    .eq("id", placeId);
+
+  dbError(error, "Set Google place id");
 }

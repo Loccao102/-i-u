@@ -114,6 +114,7 @@ export type Database = {
           crowd: string
           description: string
           distance_km: number
+          google_place_id: string | null
           id: string
           kind: string
           latitude: number
@@ -143,6 +144,7 @@ export type Database = {
           crowd?: string
           description?: string
           distance_km?: number
+          google_place_id?: string | null
           id: string
           kind: string
           latitude: number
@@ -172,6 +174,7 @@ export type Database = {
           crowd?: string
           description?: string
           distance_km?: number
+          google_place_id?: string | null
           id?: string
           kind?: string
           latitude?: number
@@ -225,6 +228,41 @@ export type Database = {
           visited_at?: string
         }
         Relationships: []
+      }
+      place_user_photos: {
+        Row: {
+          caption: string
+          created_at: string
+          id: string
+          owner_key: string
+          place_id: string
+          storage_path: string
+        }
+        Insert: {
+          caption?: string
+          created_at?: string
+          id: string
+          owner_key: string
+          place_id: string
+          storage_path: string
+        }
+        Update: {
+          caption?: string
+          created_at?: string
+          id?: string
+          owner_key?: string
+          place_id?: string
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "place_user_photos_owner_key_place_id_fkey"
+            columns: ["owner_key", "place_id"]
+            isOneToOne: false
+            referencedRelation: "personal_places"
+            referencedColumns: ["owner_key", "id"]
+          },
+        ]
       }
       saved_places: {
         Row: {

@@ -2,11 +2,15 @@ import "server-only";
 
 import type { NextRequest } from "next/server";
 
-export function assertSameOriginMutation(request: NextRequest) {
+export function assertSameOriginRequest(request: NextRequest) {
   const origin = request.headers.get("origin");
   if (origin && origin !== request.nextUrl.origin) {
     throw new Error("CROSS_ORIGIN_MUTATION");
   }
+}
+
+export function assertSameOriginMutation(request: NextRequest) {
+  assertSameOriginRequest(request);
 
   const contentType = request.headers.get("content-type") ?? "";
   if (

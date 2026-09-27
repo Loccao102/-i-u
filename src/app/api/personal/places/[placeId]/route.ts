@@ -5,6 +5,7 @@ import {
   deletePlace,
   upsertPlace
 } from "@/lib/server/personal-repository";
+import { deleteAllUserPlacePhotos } from "@/lib/server/place-photo-repository";
 import { resolveAnonymousProfile } from "@/lib/server/profile";
 import {
   assertSameOriginMutation,
@@ -41,6 +42,7 @@ export async function DELETE(
   try {
     assertSameOriginMutation(request);
     const { placeId } = await context.params;
+    await deleteAllUserPlacePhotos(profile.ownerKey, placeId);
     const deleted = await deletePlace(profile.ownerKey, placeId);
     if (!deleted) {
       return profileJson(

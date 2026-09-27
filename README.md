@@ -36,6 +36,10 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - one active plan per anonymous profile, intentionally without calendar/history bloat;
 - completing a stop records a visit only when there is no recent duplicate check-in;
 - active-plan progress uses expected-stop concurrency checks so stale actions from another tab cannot skip a stop;
+- real place media: private user-uploaded photos in Supabase Storage;
+- optional Google Places live enrichment for photos, rating and open-now state;
+- only Google Place ID is persisted; Google photo names/content are fetched live and never cached/stored;
+- Google Maps attribution + photo author attribution are rendered with live content;
 - JSON export/import backup with merge semantics;
 - responsive web UI.
 
@@ -87,6 +91,14 @@ Required environment variables:
 SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
 SUPABASE_SECRET_KEY=sb_secret_...
 ```
+
+Optional Google Places live enrichment:
+
+```bash
+GOOGLE_PLACES_API_KEY=...
+```
+
+The key stays server-only. When absent, user-uploaded photos continue to work normally.
 
 Map styling remains public:
 
@@ -164,9 +176,9 @@ http://localhost:3000
 
 ## Next
 
-1. enrich provider imports with better opening-hours/price metadata;
-2. add weather forecast awareness for future plans, not only current conditions;
-3. add lightweight feedback on recommendations so the learned taste model can distinguish "not now" from "not my taste";
-4. improve plan alternatives with provider POIs that are not saved yet;
+1. replace remaining demo seed places with provider-driven real discovery;
+2. add cover-photo thumbnails to result cards without loading full galleries;
+3. enrich OSM/provider imports with better categories and opening-hours metadata;
+4. add weather forecast awareness for future plans, not only current conditions;
 5. Supabase Auth only when account recovery/multi-device sync is worth the friction;
 6. Groups and group voting after the personal loop is mature.
