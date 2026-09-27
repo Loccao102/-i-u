@@ -4334,3 +4334,120 @@ textarea:focus-visible {
     flex-direction: column;
   }
 }
+
+
+.share-manager-card {
+  max-width: 640px;
+}
+
+.share-manager-list {
+  display: grid;
+  gap: 8px;
+  max-height: min(56vh, 520px);
+  overflow-y: auto;
+}
+
+.share-manager-item {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px;
+  background: #fbfbf8;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.share-manager-item__body {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.share-manager-item__body > strong,
+.share-manager-item__body > small,
+.share-manager-item__body > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.share-manager-item__body > strong {
+  font-size: 11px;
+}
+
+.share-manager-item__body > small {
+  color: #60655f;
+  font-size: 9px;
+}
+
+.share-manager-item__body > span:last-child {
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.share-manager-item__actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.share-manager-item__actions a,
+.share-manager-item__actions button {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 8px;
+  background: white;
+  color: #515751;
+  cursor: pointer;
+  font-size: 8px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.share-manager-item__actions a:hover,
+.share-manager-item__actions button:hover {
+  background: #f1f4ef;
+}
+
+.share-manager-item__actions .share-manager-item__revoke {
+  border-color: #edd7d3;
+  color: #9a554c;
+}
+
+.share-manager-item__actions button:disabled {
+  opacity: .55;
+  cursor: wait;
+}
+
+.share-manager-empty {
+  border: 1px dashed #d9ddd7;
+  border-radius: 14px;
+  padding: 24px 16px;
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  color: var(--muted);
+  text-align: center;
+}
+
+.share-manager-empty strong {
+  color: #565c56;
+  font-size: 11px;
+}
+
+.share-manager-empty span {
+  max-width: 360px;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+@media (max-width: 620px) {
+  .share-manager-item {
+    grid-template-columns: 1fr;
+  }
+
+  .share-manager-item__actions {
+    justify-content: flex-end;
+  }
+}
