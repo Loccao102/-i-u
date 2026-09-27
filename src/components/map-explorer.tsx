@@ -48,6 +48,7 @@ import type {
   PersonalBackup,
   PersonalRating,
   Place,
+  PlaceMedia,
   PoiSearchResult,
   RatingDraft,
   RecommendationContext,
@@ -198,6 +199,9 @@ export function MapExplorer() {
 
   const [providerResults, setProviderResults] = useState<PoiSearchResult[]>([]);
   const [providerLoading, setProviderLoading] = useState(false);
+  const [placeMedia, setPlaceMedia] = useState<PlaceMedia | null>(null);
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState(false);
   const [serverDistances, setServerDistances] = useState<Record<string, number>>({});
   const [backupLoading, setBackupLoading] = useState(false);
   const [viewportBounds, setViewportBounds] = useState<MapBounds | null>(null);
@@ -252,6 +256,7 @@ export function MapExplorer() {
   const collectionDialogRef = useRef<HTMLDialogElement | null>(null);
   const planDialogRef = useRef<HTMLDialogElement | null>(null);
   const backupInputRef = useRef<HTMLInputElement | null>(null);
+  const placePhotoInputRef = useRef<HTMLInputElement | null>(null);
 
   const loadSnapshot = useCallback(async () => {
     try {
@@ -506,6 +511,37 @@ export function MapExplorer() {
   ]);
 
   const isPersonalPlace = customIds.has(selected.id);
+
+  useEffect(() => {
+    let active = true;
+
+    if (!isPersonalPlace) {
+      setPlaceMedia(null);
+      setMediaLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    setMediaLoading(true);
+    setPlaceMedia(null);
+
+    void personalApi
+      .getPlaceMedia(selected.id)
+      .then((media) => {
+        if (active) setPlaceMedia(media);
+      })
+      .catch(() => {
+        if (active) setPlaceMedia(null);
+      })
+      .finally(() => {
+        if (active) setMediaLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selected.id, isPersonalPlace]);
 
   useEffect(() => {
     let active = true;
@@ -1180,6 +1216,40 @@ export function MapExplorer() {
     } catch (error) {
       setNotice(
         error instanceof Error ? error.message : "Không thể check-in."
+      );
+    }
+  }
+
+  async function uploadSelectedPhoto(file: File) {
+    if (!isPersonalPlace) return;
+
+    setPhotoUploading(true);
+    try {
+      await personalApi.uploadPlacePhoto(selected.id, file);
+      const media = await personalApi.getPlaceMedia(selected.id);
+      setPlaceMedia(media);
+      setNotice("Đã thêm ảnh thật cho địa điểm.");
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "Không thể tải ảnh lên."
+      );
+    } finally {
+      if (placePhotoInputRef.current) {
+        placePhotoInputRef.current.value = "";
+      }
+      setPhotoUploading(false);
+    }
+  }
+
+  async function deleteSelectedPhoto(photoId: string) {
+    try {
+      await personalApi.deletePlacePhoto(photoId);
+      const media = await personalApi.getPlaceMedia(selected.id);
+      setPlaceMedia(media);
+      setNotice("Đã xóa ảnh.");
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "Không thể xóa ảnh."
       );
     }
   }
