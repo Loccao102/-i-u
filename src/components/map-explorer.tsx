@@ -519,6 +519,8 @@ export function MapExplorer() {
   const [activePlan, setActivePlan] = useState<EveningPlan | null>(null);
   const [runningPlan, setRunningPlan] =
     useState<ActivePersonalPlan | null>(null);
+  const [whatNextTravelMatrix, setWhatNextTravelMatrix] =
+    useState<PlannerTravelMatrix | undefined>(undefined);
 
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [locationStatus, setLocationStatus] = useState<
@@ -1082,22 +1084,115 @@ export function MapExplorer() {
     clock.getTime() - selectedVisitTime >= 0 &&
     clock.getTime() - selectedVisitTime <= 8 * 60 * 60 * 1000;
 
+  const whatNextRoutingMode =
+    runningPlan?.plan.routeMode ?? planRoutingMode;
+
+  const whatNextHeuristicCandidates = useMemo(
+    () =>
+      selectedVisitedRecently
+        ? suggestWhatNext({
+            current: selected,
+            places: rankedAll,
+            signals: {
+              savedIds: saved,
+              ratings,
+              feedbacks: recommendationFeedbacks,
+              visits,
+              costProfile: plannerCostProfile,
+              planOutcomes: planOutcomeProfile
+            },
+            maxDistanceKm: 4,
+            limit: 4,
+            localHour: recommendationContext.localHour,
+            routeMode: whatNextRoutingMode
+          })
+        : [],
+    [
+      selectedVisitedRecently,
+      selected,
+      rankedAll,
+      saved,
+      ratings,
+      recommendationFeedbacks,
+      visits,
+      plannerCostProfile,
+      planOutcomeProfile,
+      recommendationContext.localHour,
+      whatNextRoutingMode
+    ]
+  );
+
+  useEffect(() => {
+    let active = true;
+    setWhatNextTravelMatrix(undefined);
+
+    if (
+      !selectedVisitedRecently ||
+      !selected.id ||
+      whatNextHeuristicCandidates.length === 0
+    ) {
+      return () => {
+        active = false;
+      };
+    }
+
+    const candidates = whatNextHeuristicCandidates.slice(0, 4);
+
+    void personalApi
+      .routeMatrix(
+        [
+          {
+            key: selected.id,
+            latitude: selected.latitude,
+            longitude: selected.longitude
+          },
+          ...candidates.map((item) => ({
+            key: item.place.id,
+            latitude: item.place.latitude,
+            longitude: item.place.longitude
+          }))
+        ],
+        whatNextRoutingMode
+      )
+      .then((result) => {
+        if (active) {
+          setWhatNextTravelMatrix(result.matrix ?? undefined);
+        }
+      })
+      .catch(() => {
+        if (active) setWhatNextTravelMatrix(undefined);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    selectedVisitedRecently,
+    selected.id,
+    selected.latitude,
+    selected.longitude,
+    whatNextHeuristicCandidates,
+    whatNextRoutingMode
+  ]);
+
   const whatNextSuggestions = useMemo(() => {
     const generic = selectedVisitedRecently
       ? suggestWhatNext({
           current: selected,
           places: rankedAll,
           signals: {
-        savedIds: saved,
-        ratings,
-        feedbacks: recommendationFeedbacks,
-        visits,
-        costProfile: plannerCostProfile,
-        planOutcomes: planOutcomeProfile
-      },
+            savedIds: saved,
+            ratings,
+            feedbacks: recommendationFeedbacks,
+            visits,
+            costProfile: plannerCostProfile,
+            planOutcomes: planOutcomeProfile
+          },
           maxDistanceKm: 4,
           limit: 3,
-          localHour: recommendationContext.localHour
+          localHour: recommendationContext.localHour,
+          travelMatrix: whatNextTravelMatrix,
+          routeMode: whatNextRoutingMode
         })
       : [];
 
@@ -1132,7 +1227,9 @@ export function MapExplorer() {
     recommendationContext.localHour,
     runningNextStop,
     plannerCostProfile,
-    planOutcomeProfile
+    planOutcomeProfile,
+    whatNextTravelMatrix,
+    whatNextRoutingMode
   ]);
 
   const isPersonalPlace =
@@ -3441,6 +3538,9 @@ export function MapExplorer() {
               <span>
                 {whatNextSuggestions[0].transitionLabel} ·{" "}
                 {distanceLabel(whatNextSuggestions[0].distanceKm)}
+                {whatNextSuggestions[0].travelSource === "road"
+                  ? " · road"
+                  : ""}
               </span>
             </button>
           </div>
@@ -4261,6 +4361,7 @@ export function MapExplorer() {
                     </span>
                     <span>
                       {item.transitionLabel} · {distanceLabel(item.distanceKm)}
+                      {item.travelSource === "road" ? " · road" : ""}
                     </span>
                     <small>
                       {item.reason} · ~{moneyLabel(item.estimatedCostForTwo)}
