@@ -70,7 +70,7 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - persisted **active plan lifecycle**: start → resume after reload → complete/skip each stop → auto-finish;
 - completed plan history is archived atomically when the final stop is completed/skipped, keeping mood, route snapshot, completed/skipped stops, cost, duration and completion time;
 - completed outings can be replayed as **templates**, not frozen copies: original stops get a controlled preference bonus but still pass fresh weather, opening-hours, routing, budget, distance and duration checks, with unsuitable stops replaced automatically;
-- 30-day planner telemetry separates initial generation, rerolls, failed generation, starts, completions, replays and cancellations; **Planner Health** only surfaces friction after minimum sample thresholds and never auto-tunes ranking from tiny samples;
+- 30-day planner telemetry separates initial generation, rerolls, failed generation, starts, completions, replays and cancellations; **Planner Health** only surfaces friction after minimum sample thresholds and never auto-tunes ranking from tiny samples; legacy pre-semantics counters are reset once because they mixed rerolls into generation conversion;
 - replay replacements explain the concrete reason an old stop changed (closed, radius/leg distance, budget, duration, personal feedback, missing data, or a stronger current candidate);
 - privacy-minimal planner telemetry stores only daily aggregate counters for generated / started / completed / replayed plans; no GPS trace, place ID, route snapshot or per-event log is stored for analytics;
 - History exposes a 30-day personal planner funnel with start/completion/replay rates; telemetry is deliberately excluded from backup/import;
@@ -202,6 +202,7 @@ supabase/migrations/20260927094900_public_itinerary_shares.sql
 supabase/migrations/20260927095409_encrypt_profile_transfer_tokens.sql
 supabase/migrations/20260927152302_planner_telemetry.sql
 supabase/migrations/20260927172009_planner_telemetry_semantics.sql
+supabase/migrations/20260927172409_reset_planner_telemetry_after_semantics_change.sql
 supabase/migrations/20260927153331_profile_data_reset.sql
 ```
 
