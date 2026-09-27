@@ -37,6 +37,7 @@ import {
   toActivePlanSnapshot
 } from "@/lib/planner";
 import { placeFromPoiResult, scenarioLabels } from "@/lib/places";
+import { derivePlanOutcomeProfile } from "@/lib/plan-outcomes";
 import { openingStatus } from "@/lib/opening-hours";
 import {
   deriveTasteProfile,
@@ -684,6 +685,11 @@ export function MapExplorer() {
     [customPlaces]
   );
 
+  const planOutcomeProfile = useMemo(
+    () => derivePlanOutcomeProfile(completedPlans, clock.getTime()),
+    [completedPlans, clock]
+  );
+
   const recentDailyActivity = useMemo(
     () => recentDailyDiscoveries(dailyDiscoveries, clock, 7),
     [dailyDiscoveries, clock]
@@ -753,6 +759,7 @@ export function MapExplorer() {
         ratings,
         feedbacks: recommendationFeedbacks,
         visits,
+        planOutcomes: planOutcomeProfile
       },
       serverDistances,
       recommendationContext,
@@ -803,6 +810,7 @@ export function MapExplorer() {
     recentVisitByPlace,
     serverDistances,
     recommendationContext,
+    planOutcomeProfile,
     viewportBounds,
     viewportPersonalIds,
     customIds,
@@ -821,6 +829,7 @@ export function MapExplorer() {
         ratings,
         feedbacks: recommendationFeedbacks,
         visits,
+        planOutcomes: planOutcomeProfile
       },
         serverDistances,
         recommendationContext,
@@ -835,7 +844,8 @@ export function MapExplorer() {
       visits,
       serverDistances,
       recommendationContext,
-      tasteProfile
+      tasteProfile,
+      planOutcomeProfile
     ]
   );
 
@@ -1009,7 +1019,8 @@ export function MapExplorer() {
         ratings,
         feedbacks: recommendationFeedbacks,
         visits,
-        costProfile: plannerCostProfile
+        costProfile: plannerCostProfile,
+        planOutcomes: planOutcomeProfile
       },
           maxDistanceKm: 4,
           limit: 3,
@@ -1047,7 +1058,8 @@ export function MapExplorer() {
     visits,
     recommendationContext.localHour,
     runningNextStop,
-    plannerCostProfile
+    plannerCostProfile,
+    planOutcomeProfile
   ]);
 
   const isPersonalPlace =
@@ -1774,6 +1786,7 @@ export function MapExplorer() {
         ratings,
         feedbacks: recommendationFeedbacks,
         visits,
+        planOutcomes: planOutcomeProfile
       },
       undefined,
       planContext,
@@ -1843,7 +1856,8 @@ export function MapExplorer() {
           ratings,
           feedbacks: recommendationFeedbacks,
           visits,
-          costProfile: plannerCostProfile
+          costProfile: plannerCostProfile,
+          planOutcomes: planOutcomeProfile
         },
         origin,
         variant: nextVariant,
@@ -3112,6 +3126,13 @@ export function MapExplorer() {
             <small>
               {tasteProfile.sampleSize} nơi ·{" "}
               {Math.round(tasteProfile.confidence * 100)}% confidence
+              {planOutcomeProfile.sampleSize > 0
+                ? " · " +
+                  planOutcomeProfile.successfulPlanCount +
+                  "/" +
+                  planOutcomeProfile.sampleSize +
+                  " plan đi khá trọn"
+                : ""}
             </small>
           </div>
         ) : null}
