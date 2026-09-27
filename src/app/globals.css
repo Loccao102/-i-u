@@ -3844,3 +3844,121 @@ textarea:focus-visible {
   line-height: 1.4;
   text-align: right;
 }
+
+
+.data-repair-backlog {
+  margin-top: 10px;
+  border: 1px solid #eadfcb;
+  border-radius: 13px;
+  padding: 9px 10px;
+  background: #fffaf1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.data-repair-backlog > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.data-repair-backlog strong {
+  font-size: 10px;
+}
+
+.data-repair-backlog > small {
+  max-width: 190px;
+  color: #81745e;
+  font-size: 8px;
+  line-height: 1.4;
+  text-align: right;
+}
+
+.plan-data-repair {
+  margin-top: 10px;
+  border: 1px solid #e7d9c0;
+  border-radius: 14px;
+  padding: 10px;
+  background: #fffaf2;
+  display: grid;
+  gap: 8px;
+}
+
+.plan-data-repair__head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.plan-data-repair__head > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.plan-data-repair__head strong {
+  font-size: 10px;
+}
+
+.plan-data-repair__head > small {
+  color: #8b7a5f;
+  font-size: 8px;
+}
+
+.plan-data-repair__list {
+  display: grid;
+  gap: 6px;
+}
+
+.plan-data-repair__list > div {
+  border: 1px solid #eee2ce;
+  border-radius: 11px;
+  padding: 8px 9px;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 9px;
+}
+
+.plan-data-repair__list > div > div:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.plan-data-repair__list strong {
+  overflow: hidden;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-data-repair__list small {
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.35;
+}
+
+.plan-data-repair__actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 5px;
+}
+
+.plan-data-repair__actions button {
+  border: 1px solid #dfccb0;
+  border-radius: 999px;
+  padding: 5px 7px;
+  background: #fffdf9;
+  cursor: pointer;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.plan-data-repair__actions button:hover {
+  background: #fff5e7;
+}
