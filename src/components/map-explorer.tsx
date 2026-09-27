@@ -128,11 +128,9 @@ function moneyLabel(value: number) {
 
 function priceText(place: Pick<Place, "priceLabel" | "averageForTwo">) {
   if (place.averageForTwo === "Chưa có dữ liệu") return "Chưa rõ";
-  return place.priceLabel === "$"
-    ? "Tiết kiệm"
-    : place.priceLabel === "$"
-      ? "Vừa phải"
-      : "Cao";
+  if (place.priceLabel.length === 1) return "Tiết kiệm";
+  if (place.priceLabel.length === 2) return "Vừa phải";
+  return "Cao";
 }
 
 function priceBadge(place: Pick<Place, "priceLabel" | "averageForTwo">) {
