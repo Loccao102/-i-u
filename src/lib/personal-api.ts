@@ -119,6 +119,21 @@ export const personalApi = {
         "/media"
     ),
 
+  getPlaceCovers: (placeIds: string[]) => {
+    const ids = placeIds
+      .slice(0, 50)
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    const params = new URLSearchParams({
+      ids: ids.join(",")
+    });
+
+    return api<{ covers: Record<string, string> }>(
+      "/api/personal/place-covers?" + params.toString()
+    );
+  },
+
   uploadPlacePhoto: async (
     placeId: string,
     file: File,

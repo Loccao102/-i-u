@@ -30,6 +30,7 @@ import {
   toActivePlanSnapshot
 } from "@/lib/planner";
 import { placeFromPoiResult, scenarioLabels } from "@/lib/places";
+import { openingStatus } from "@/lib/opening-hours";
 import {
   deriveTasteProfile,
   tasteProfileSummary
@@ -237,6 +238,8 @@ export function MapExplorer() {
   const [placeMedia, setPlaceMedia] = useState<PlaceMedia | null>(null);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [placeCovers, setPlaceCovers] = useState<Record<string, string>>({});
+  const [shortlist, setShortlist] = useState<Place[]>([]);
   const [serverDistances, setServerDistances] = useState<Record<string, number>>({});
   const [backupLoading, setBackupLoading] = useState(false);
   const [viewportBounds, setViewportBounds] = useState<MapBounds | null>(null);
@@ -290,6 +293,7 @@ export function MapExplorer() {
   const ratingDialogRef = useRef<HTMLDialogElement | null>(null);
   const collectionDialogRef = useRef<HTMLDialogElement | null>(null);
   const planDialogRef = useRef<HTMLDialogElement | null>(null);
+  const compareDialogRef = useRef<HTMLDialogElement | null>(null);
   const backupInputRef = useRef<HTMLInputElement | null>(null);
   const placePhotoInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -324,6 +328,60 @@ export function MapExplorer() {
     const timer = window.setInterval(() => setClock(new Date()), 5 * 60 * 1000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    try {
+      const raw = window.sessionStorage.getItem("di-dau-shortlist");
+      if (!raw) return;
+      const parsed: unknown = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return;
+
+      setShortlist(
+        parsed
+          .filter(
+            (item): item is Place =>
+              Boolean(
+                item &&
+                  typeof item === "object" &&
+                  "id" in item &&
+                  typeof (item as { id?: unknown }).id === "string"
+              )
+          )
+          .slice(0, 3)
+      );
+    } catch {
+      window.sessionStorage.removeItem("di-dau-shortlist");
+    }
+  }, []);
+
+  useEffect(() => {
+    window.sessionStorage.setItem(
+      "di-dau-shortlist",
+      JSON.stringify(shortlist)
+    );
+  }, [shortlist]);
+
+  useEffect(() => {
+    const ids = customPlaces.map((place) => place.id).slice(0, 50);
+    if (ids.length === 0) {
+      setPlaceCovers({});
+      return;
+    }
+
+    let active = true;
+    void personalApi
+      .getPlaceCovers(ids)
+      .then(({ covers }) => {
+        if (active) setPlaceCovers(covers);
+      })
+      .catch(() => {
+        if (active) setPlaceCovers({});
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [customPlaces]);
 
   const refreshWeather = useCallback(async (point: UserLocation) => {
     setWeatherLoading(true);
@@ -488,6 +546,19 @@ export function MapExplorer() {
     );
   }, [selectedCollection, rankedAll, saved, ratings, visits]);
 
+  const shortlistView = useMemo(
+    () =>
+      shortlist.map(
+        (item) => rankedAll.find((place) => place.id === item.id) ?? item
+      ),
+    [shortlist, rankedAll]
+  );
+
+  const shortlistIds = useMemo(
+    () => new Set(shortlist.map((item) => item.id)),
+    [shortlist]
+  );
+
   const runningCurrentStop =
     runningPlan?.plan.stops[runningPlan.currentStopIndex] ?? null;
   const runningNextStop =
@@ -504,6 +575,7 @@ export function MapExplorer() {
   const selectedPersonalRating = hasSelectedPlace
     ? ratings[selected.id] ?? null
     : null;
+  const selectedOpening = openingStatus(selected.openUntil, clock);
   const selectedVisit = recentVisitByPlace.get(selected.id) ?? null;
   const selectedVisitTime = selectedVisit
     ? new Date(selectedVisit.visitedAt).getTime()
@@ -714,6 +786,30 @@ export function MapExplorer() {
       setSelectedId(visiblePlaces[0]!.id);
     }
   }, [visiblePlaces, selectedId]);
+
+  function toggleShortlist(place: Place) {
+    setShortlist((current) => {
+      const exists = current.some((item) => item.id === place.id);
+      if (exists) {
+        return current.filter((item) => item.id !== place.id);
+      }
+
+      if (current.length >= 3) {
+        setNotice("Shortlist tối đa 3 địa điểm để so sánh nhanh.");
+        return current;
+      }
+
+      return [...current, place];
+    });
+  }
+
+  function openCompare() {
+    if (shortlist.length < 2) {
+      setNotice("Chọn ít nhất 2 địa điểm để so sánh.");
+      return;
+    }
+    compareDialogRef.current?.showModal();
+  }
 
   function requestLocation() {
     if (!navigator.geolocation) {
@@ -1392,6 +1488,13 @@ export function MapExplorer() {
       await personalApi.uploadPlacePhoto(selected.id, file);
       const media = await personalApi.getPlaceMedia(selected.id);
       setPlaceMedia(media);
+      setPlaceCovers((current) => {
+        const next = { ...current };
+        const cover = media.userPhotos[0]?.url;
+        if (cover) next[selected.id] = cover;
+        else delete next[selected.id];
+        return next;
+      });
       setNotice("Đã thêm ảnh thật cho địa điểm.");
     } catch (error) {
       setNotice(
@@ -1410,6 +1513,13 @@ export function MapExplorer() {
       await personalApi.deletePlacePhoto(photoId);
       const media = await personalApi.getPlaceMedia(selected.id);
       setPlaceMedia(media);
+      setPlaceCovers((current) => {
+        const next = { ...current };
+        const cover = media.userPhotos[0]?.url;
+        if (cover) next[selected.id] = cover;
+        else delete next[selected.id];
+        return next;
+      });
       setNotice("Đã xóa ảnh.");
     } catch (error) {
       setNotice(
@@ -2018,55 +2128,142 @@ export function MapExplorer() {
             visiblePlaces.map((place) => {
               const rating = ratings[place.id];
               const visit = recentVisitByPlace.get(place.id);
+              const status = openingStatus(place.openUntil, clock);
+              const cover = placeCovers[place.id];
+              const shortlisted = shortlistIds.has(place.id);
+
               return (
-                <button
-                  type="button"
+                <div
                   key={place.id}
                   className={
                     "place-card" +
                     (selected.id === place.id ? " place-card--active" : "")
                   }
-                  onClick={() => setSelectedId(place.id)}
                 >
-                  <span
-                    className="place-thumb"
-                    style={{ "--place-accent": place.accent } as CSSProperties}
-                    aria-hidden="true"
+                  <button
+                    type="button"
+                    className="place-card__main"
+                    onClick={() => setSelectedId(place.id)}
                   >
-                    {placeIcon(place)}
-                  </span>
-                  <span className="place-card__content">
-                    <span className="place-card__top">
-                      <strong>{place.name}</strong>
-                      <small>{place.match}%</small>
+                    <span
+                      className={
+                        "place-thumb" +
+                        (cover ? " place-thumb--photo" : "")
+                      }
+                      style={{ "--place-accent": place.accent } as CSSProperties}
+                      aria-hidden="true"
+                    >
+                      {cover ? (
+                        <img src={cover} alt="" />
+                      ) : (
+                        placeIcon(place)
+                      )}
                     </span>
-                    <span className="place-card__meta">
-                      <b>
-                        ★{" "}
-                        {rating
-                          ? rating.stars.toFixed(1) + " của bạn"
-                          : place.publicRating > 0
-                            ? place.publicRating.toFixed(1)
-                            : "Mới"}
-                      </b>
-                      <span>·</span>
-                      <span>{distanceLabel(place.distanceKm)}</span>
-                      <span>·</span>
-                      <span>{priceBadge(place)}</span>
+
+                    <span className="place-card__content">
+                      <span className="place-card__top">
+                        <strong>{place.name}</strong>
+                        <small>{place.match}%</small>
+                      </span>
+
+                      <span className="place-card__meta">
+                        <b>
+                          ★{" "}
+                          {rating
+                            ? rating.stars.toFixed(1) + " của bạn"
+                            : place.publicRating > 0
+                              ? place.publicRating.toFixed(1)
+                              : "Mới"}
+                        </b>
+                        <span>·</span>
+                        <span>{distanceLabel(place.distanceKm)}</span>
+                        <span>·</span>
+                        <span>{priceBadge(place)}</span>
+                      </span>
+
+                      <span className="place-card__status-row">
+                        <i
+                          className={
+                            "opening-badge opening-badge--" + status.state
+                          }
+                        >
+                          {status.label}
+                          {status.detail && status.state === "open"
+                            ? " · " + status.detail
+                            : ""}
+                        </i>
+                        {place.source === "provider" ? (
+                          <em>OSM</em>
+                        ) : null}
+                      </span>
+
+                      <span className="tag-line">
+                        {visit ? (
+                          <i>Đã đi {formatVisitedAt(visit.visitedAt)}</i>
+                        ) : null}
+                        {place.recommendationReasons?.[0] ? (
+                          <i>{place.recommendationReasons[0]}</i>
+                        ) : null}
+                      </span>
                     </span>
-                    <span className="tag-line">
-                      {visit ? <i>Đã đi {formatVisitedAt(visit.visitedAt)}</i> : null}
-                      {place.recommendationReasons?.[0] ? (
-                        <i>{place.recommendationReasons[0]}</i>
-                      ) : null}
-                      {place.tags.slice(0, 1).map((tag) => <i key={tag}>{tag}</i>)}
-                    </span>
-                  </span>
-                </button>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={
+                      "shortlist-toggle" +
+                      (shortlisted ? " shortlist-toggle--active" : "")
+                    }
+                    aria-label={
+                      shortlisted
+                        ? "Bỏ khỏi shortlist"
+                        : "Thêm vào shortlist"
+                    }
+                    onClick={() => toggleShortlist(place)}
+                  >
+                    {shortlisted ? "✓" : "+"}
+                  </button>
+                </div>
               );
             })
           )}
         </div>
+
+        {shortlist.length > 0 ? (
+          <div className="shortlist-tray">
+            <div>
+              <span>Shortlist</span>
+              <strong>{shortlist.length}/3 địa điểm</strong>
+            </div>
+            <div className="shortlist-tray__names">
+              {shortlistView.map((place) => (
+                <button
+                  type="button"
+                  key={place.id}
+                  onClick={() => setSelectedId(place.id)}
+                >
+                  {place.name}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="shortlist-tray__compare"
+              disabled={shortlist.length < 2}
+              onClick={openCompare}
+            >
+              So sánh
+            </button>
+            <button
+              type="button"
+              className="shortlist-tray__clear"
+              aria-label="Xóa shortlist"
+              onClick={() => setShortlist([])}
+            >
+              ×
+            </button>
+          </div>
+        ) : null}
 
         <button
           className="wide-secondary"
@@ -2249,6 +2446,46 @@ export function MapExplorer() {
             <span>{distanceLabel(selected.distanceKm)}</span>
             <span>·</span>
             <span>{priceBadge(selected)}</span>
+          </div>
+
+          <div className="detail-opening-row">
+            {placeMedia?.google?.openNow !== null &&
+            placeMedia?.google?.openNow !== undefined ? (
+              <span
+                className={
+                  "opening-badge opening-badge--" +
+                  (placeMedia.google.openNow ? "open" : "closed")
+                }
+              >
+                {placeMedia.google.openNow ? "Đang mở" : "Đang đóng"} · Google
+              </span>
+            ) : (
+              <span
+                className={
+                  "opening-badge opening-badge--" + selectedOpening.state
+                }
+              >
+                {selectedOpening.label}
+                {selectedOpening.detail && selectedOpening.state === "open"
+                  ? " · " + selectedOpening.detail
+                  : ""}
+              </span>
+            )}
+
+            <button
+              type="button"
+              className={
+                "detail-shortlist-button" +
+                (shortlistIds.has(selected.id)
+                  ? " detail-shortlist-button--active"
+                  : "")
+              }
+              onClick={() => toggleShortlist(selected)}
+            >
+              {shortlistIds.has(selected.id)
+                ? "✓ Đã shortlist"
+                : "+ Shortlist"}
+            </button>
           </div>
 
           {selected.address ? (
@@ -2537,7 +2774,15 @@ export function MapExplorer() {
               <div><dt>Không gian</dt><dd>{selected.noise}</dd></div>
               <div><dt>Đông đúc</dt><dd>{selected.crowd}</dd></div>
               <div><dt>Đi đẹp nhất</dt><dd>{selected.bestTime}</dd></div>
-              <div><dt>Đóng cửa</dt><dd>{selected.openUntil}</dd></div>
+              <div>
+                <dt>Giờ mở cửa</dt>
+                <dd>
+                  {selectedOpening.label}
+                  {selectedOpening.detail
+                    ? " · " + selectedOpening.detail
+                    : ""}
+                </dd>
+              </div>
             </dl>
             {selected.note ? <blockquote>“{selected.note}”</blockquote> : null}
           </section>
@@ -2567,6 +2812,132 @@ export function MapExplorer() {
           </button>
         </div>
       ) : null}
+
+      <dialog className="app-dialog app-dialog--compare" ref={compareDialogRef}>
+        <div className="dialog-card compare-dialog-card">
+          <div className="dialog-header">
+            <div>
+              <span className="eyebrow">Chọn nhanh</span>
+              <h2>So sánh shortlist</h2>
+            </div>
+            <button
+              className="icon-button"
+              type="button"
+              onClick={() => compareDialogRef.current?.close()}
+            >
+              <CloseIcon />
+            </button>
+          </div>
+
+          <p className="dialog-copy">
+            So sánh tối đa 3 chỗ theo đúng context hiện tại. Shortlist chỉ sống
+            trong phiên trình duyệt, không tạo thêm dữ liệu dài hạn.
+          </p>
+
+          <div
+            className="compare-grid"
+            style={{
+              gridTemplateColumns:
+                "repeat(" + Math.max(1, shortlistView.length) + ", minmax(0, 1fr))"
+            }}
+          >
+            {shortlistView.map((place) => {
+              const status = openingStatus(place.openUntil, clock);
+              const rating = ratings[place.id];
+              const cover = placeCovers[place.id];
+
+              return (
+                <article className="compare-card" key={place.id}>
+                  <div
+                    className={
+                      "compare-card__hero" +
+                      (cover ? " compare-card__hero--photo" : "")
+                    }
+                    style={{ "--place-accent": place.accent } as CSSProperties}
+                  >
+                    {cover ? (
+                      <img src={cover} alt={"Ảnh " + place.name} />
+                    ) : (
+                      <span>{placeIcon(place)}</span>
+                    )}
+                    <b>{place.match}%</b>
+                  </div>
+
+                  <div className="compare-card__body">
+                    <span className="eyebrow">
+                      {place.kind}
+                      {place.source === "provider" ? " · OSM" : ""}
+                    </span>
+                    <h3>{place.name}</h3>
+
+                    <dl>
+                      <div>
+                        <dt>Khoảng cách</dt>
+                        <dd>{distanceLabel(place.distanceKm)}</dd>
+                      </div>
+                      <div>
+                        <dt>Giá</dt>
+                        <dd>{priceBadge(place)}</dd>
+                      </div>
+                      <div>
+                        <dt>Mở cửa</dt>
+                        <dd>
+                          <span
+                            className={
+                              "opening-badge opening-badge--" + status.state
+                            }
+                          >
+                            {status.label}
+                          </span>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Rating</dt>
+                        <dd>
+                          {rating
+                            ? "★ " + rating.stars.toFixed(1) + " của bạn"
+                            : place.publicRating > 0
+                              ? "★ " + place.publicRating.toFixed(1)
+                              : "Chưa có"}
+                        </dd>
+                      </div>
+                    </dl>
+
+                    <p>
+                      {place.recommendationReasons?.[0] ??
+                        "Phù hợp với bối cảnh hiện tại"}
+                    </p>
+
+                    <button
+                      type="button"
+                      className="primary-button"
+                      onClick={() => {
+                        setSelectedId(place.id);
+                        compareDialogRef.current?.close();
+                        mapRef.current?.flyTo({
+                          center: [place.longitude, place.latitude],
+                          zoom: 14,
+                          duration: 650,
+                          essential: true
+                        });
+                      }}
+                    >
+                      Chọn chỗ này
+                    </button>
+                    <button
+                      type="button"
+                      className="compare-card__remove"
+                      onClick={() => toggleShortlist(place)}
+                    >
+                      Bỏ khỏi shortlist
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      </dialog>
 
       <dialog className="app-dialog" ref={addDialogRef}>
         <form className="dialog-card" onSubmit={submitNewPlace}>

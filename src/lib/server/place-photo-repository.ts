@@ -275,3 +275,55 @@ export async function deleteAllUserPlacePhotos(
     throw new Error("Delete photo objects: " + removed.error.message);
   }
 }
+
+
+export async function listUserPlaceCovers(
+  ownerKey: string,
+  placeIds: string[]
+): Promise<Record<string, string>> {
+  const ids = Array.from(
+    new Set(
+      placeIds
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0 && item.length <= 160)
+    )
+  ).slice(0, 50);
+
+  if (ids.length === 0) return {};
+
+  const client = getSupabaseAdmin();
+  const { data, error } = await client
+    .from("place_user_photos")
+    .select("place_id,storage_path,created_at")
+    .eq("owner_key", ownerKey)
+    .in("place_id", ids)
+    .order("created_at", { ascending: false })
+    .limit(250);
+
+  dbError(error, "List place covers");
+
+  const firstByPlace = new Map<string, string>();
+  for (const row of data ?? []) {
+    const placeId = String(row.place_id);
+    if (!firstByPlace.has(placeId)) {
+      firstByPlace.set(placeId, String(row.storage_path));
+    }
+  }
+
+  const signed = await Promise.all(
+    Array.from(firstByPlace.entries()).map(async ([placeId, storagePath]) => {
+      const { data: signedData, error: signedError } = await client.storage
+        .from(BUCKET)
+        .createSignedUrl(storagePath, 60 * 60);
+
+      if (signedError || !signedData?.signedUrl) return null;
+      return [placeId, signedData.signedUrl] as const;
+    })
+  );
+
+  return Object.fromEntries(
+    signed.filter(
+      (item): item is readonly [string, string] => item !== null
+    )
+  );
+}

@@ -19,6 +19,8 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - collections;
 - real OpenStreetMap discovery: Overpass loads cafe / food / bar / activity POIs from the visible map viewport;
 - Nominatim text search + import for named places;
+- safe client-side interpretation of common OSM opening_hours formats;
+- temporary 2–3 place shortlist with quick comparison for match, distance, price, opening state and rating;
 - smarter personal ranking with visible recommendation reasons;
 - learned **Taste Profile** from rating, revisit intent and repeat visits; similar places inherit preference signals for scenario, price, noise and crowd level;
 - collection-based recommendations;
@@ -38,6 +40,7 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - completing a stop records a visit only when there is no recent duplicate check-in;
 - active-plan progress uses expected-stop concurrency checks so stale actions from another tab cannot skip a stop;
 - real place media: private user-uploaded photos in Supabase Storage;
+- user-photo cover thumbnails on saved/imported place cards via a single batch request;
 - optional Google Places live enrichment for photos, rating and open-now state;
 - only Google Place ID is persisted; Google photo names/content are fetched live and never cached/stored;
 - Google Maps attribution + photo author attribution are rendered with live content;
