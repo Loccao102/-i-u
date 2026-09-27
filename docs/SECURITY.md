@@ -155,3 +155,16 @@ Photo metadata lives in `place_user_photos`, which has RLS enabled, explicitly d
 If `GOOGLE_PLACES_API_KEY` is configured, the server may resolve a saved place to a Google Place ID. Only that Place ID is persisted. Google Places content, photo resource names and photo URLs are fetched live with `cache: no-store` and are not stored in Supabase.
 
 Google content is displayed only in the place detail panel, not as Google-derived pins on the MapLibre map. The UI displays Google Maps attribution and photo author attribution where supplied.
+
+
+## Recommendation feedback
+
+`recommendation_feedback` stores at most one current feedback signal per anonymous owner/place pair.
+
+- RLS is enabled.
+- `anon` and `authenticated` are explicitly denied.
+- Browser code never talks to the table directly; the Next.js server uses the server-only secret/service-role client.
+- The table stores only a bounded reason, optional scenario, and optional numeric distance at feedback time.
+- It never stores live GPS coordinates.
+- Rows are deleted automatically when the personal place is deleted.
+- `not_now` and `too_far` are treated as contextual signals by ranking, while `not_taste` and `too_expensive` can contribute to longer-term taste learning.
