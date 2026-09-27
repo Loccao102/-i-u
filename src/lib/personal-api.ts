@@ -21,6 +21,49 @@ import type {
   WeatherContext
 } from "./types";
 
+async function readApiPayload(response: Response): Promise<unknown> {
+  const text = await response.text();
+
+  if (!text.trim()) {
+    throw new Error(
+      response.ok
+        ? "Máy chủ trả response rỗng."
+        : "Máy chủ lỗi " + response.status + " nhưng không trả JSON."
+    );
+  }
+
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    throw new Error(
+      response.ok
+        ? "Máy chủ trả dữ liệu không phải JSON."
+        : "Máy chủ lỗi " +
+            response.status +
+            " và trả response không hợp lệ."
+    );
+  }
+}
+
+function apiErrorMessage(data: unknown, fallback: string) {
+  if (
+    data &&
+    typeof data === "object" &&
+    "error" in data &&
+    typeof (data as { error?: unknown }).error === "string"
+  ) {
+    const base = (data as { error: string }).error;
+    const code =
+      "code" in data &&
+      typeof (data as { code?: unknown }).code === "string"
+        ? (data as { code: string }).code
+        : null;
+    return code ? base + " [" + code + "]" : base;
+  }
+
+  return fallback;
+}
+
 async function api<T>(
   path: string,
   init?: { method?: string; body?: unknown }
@@ -39,17 +82,10 @@ async function api<T>(
     cache: "no-store"
   });
 
-  const data: unknown = await response.json();
+  const data = await readApiPayload(response);
 
   if (!response.ok) {
-    const message =
-      data &&
-      typeof data === "object" &&
-      "error" in data &&
-      typeof (data as { error?: unknown }).error === "string"
-        ? (data as { error: string }).error
-        : "Yêu cầu không hoàn tất.";
-    throw new Error(message);
+    throw new Error(apiErrorMessage(data, "Yêu cầu không hoàn tất."));
   }
 
   return data as T;
@@ -104,16 +140,11 @@ export const personalApi = {
       }
     );
 
-    const data: unknown = await response.json();
+    const data = await readApiPayload(response);
     if (!response.ok) {
-      const message =
-        data &&
-        typeof data === "object" &&
-        "error" in data &&
-        typeof (data as { error?: unknown }).error === "string"
-          ? (data as { error: string }).error
-          : "Không thể tải ảnh lên.";
-      throw new Error(message);
+      throw new Error(
+        apiErrorMessage(data, "Không thể tải ảnh lên.")
+      );
     }
 
     return data as PlaceUserPhoto;
