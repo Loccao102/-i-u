@@ -108,21 +108,39 @@ export type PlannerDefaults = {
 };
 
 export type PlannerMetric =
-  | "generated"
+  | "generated_initial"
+  | "rerolled"
+  | "generation_failed"
   | "started"
   | "completed"
-  | "replayed";
+  | "replayed"
+  | "canceled";
 
 export type PlannerMetricsSummary = {
   windowDays: 30;
   activeDays: number;
   generated: number;
+  initialGenerated: number;
+  rerolled: number;
+  generationFailed: number;
   started: number;
   completed: number;
   replayed: number;
+  canceled: number;
+  generationSuccessRate: number | null;
   startRate: number | null;
   completionRate: number | null;
   replayRate: number | null;
+  rerollRate: number | null;
+  cancelRate: number | null;
+};
+
+export type PlannerHealthInsight = {
+  state: "collecting" | "pre_start_friction" | "completion_friction" | "replay_value" | "healthy";
+  confidence: "low" | "medium" | "high";
+  title: string;
+  detail: string;
+  action: string;
 };
 
 export type PersonalSnapshot = {
