@@ -24,6 +24,7 @@ supabase/migrations/20260927072104_completed_plan_history_update_grant.sql
 supabase/migrations/20260927072239_archive_completed_plan_atomically.sql
 supabase/migrations/20260927072447_completed_plan_owner_scope.sql
 supabase/migrations/20260927072518_archive_completed_plan_owner_scope.sql
+supabase/migrations/20260927073327_completed_plan_feedback.sql
 ```
 
 The provider-cost migration adds `cost_source` and `cost_confidence` to
