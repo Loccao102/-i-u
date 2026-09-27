@@ -44,7 +44,8 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - time-aware ranking (morning / lunch / afternoon / evening / late);
 - weather-aware ranking with visible explanation;
 - compact **Evening Plan Builder** that combines 1–3 nearby stops from mood, budget, duration and radius;
-- hard planner guardrails for total budget, requested duration, maximum leg distance and scheduled opening hours, with partial-plan fallback instead of silently breaking constraints;
+- cached Geoapify Route Matrix enrichment for up to 6 planner candidates + origin, using motorcycle road distance/time when available and Haversine heuristics as a safe fallback;
+- hard planner guardrails for total budget, requested duration, maximum leg distance and scheduled opening hours, with road-aware distance/time when matrix data is available and partial-plan fallback instead of silently breaking constraints;
 - plan availability verification checks both arrival and near-end time; known-closed places are rejected while unknown hours are surfaced explicitly;
 - per-stop start/end time, travel time and estimated cost;
 - editable real-world "chi phí 2 người" on personal/saved places;
@@ -225,8 +226,8 @@ http://localhost:3000
 
 ## Next
 
-1. replace straight-line travel-time heuristics with cached road routing for planner candidates;
-2. validate provider cost heuristics against accumulated user corrections and tune category baselines;
+1. validate provider cost heuristics against accumulated user corrections and tune category baselines;
+2. add persisted completed-plan history so successful outings can improve future planning;
 3. add lightweight itinerary sharing before full Groups;
 4. Supabase Auth only when account recovery/multi-device sync is worth the friction;
 5. Groups and group voting after the personal loop is mature.
