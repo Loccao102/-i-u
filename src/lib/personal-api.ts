@@ -366,11 +366,13 @@ export const personalApi = {
     );
   },
 
-  weather: (location: UserLocation) => {
+  weather: (location: UserLocation, targetAt?: string) => {
     const params = new URLSearchParams({
       lat: String(location.latitude),
       lon: String(location.longitude)
     });
+
+    if (targetAt) params.set("at", targetAt);
 
     return api<{ weather: WeatherContext }>(
       "/api/context/weather?" + params.toString()
