@@ -3962,3 +3962,20 @@ textarea:focus-visible {
 .plan-data-repair__actions button:hover {
   background: #fff5e7;
 }
+
+
+.completed-plan-quality {
+  font-weight: 800;
+}
+
+.completed-plan-quality--high {
+  color: #3d744d;
+}
+
+.completed-plan-quality--medium {
+  color: #836c31;
+}
+
+.completed-plan-quality--low {
+  color: #9b554a;
+}

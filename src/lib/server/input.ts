@@ -603,6 +603,48 @@ export function parseActivePlanSnapshot(value: unknown): ActivePlanSnapshot {
       ? (root.scenario as Scenario)
       : null;
 
+  let quality: ActivePlanSnapshot["quality"] = null;
+  if (
+    root.quality &&
+    typeof root.quality === "object" &&
+    !Array.isArray(root.quality)
+  ) {
+    const rawQuality = root.quality as Record<string, unknown>;
+    const level =
+      rawQuality.level === "high" ||
+      rawQuality.level === "medium" ||
+      rawQuality.level === "low"
+        ? rawQuality.level
+        : null;
+    if (level) {
+      const rawIssues = Array.isArray(rawQuality.issues)
+        ? rawQuality.issues
+        : [];
+      quality = {
+        score: Math.round(finiteNumber(rawQuality.score, 0, 100)),
+        level,
+        routingCoverage: finiteNumber(
+          rawQuality.routingCoverage,
+          0,
+          1
+        ),
+        openingCoverage: finiteNumber(
+          rawQuality.openingCoverage,
+          0,
+          1
+        ),
+        estimatedCostStops: Math.round(
+          finiteNumber(rawQuality.estimatedCostStops, 0, 3)
+        ),
+        issues: rawIssues
+          .filter((item): item is string => typeof item === "string")
+          .map((item) => cleanPlainText(item, 180))
+          .filter(Boolean)
+          .slice(0, 5)
+      };
+    }
+  }
+
   return {
     scenario,
     summary: stringValue(root.summary, 180, true),
@@ -617,6 +659,7 @@ export function parseActivePlanSnapshot(value: unknown): ActivePlanSnapshot {
       finiteNumber(root.totalDurationMinutes, 1, 24 * 60)
     ),
     averageMatch: Math.round(finiteNumber(root.averageMatch, 0, 100)),
+    quality,
     stops
   };
 }

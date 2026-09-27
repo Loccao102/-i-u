@@ -334,6 +334,15 @@ export type PlanQualityReport = {
   strengths: string[];
 };
 
+export type PlanQualitySnapshot = {
+  score: number;
+  level: "high" | "medium" | "low";
+  routingCoverage: number;
+  openingCoverage: number;
+  estimatedCostStops: number;
+  issues: string[];
+};
+
 
 export type NextPlaceSuggestion = {
   place: Place;
@@ -391,6 +400,7 @@ export type ActivePlanSnapshot = {
   routeKm: number;
   totalDurationMinutes: number;
   averageMatch: number;
+  quality?: PlanQualitySnapshot | null;
   stops: ActivePlanStopSnapshot[];
 };
 
