@@ -4,7 +4,7 @@ import {
   createAnonymousProfileToken,
   resolveAnonymousProfile
 } from "@/lib/server/profile";
-import { errorJson } from "@/lib/server/http";
+import { errorJson, internalErrorJson } from "@/lib/server/http";
 import { readJsonObject } from "@/lib/server/request-security";
 import { resetPersonalProfile } from "@/lib/server/profile-reset";
 
@@ -18,7 +18,15 @@ export async function DELETE(request: NextRequest) {
     if (body.confirm !== "XOA") {
       throw new Error("PROFILE_RESET_CONFIRMATION_REQUIRED");
     }
+  } catch (error) {
+    return errorJson(
+      profile,
+      error,
+      "Xác nhận reset profile không hợp lệ."
+    );
+  }
 
+  try {
     const result = await resetPersonalProfile(profile.ownerKey);
     const response = NextResponse.json({
       reset: true,
@@ -30,7 +38,7 @@ export async function DELETE(request: NextRequest) {
       createAnonymousProfileToken()
     );
   } catch (error) {
-    return errorJson(
+    return internalErrorJson(
       profile,
       error,
       "Không thể xóa toàn bộ dữ liệu profile."
