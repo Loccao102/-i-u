@@ -6,7 +6,7 @@ export type ProviderCostEstimate = {
   confidence: number;
 };
 
-function priceTier(amount: number): Place["priceLabel"] {
+export function priceLabelForCost(amount: number): Place["priceLabel"] {
   if (amount <= 220_000) return "$";
   if (amount <= 500_000) return "$$";
   return "$$$";
@@ -79,7 +79,7 @@ export function estimateProviderCost(
 
   return {
     ...estimate,
-    priceLabel: priceTier(estimate.amountForTwo)
+    priceLabel: priceLabelForCost(estimate.amountForTwo)
   };
 }
 
