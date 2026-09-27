@@ -228,6 +228,7 @@ export type EveningPlanPreferences = {
   maxDistanceKm: number;
   durationHours: 2 | 3 | 4;
   startTime: string;
+  startAt?: string;
 };
 
 export type EveningPlanStop = {
@@ -240,6 +241,7 @@ export type EveningPlanStop = {
   estimatedCostForTwo: number;
   travelKmFromPrevious: number;
   travelMinutesFromPrevious: number;
+  openingHoursStatus: "confirmed" | "unknown";
   reason: string;
 };
 
@@ -255,6 +257,7 @@ export type EveningPlan = {
   withinDuration: boolean;
   complete: boolean;
   missingStages: PlanStage[];
+  unknownOpeningHoursCount: number;
   summary: string;
 };
 
