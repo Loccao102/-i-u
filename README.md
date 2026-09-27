@@ -70,6 +70,8 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - completed plan history is archived atomically when the final stop is completed/skipped, keeping mood, route snapshot, completed/skipped stops, cost, duration and completion time;
 - completed outings can be replayed as **templates**, not frozen copies: original stops get a controlled preference bonus but still pass fresh weather, opening-hours, routing, budget, distance and duration checks, with unsuitable stops replaced automatically;
 - replay replacements explain the concrete reason an old stop changed (closed, radius/leg distance, budget, duration, personal feedback, missing data, or a stronger current candidate);
+- privacy-minimal planner telemetry stores only daily aggregate counters for generated / started / completed / replayed plans; no GPS trace, place ID, route snapshot or per-event log is stored for analytics;
+- History exposes a 30-day personal planner funnel with start/completion/replay rates; telemetry is deliberately excluded from backup/import;
 - completed-plan outcome learning uses only actually completed stops as positive evidence, applies a small recency-weighted scenario/place bonus, never treats skipped stops as dislike, and caps the total influence so explicit feedback and current context remain stronger;
 - explicit post-plan feedback (1–5★, repeat intent, optional note) separates “finished the route” from “actually enjoyed it”; low feedback suppresses completion-based bonuses instead of inventing per-place dislikes;
 - History view now shows recent completed outings alongside per-place visits;
@@ -196,7 +198,7 @@ supabase/migrations/20260927081109_personal_planner_defaults.sql
 supabase/migrations/20260927083839_profile_transfer_codes.sql
 supabase/migrations/20260927094900_public_itinerary_shares.sql
 supabase/migrations/20260927095409_encrypt_profile_transfer_tokens.sql
-supabase/migrations/20260927073327_completed_plan_feedback.sql
+supabase/migrations/20260927152302_planner_telemetry.sql
 ```
 
 Apply migrations through the Supabase SQL Editor, Supabase CLI, or the connected Supabase tooling.
@@ -254,7 +256,7 @@ http://localhost:3000
 ## Next
 
 1. add stronger long-term plan analytics only after enough real completed-plan samples exist;
-2. add lightweight planner telemetry counters (generated → started → completed → repeated) without collecting GPS traces;
+2. use telemetry only after enough samples to identify planner friction; do not auto-tune ranking from tiny sample sizes;
 3. add Supabase Auth only when account recovery and permanent multi-device identity are worth the friction; the one-time transfer code covers the anonymous phase;
 4. Groups and group voting after the personal loop is mature.
 
