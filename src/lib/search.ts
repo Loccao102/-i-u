@@ -1,8 +1,10 @@
+import { scorePlanOutcomeMatch } from "./plan-outcomes";
 import { scoreTasteMatch } from "./taste";
 import type {
   Collection,
   PersonalRating,
   Place,
+  PlanOutcomeProfile,
   RecommendationFeedback,
   RecommendationContext,
   Scenario,
@@ -25,6 +27,7 @@ export type PersonalSignals = {
   ratings: Readonly<Record<string, PersonalRating>>;
   feedbacks?: Readonly<Record<string, RecommendationFeedback>>;
   visits: ReadonlyArray<VisitRecord>;
+  planOutcomes?: PlanOutcomeProfile;
 };
 
 function normalize(value: string) {
@@ -362,6 +365,16 @@ function personalScore(
     const tasteSignal = scoreTasteMatch(place, tasteProfile);
     score += tasteSignal.score;
     reasons.push(...tasteSignal.reasons);
+  }
+
+  if (signals?.planOutcomes) {
+    const outcomeSignal = scorePlanOutcomeMatch(
+      place,
+      signals.planOutcomes,
+      selectedScenario
+    );
+    score += outcomeSignal.score;
+    reasons.push(...outcomeSignal.reasons);
   }
 
   if (signals?.savedIds.has(place.id)) {
