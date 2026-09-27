@@ -264,6 +264,44 @@ export type Database = {
           },
         ]
       }
+      recommendation_feedback: {
+        Row: {
+          created_at: string
+          distance_km: number | null
+          owner_key: string
+          place_id: string
+          reason: string
+          scenario: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          distance_km?: number | null
+          owner_key: string
+          place_id: string
+          reason: string
+          scenario?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          distance_km?: number | null
+          owner_key?: string
+          place_id?: string
+          reason?: string
+          scenario?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recommendation_feedback_owner_key_place_id_fkey"
+            columns: ["owner_key", "place_id"]
+            isOneToOne: true
+            referencedRelation: "personal_places"
+            referencedColumns: ["owner_key", "id"]
+          },
+        ]
+      }
       saved_places: {
         Row: {
           created_at: string
