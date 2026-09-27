@@ -875,6 +875,27 @@ export async function mergePersonalBackup(
     dbError(error, "Import collection places");
   }
 
+  const dailyDiscoveryRows = (snapshot.dailyDiscoveries ?? []).map(
+    (item) => ({
+      owner_key: ownerKey,
+      day: item.day,
+      kind: item.kind,
+      place_keys: item.placeKeys.map(mapPlaceId),
+      scenario: item.scenario,
+      created_at: item.createdAt,
+      updated_at: item.updatedAt
+    })
+  );
+
+  if (dailyDiscoveryRows.length > 0) {
+    const { error } = await client
+      .from("daily_discoveries")
+      .upsert(dailyDiscoveryRows, {
+        onConflict: "owner_key,day,kind"
+      });
+    dbError(error, "Import daily discoveries");
+  }
+
   return {
     places,
     saved: savedRows.length,
@@ -882,7 +903,8 @@ export async function mergePersonalBackup(
     recommendationFeedbacks: feedbackRows.length,
     visits: visitRows.length,
     collections: collectionRows.length,
-    collectionPlaces: collectionPlaceRows.length
+    collectionPlaces: collectionPlaceRows.length,
+    dailyDiscoveries: dailyDiscoveryRows.length
   };
 }
 
