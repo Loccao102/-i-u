@@ -277,6 +277,33 @@ export type Database = {
         }
         Relationships: []
       }
+      personal_planner_defaults: {
+        Row: {
+          budget_for_two: number
+          duration_hours: number
+          max_distance_km: number
+          owner_key: string
+          route_mode: string
+          updated_at: string
+        }
+        Insert: {
+          budget_for_two?: number
+          duration_hours?: number
+          max_distance_km?: number
+          owner_key: string
+          route_mode?: string
+          updated_at?: string
+        }
+        Update: {
+          budget_for_two?: number
+          duration_hours?: number
+          max_distance_km?: number
+          owner_key?: string
+          route_mode?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       personal_ratings: {
         Row: {
           contexts: string[]
