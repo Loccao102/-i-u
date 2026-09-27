@@ -26,7 +26,11 @@ function discoveryCategory(value: string | null): PoiDiscoveryCategory {
     value === "food" ||
     value === "cafe" ||
     value === "drink" ||
-    value === "activity"
+    value === "activity" ||
+    value === "outdoor" ||
+    value === "culture" ||
+    value === "sport" ||
+    value === "shopping"
   ) {
     return value;
   }
