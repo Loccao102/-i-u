@@ -96,7 +96,7 @@ export function internalErrorJson(
     message =
       "Supabase server key hoặc URL trên Vercel không hợp lệ. Không dùng publishable/anon key cho biến server.";
   } else if (
-    /google_place_id|place_user_photos|active_personal_plans/i.test(raw) &&
+    /google_place_id|place_user_photos|active_personal_plans|daily_discoveries/i.test(raw) &&
     /column|relation|schema|does not exist|cache/i.test(raw)
   ) {
     status = 503;
@@ -104,7 +104,7 @@ export function internalErrorJson(
     message =
       "Supabase schema của môi trường deploy chưa đồng bộ migration mới.";
   } else if (
-    /supabase|permission denied|row-level security|list places|list saved|list ratings|list visits|list collections|get active plan/i.test(
+    /supabase|permission denied|row-level security|list places|list saved|list ratings|list visits|list collections|list daily discoveries|get active plan/i.test(
       raw
     )
   ) {
