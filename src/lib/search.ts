@@ -3,6 +3,7 @@ import type {
   Collection,
   PersonalRating,
   Place,
+  RecommendationFeedback,
   RecommendationContext,
   Scenario,
   TasteProfile,
@@ -22,6 +23,7 @@ const scenarioTerms: Record<Scenario, string[]> = {
 export type PersonalSignals = {
   savedIds: ReadonlySet<string>;
   ratings: Readonly<Record<string, PersonalRating>>;
+  feedbacks?: Readonly<Record<string, RecommendationFeedback>>;
   visits: ReadonlyArray<VisitRecord>;
 };
 
@@ -222,6 +224,72 @@ function weatherContextScore(
   return { score, reasons };
 }
 
+function recommendationFeedbackScore(
+  feedback: RecommendationFeedback | undefined,
+  selectedScenario: Scenario | "all",
+  distanceKm: number
+) {
+  if (!feedback) {
+    return { score: 0, reasons: [] as string[] };
+  }
+
+  const updatedAt = new Date(feedback.updatedAt).getTime();
+  const ageHours = Number.isFinite(updatedAt)
+    ? Math.max(0, (Date.now() - updatedAt) / (1000 * 60 * 60))
+    : Number.POSITIVE_INFINITY;
+
+  if (feedback.reason === "not_taste") {
+    const contextMismatch =
+      feedback.scenario &&
+      selectedScenario !== "all" &&
+      feedback.scenario !== selectedScenario;
+
+    return {
+      score: contextMismatch ? -12 : -22,
+      reasons: ["Bạn từng đánh dấu không hợp gu"]
+    };
+  }
+
+  if (feedback.reason === "not_now") {
+    let penalty = ageHours <= 24 ? -20 : ageHours <= 72 ? -8 : ageHours <= 168 ? -3 : 0;
+
+    if (
+      feedback.scenario &&
+      selectedScenario !== "all" &&
+      feedback.scenario !== selectedScenario
+    ) {
+      penalty = Math.round(penalty * 0.35);
+    }
+
+    return {
+      score: penalty,
+      reasons: penalty < 0 ? ["Bạn từng chọn không phải lúc này"] : []
+    };
+  }
+
+  if (feedback.reason === "too_far") {
+    const previousDistance = feedback.distanceKm ?? distanceKm;
+
+    if (
+      distanceKm <= 2 ||
+      (Number.isFinite(previousDistance) &&
+        distanceKm <= Math.max(2, previousDistance * 0.55))
+    ) {
+      return { score: 0, reasons: [] as string[] };
+    }
+
+    return {
+      score: -Math.min(18, Math.round(6 + distanceKm * 1.5)),
+      reasons: ["Bạn từng thấy chỗ này quá xa"]
+    };
+  }
+
+  return {
+    score: -14,
+    reasons: ["Bạn từng thấy chỗ này quá đắt"]
+  };
+}
+
 function personalScore(
   place: Place,
   selectedScenario: Scenario | "all",
@@ -255,6 +323,15 @@ function personalScore(
   const weatherSignal = weatherContextScore(place, context);
   score += weatherSignal.score;
   reasons.push(...weatherSignal.reasons);
+
+  const feedbackSignal = recommendationFeedbackScore(
+    signals?.feedbacks?.[place.id],
+    selectedScenario,
+    distanceKm
+  );
+  score += feedbackSignal.score;
+  reasons.push(...feedbackSignal.reasons);
+
 
   const rating = signals?.ratings[place.id];
   if (rating) {
@@ -418,9 +495,24 @@ export function pickSurprisePlace(
   source: Place[],
   signals: PersonalSignals
 ): Place | null {
-  const accepted = source.filter(
-    (place) => signals.ratings[place.id]?.revisit !== "no"
-  );
+  const accepted = source.filter((place) => {
+    if (signals.ratings[place.id]?.revisit === "no") return false;
+
+    const feedback = signals.feedbacks?.[place.id];
+    if (feedback?.reason === "not_taste") return false;
+
+    if (feedback?.reason === "not_now") {
+      const time = new Date(feedback.updatedAt).getTime();
+      if (
+        Number.isFinite(time) &&
+        Date.now() - time <= 24 * 60 * 60 * 1000
+      ) {
+        return false;
+      }
+    }
+
+    return true;
+  });
   const candidates = (accepted.length > 0 ? accepted : source).slice(0, 12);
   if (candidates.length === 0) return null;
 
