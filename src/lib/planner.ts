@@ -132,13 +132,21 @@ function matchesStage(place: Place, stage: PlanStage) {
 }
 
 function stageDurationMinutes(stage: PlanStage) {
-  if (stage === "activity") return 90;
-  if (stage === "food") return 75;
-  return 60;
+  if (stage === "activity") return 75;
+  if (stage === "food") return 65;
+  return 50;
+}
+
+function minimumFutureMinutes(stages: PlanStage[]) {
+  if (stages.length === 0) return 0;
+  return (
+    stages.reduce((sum, stage) => sum + stageDurationMinutes(stage), 0) +
+    Math.max(0, stages.length - 1) * 8
+  );
 }
 
 function travelMinutes(distanceKm: number) {
-  return Math.max(8, Math.min(35, Math.round(7 + distanceKm * 5)));
+  return Math.max(8, Math.min(30, Math.round(6 + distanceKm * 4.5)));
 }
 
 function parseClock(value: string) {
@@ -243,16 +251,16 @@ function candidateScore(input: {
       )
     : originDistance;
 
-  if (previous && legDistance > Math.max(4, maxDistanceKm * 0.8)) {
+  if (previous && legDistance > Math.max(3.5, maxDistanceKm * 0.7)) {
     return null;
   }
 
   const cost = estimateCostForTwo(place);
-  const costOver = Math.max(0, cost - stageBudget);
-  const costPenalty = costOver / 35_000;
-  const routePenalty = legDistance * (previous ? 5.5 : 2.5);
+  if (cost > stageBudget) return null;
+
+  const routePenalty = legDistance * (previous ? 6.5 : 3.2);
   const novelty = visitCount(signals.visits, place.id) === 0 ? 5 : 0;
-  const variantScore = variantBias(place.id, input.variant) * 18;
+  const variantScore = variantBias(place.id, input.variant) * 14;
 
   return (
     place.match +
@@ -260,9 +268,135 @@ function candidateScore(input: {
     (place.scenarios.includes(scenario) ? 10 : 0) +
     novelty +
     variantScore -
-    routePenalty -
-    costPenalty
+    routePenalty
   );
+}
+
+function buildWithGuardrails(input: {
+  places: Place[];
+  preferences: EveningPlanPreferences;
+  signals: PlannerSignals;
+  origin: UserLocation;
+  variant: number;
+  relaxedBudget: boolean;
+}) {
+  const { places, preferences, signals, origin, variant, relaxedBudget } = input;
+  const stages = stagesFor(preferences.scenario, preferences.durationHours);
+  const maxDurationMinutes = preferences.durationHours * 60;
+
+  const selected: Array<{
+    place: Place;
+    stage: PlanStage;
+    cost: number;
+    travelKm: number;
+    travelMinutes: number;
+  }> = [];
+
+  const missingStages: PlanStage[] = [];
+  const used = new Set<string>();
+  let previous: Place | null = null;
+  let remainingBudget = preferences.budgetForTwo;
+  let usedMinutes = 0;
+
+  for (let index = 0; index < stages.length; index += 1) {
+    const stage = stages[index]!;
+    const futureStages = stages.slice(index + 1);
+    const reserveMinutes = minimumFutureMinutes(futureStages);
+    const remainingStages = stages.length - index;
+
+    const rawStageBudget = remainingBudget / remainingStages;
+    const stageBudget = relaxedBudget
+      ? Math.max(180_000, rawStageBudget * 1.2)
+      : Math.max(120_000, rawStageBudget);
+
+    const stageCandidates = places
+      .filter((place) => !used.has(place.id))
+      .filter((place) => matchesStage(place, stage))
+      .map((place) => {
+        const cost = estimateCostForTwo(place);
+        const travelKm = previous
+          ? haversineKm(
+              {
+                latitude: previous.latitude,
+                longitude: previous.longitude
+              },
+              {
+                latitude: place.latitude,
+                longitude: place.longitude
+              }
+            )
+          : haversineKm(origin, {
+              latitude: place.latitude,
+              longitude: place.longitude
+            });
+        const travelMin = selected.length > 0 ? travelMinutes(travelKm) : 0;
+        const stageMin = stageDurationMinutes(stage);
+
+        if (
+          usedMinutes + travelMin + stageMin + reserveMinutes >
+          maxDurationMinutes
+        ) {
+          return null;
+        }
+
+        if (!relaxedBudget && cost > remainingBudget) {
+          return null;
+        }
+
+        const score = candidateScore({
+          place,
+          stage,
+          scenario: preferences.scenario,
+          signals,
+          origin,
+          previous,
+          maxDistanceKm: preferences.maxDistanceKm,
+          stageBudget,
+          variant
+        });
+
+        if (score === null) return null;
+
+        return { place, cost, score, travelKm, travelMin, stageMin };
+      })
+      .filter(
+        (
+          item
+        ): item is {
+          place: Place;
+          cost: number;
+          score: number;
+          travelKm: number;
+          travelMin: number;
+          stageMin: number;
+        } => item !== null
+      )
+      .sort((a, b) => b.score - a.score);
+
+    const chosen = stageCandidates[0];
+    if (!chosen) {
+      missingStages.push(stage);
+      continue;
+    }
+
+    selected.push({
+      place: chosen.place,
+      stage,
+      cost: chosen.cost,
+      travelKm: chosen.travelKm,
+      travelMinutes: chosen.travelMin
+    });
+    used.add(chosen.place.id);
+    remainingBudget -= chosen.cost;
+    usedMinutes += chosen.travelMin + chosen.stageMin;
+    previous = chosen.place;
+  }
+
+  return {
+    selected,
+    missingStages,
+    usedMinutes
+  };
 }
 
 export function buildEveningPlan(input: {
@@ -274,107 +408,51 @@ export function buildEveningPlan(input: {
 }): EveningPlan | null {
   const { places, preferences, signals, origin } = input;
   const variant = input.variant ?? 0;
-  const stages = stagesFor(
-    preferences.scenario,
-    preferences.durationHours
-  );
 
-  const selected: Array<{
-    place: Place;
-    stage: PlanStage;
-    cost: number;
-    travelKm: number;
-  }> = [];
+  let generated = buildWithGuardrails({
+    places,
+    preferences,
+    signals,
+    origin,
+    variant,
+    relaxedBudget: false
+  });
 
-  const used = new Set<string>();
-  let previous: Place | null = null;
-  let remainingBudget = preferences.budgetForTwo;
-
-  for (let index = 0; index < stages.length; index += 1) {
-    const stage = stages[index]!;
-    const remainingStages = stages.length - index;
-    const stageBudget = Math.max(120_000, remainingBudget / remainingStages);
-
-    const stageCandidates = places
-      .filter((place) => !used.has(place.id))
-      .filter((place) => matchesStage(place, stage))
-      .map((place) => ({
-        place,
-        cost: estimateCostForTwo(place),
-        score: candidateScore({
-          place,
-          stage,
-          scenario: preferences.scenario,
-          signals,
-          origin,
-          previous,
-          maxDistanceKm: preferences.maxDistanceKm,
-          stageBudget,
-          variant
-        })
-      }))
-      .filter(
-        (
-          item
-        ): item is {
-          place: Place;
-          cost: number;
-          score: number;
-        } => item.score !== null
-      );
-
-    const affordable = stageCandidates.filter(
-      (item) => item.cost <= Math.max(200_000, stageBudget * 1.35)
-    );
-    const candidatePool =
-      affordable.length > 0 ? affordable : stageCandidates;
-
-    candidatePool.sort((a, b) => b.score - a.score);
-    const chosen = candidatePool[0]?.place;
-
-    if (!chosen) continue;
-
-    const travelKm = previous
-      ? haversineKm(
-          {
-            latitude: previous.latitude,
-            longitude: previous.longitude
-          },
-          {
-            latitude: chosen.latitude,
-            longitude: chosen.longitude
-          }
-        )
-      : haversineKm(origin, {
-          latitude: chosen.latitude,
-          longitude: chosen.longitude
-        });
-
-    const cost = estimateCostForTwo(chosen);
-    selected.push({ place: chosen, stage, cost, travelKm });
-    used.add(chosen.id);
-    remainingBudget = Math.max(0, remainingBudget - cost);
-    previous = chosen;
+  if (generated.selected.length === 0) {
+    generated = buildWithGuardrails({
+      places,
+      preferences,
+      signals,
+      origin,
+      variant,
+      relaxedBudget: true
+    });
   }
 
-  if (selected.length === 0) return null;
+  if (generated.selected.length === 0) return null;
 
   let clock = parseClock(preferences.startTime);
-  const stops: EveningPlanStop[] = selected.map((item, index) => {
+
+  const stops: EveningPlanStop[] = generated.selected.map((item, index) => {
     if (index > 0) {
-      clock += travelMinutes(item.travelKm);
+      clock += item.travelMinutes;
     }
 
     const startTime = formatClock(clock);
-    clock += stageDurationMinutes(item.stage);
+    const durationMinutes = stageDurationMinutes(item.stage);
+    clock += durationMinutes;
+    const endTime = formatClock(clock);
 
     return {
       place: item.place,
       stage: item.stage,
       stageLabel: stageLabels[item.stage],
       startTime,
+      endTime,
+      durationMinutes,
       estimatedCostForTwo: item.cost,
       travelKmFromPrevious: item.travelKm,
+      travelMinutesFromPrevious: item.travelMinutes,
       reason: stageReason(
         item.place,
         item.stage,
@@ -392,29 +470,47 @@ export function buildEveningPlan(input: {
     (sum, stop) => sum + stop.travelKmFromPrevious,
     0
   );
+  const maxLegKm = stops.reduce(
+    (max, stop) => Math.max(max, stop.travelKmFromPrevious),
+    0
+  );
+  const totalDurationMinutes = stops.reduce(
+    (sum, stop) =>
+      sum + stop.durationMinutes + stop.travelMinutesFromPrevious,
+    0
+  );
   const averageMatch = Math.round(
     stops.reduce((sum, stop) => sum + stop.place.match, 0) /
       stops.length
   );
   const withinBudget =
     totalEstimatedCostForTwo <= preferences.budgetForTwo;
+  const withinDuration =
+    totalDurationMinutes <= preferences.durationHours * 60;
+  const complete = generated.missingStages.length === 0;
 
   return {
     stops,
     totalEstimatedCostForTwo,
+    budgetRemainingForTwo:
+      preferences.budgetForTwo - totalEstimatedCostForTwo,
     routeKm,
+    maxLegKm,
+    totalDurationMinutes,
     averageMatch,
     withinBudget,
+    withinDuration,
+    complete,
+    missingStages: generated.missingStages,
     summary:
       stops.length +
       " chặng · " +
       Math.round(totalEstimatedCostForTwo / 1000) +
       "k/2 người · " +
-      routeKm.toFixed(1) +
-      " km"
+      Math.round(totalDurationMinutes / 10) * 10 +
+      " phút"
   };
 }
-
 
 function inferStage(place: Place): PlanStage {
   const kind = normalize(place.kind);
@@ -427,8 +523,15 @@ function inferStage(place: Place): PlanStage {
   return "coffee";
 }
 
-function nextStageOrder(current: Place): PlanStage[] {
+function nextStageOrder(current: Place, localHour?: number): PlanStage[] {
   const currentStage = inferStage(current);
+
+  if (typeof localHour === "number" && localHour >= 21) {
+    if (currentStage === "food") return ["coffee", "activity"];
+    if (currentStage === "activity") return ["coffee", "food"];
+    return ["food", "activity"];
+  }
+
   if (currentStage === "food") return ["activity", "coffee"];
   if (currentStage === "activity") return ["coffee", "food"];
   return ["food", "activity"];
@@ -440,16 +543,20 @@ export function suggestWhatNext(input: {
   signals: PlannerSignals;
   maxDistanceKm?: number;
   limit?: number;
+  localHour?: number;
+  maxCostForTwo?: number;
 }): NextPlaceSuggestion[] {
   const {
     current,
     places,
     signals,
     maxDistanceKm = 4,
-    limit = 3
+    limit = 3,
+    localHour,
+    maxCostForTwo = Number.POSITIVE_INFINITY
   } = input;
 
-  const desired = nextStageOrder(current);
+  const desired = nextStageOrder(current, localHour);
   const currentPoint: UserLocation = {
     latitude: current.latitude,
     longitude: current.longitude
@@ -466,17 +573,29 @@ export function suggestWhatNext(input: {
 
       if (distanceKm > maxDistanceKm) return null;
 
+      const estimatedCostForTwo = estimateCostForTwo(place);
+      if (estimatedCostForTwo > maxCostForTwo) return null;
+
       const stage = inferStage(place);
       const orderIndex = desired.indexOf(stage);
       const transitionBonus =
-        orderIndex === 0 ? 24 : orderIndex === 1 ? 12 : 0;
+        orderIndex === 0 ? 26 : orderIndex === 1 ? 12 : 0;
       const count = visitCount(signals.visits, place.id);
       const novelty = count === 0 ? 5 : Math.max(0, 3 - count);
+      const estimatedTravelMinutes = travelMinutes(distanceKm);
+      const latePenalty =
+        typeof localHour === "number" &&
+        localHour >= 22 &&
+        stage === "activity"
+          ? 8
+          : 0;
+
       const score =
         place.match +
         transitionBonus +
         novelty -
-        distanceKm * 7;
+        distanceKm * 7 -
+        latePenalty;
 
       const transitionLabel =
         stage === "food"
@@ -494,14 +613,15 @@ export function suggestWhatNext(input: {
       return {
         place,
         distanceKm,
+        estimatedTravelMinutes,
+        estimatedCostForTwo,
         transitionLabel,
         score,
         reason:
           personalReason +
-          " · cách " +
-          (distanceKm < 1
-            ? Math.round(distanceKm * 1000) + " m"
-            : distanceKm.toFixed(1) + " km")
+          " · " +
+          estimatedTravelMinutes +
+          " phút di chuyển"
       };
     })
     .filter(
