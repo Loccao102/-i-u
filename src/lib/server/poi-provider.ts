@@ -4,6 +4,7 @@ import type {
   MapBounds,
   PoiDiscoveryAmenity,
   PoiDiscoveryCategory,
+  PoiDiscoveryPage,
   PoiSearchResult,
   Scenario
 } from "../types";
@@ -14,6 +15,10 @@ const searchCache = new Map<
   { expiresAt: number; data: PoiSearchResult[] }
 >();
 const discoveryCache = new Map<
+  string,
+  { expiresAt: number; data: PoiDiscoveryPage }
+>();
+const osmDiscoveryCache = new Map<
   string,
   { expiresAt: number; data: PoiSearchResult[] }
 >();
@@ -456,7 +461,8 @@ async function discoverGeoapify(input: {
   category: PoiDiscoveryCategory;
   amenity: PoiDiscoveryAmenity;
   radiusKm: 0 | 1 | 3 | 5 | 10;
-}): Promise<PoiSearchResult[]> {
+  offset: number;
+}): Promise<PoiDiscoveryPage> {
   const key = geoapifyApiKey();
   if (!key) return [];
 
@@ -469,7 +475,8 @@ async function discoverGeoapify(input: {
     bounds.north.toFixed(3),
     input.category,
     input.amenity,
-    String(input.radiusKm)
+    String(input.radiusKm),
+    String(input.offset)
   ].join("|");
 
   const cached = discoveryCache.get(cacheKey);
@@ -501,7 +508,9 @@ async function discoverGeoapify(input: {
           [bounds.west, bounds.south, bounds.east, bounds.north].join(",")
   );
   url.searchParams.set("lang", "vi");
-  url.searchParams.set("limit", "20");
+  const pageSize = 20;
+  url.searchParams.set("limit", String(pageSize));
+  url.searchParams.set("offset", String(input.offset));
   url.searchParams.set("apiKey", key);
 
   const response = await fetch(url, { cache: "no-store" });
@@ -518,7 +527,7 @@ async function discoverGeoapify(input: {
       : [];
 
   const seen = new Set<string>();
-  const data = features
+  const results = features
     .map(geoapifyFeatureToPoi)
     .filter((item): item is PoiSearchResult => item !== null)
     .filter((item) => item.kind !== "Địa điểm")
@@ -526,8 +535,15 @@ async function discoverGeoapify(input: {
       if (seen.has(item.providerId)) return false;
       seen.add(item.providerId);
       return true;
-    })
-    .slice(0, 20);
+    });
+
+  const data: PoiDiscoveryPage = {
+    results,
+    nextOffset:
+      features.length === pageSize && input.offset < 80
+        ? input.offset + pageSize
+        : null
+  };
 
   discoveryCache.set(cacheKey, {
     expiresAt: Date.now() + 10 * 60 * 1000,
@@ -686,17 +702,29 @@ export async function discoverPoi(input: {
   category?: PoiDiscoveryCategory;
   amenity?: PoiDiscoveryAmenity;
   radiusKm?: 0 | 1 | 3 | 5 | 10;
-}): Promise<PoiSearchResult[]> {
+  offset?: number;
+}): Promise<PoiDiscoveryPage> {
   const category = input.category ?? "all";
   const amenity = input.amenity ?? "any";
   const radiusKm = input.radiusKm ?? 0;
+  const offset = input.offset ?? 0;
+  if (
+    !Number.isInteger(offset) ||
+    offset < 0 ||
+    offset > 80 ||
+    offset % 20 !== 0
+  ) {
+    throw new Error("INVALID_BODY");
+  }
+
   if (geoapifyApiKey()) {
     try {
       return await discoverGeoapify({
         bounds: input.bounds,
         category,
         amenity,
-        radiusKm
+        radiusKm,
+        offset
       });
     } catch (error) {
       console.warn(
@@ -708,6 +736,7 @@ export async function discoverPoi(input: {
 
   const bounds = normalizedBounds(input.bounds);
   const key = [
+    "osm-discovery",
     bounds.west.toFixed(3),
     bounds.south.toFixed(3),
     bounds.east.toFixed(3),
@@ -717,8 +746,18 @@ export async function discoverPoi(input: {
     String(radiusKm)
   ].join("|");
 
-  const cached = discoveryCache.get(key);
-  if (cached && cached.expiresAt > Date.now()) return cached.data;
+  const cached = osmDiscoveryCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) {
+    const pageSize = 20;
+    const results = cached.data.slice(offset, offset + pageSize);
+    return {
+      results,
+      nextOffset:
+        cached.data.length > offset + pageSize && offset < 80
+          ? offset + pageSize
+          : null
+    };
+  }
 
   await obeyOverpassRateLimit();
 
@@ -764,7 +803,7 @@ out center 80;
 
   const seen = new Set<string>();
 
-  const data = elements
+  const allData = elements
     .map((item): PoiSearchResult | null => {
       if (!item || typeof item !== "object") return null;
 
@@ -846,12 +885,19 @@ out center 80;
         }) <= radiusKm
       );
     })
-    .slice(0, 60);
+    .slice(0, 80);
 
-  discoveryCache.set(key, {
+  osmDiscoveryCache.set(key, {
     expiresAt: Date.now() + 10 * 60 * 1000,
-    data
+    data: allData
   });
 
-  return data;
+  const pageSize = 20;
+  return {
+    results: allData.slice(offset, offset + pageSize),
+    nextOffset:
+      allData.length > offset + pageSize && offset < 80
+        ? offset + pageSize
+        : null
+  };
 }
