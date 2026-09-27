@@ -33,6 +33,7 @@ supabase/migrations/20260927152302_planner_telemetry.sql
 supabase/migrations/20260927172009_planner_telemetry_semantics.sql
 supabase/migrations/20260927172409_reset_planner_telemetry_after_semantics_change.sql
 supabase/migrations/20260927173434_idempotent_active_plan_start.sql
+supabase/migrations/20260927174110_idempotent_personal_visits.sql
 supabase/migrations/20260927153331_profile_data_reset.sql
 ```
 
@@ -272,3 +273,19 @@ Only a genuinely new/replaced active plan returns `created=true`, so
 `started` and `replayed` telemetry are not inflated by network retries,
 double-clicks or concurrent tabs. Starting the same route after progress has
 already been made is treated as an intentional restart and creates a new ID.
+
+
+### Idempotent personal visits
+
+`add_personal_visit_if_new` serializes visit writes for one
+`owner_key + place_id` pair and reuses an existing visit within a two-hour
+window around the requested visit time.
+
+Manual check-in, rating flows that request a visit, and active-plan completion
+all go through this same primitive. This removes the previous check-then-insert
+race between tabs/retries. If a duplicate request carries a rating and the
+existing visit has no rating yet, the existing row is enriched instead of
+creating a second visit.
+
+The two-hour window matches the existing product interpretation that repeated
+actions at the same place during one outing should not inflate visit history.
