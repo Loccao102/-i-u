@@ -19,6 +19,8 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - collections;
 - real Geoapify POI discovery for cafe / food / bar / activity places in the visible map viewport;
 - Geoapify text search + import for named places;
+- lazy Geoapify Place Details on selection: website, phone/email, opening hours, facilities, wheelchair and parking metadata;
+- 30-minute server cache for place details so opening the same place repeatedly does not burn free-tier credits;
 - OpenStreetMap Nominatim/Overpass remain as a no-key fallback so the current deployment keeps working;
 - safe client-side interpretation of common OSM opening_hours formats;
 - temporary 2–3 place shortlist with quick comparison for match, distance, price, opening state and rating;
@@ -209,8 +211,8 @@ http://localhost:3000
 
 1. add lightweight cover-photo thumbnails to saved result cards without loading full galleries;
 2. normalize OSM `opening_hours` into friendly "open now" logic when Google enrichment is absent;
-3. enrich provider categories and accessibility/parking metadata;
-4. add weather forecast awareness for future plans, not only current conditions;
+3. add weather forecast awareness for future plans, not only current conditions;
+4. add stronger discovery filters (open now, facilities, accessibility, distance);
 5. Supabase Auth only when account recovery/multi-device sync is worth the friction;
 6. Groups and group voting after the personal loop is mature.
 
