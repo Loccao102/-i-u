@@ -674,7 +674,8 @@ export function MapExplorer() {
     ? ratings[selected.id] ?? null
     : null;
   const selectedOpening = openingStatus(
-    providerDetails?.providerId === selected.providerId &&
+    providerDetails &&
+      providerDetails.providerId === selected.providerId &&
       providerDetails.openingHours
       ? providerDetails.openingHours
       : selected.openUntil,
