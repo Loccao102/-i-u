@@ -246,17 +246,6 @@ async function searchGeoapify(input: {
   const key = geoapifyApiKey();
   if (!key) return [];
 
-  if (geoapifyApiKey()) {
-    try {
-      return await searchGeoapify(input);
-    } catch (error) {
-      console.warn(
-        "[di-dau][geoapify][search] falling back to OpenStreetMap",
-        error instanceof Error ? error.message : error
-      );
-    }
-  }
-
   const query = cleanPlainText(input.query, 120);
   if (query.length < 2) return [];
 
@@ -421,6 +410,17 @@ export async function searchPoi(input: {
   longitude?: number;
   bounds?: MapBounds;
 }): Promise<PoiSearchResult[]> {
+  if (geoapifyApiKey()) {
+    try {
+      return await searchGeoapify(input);
+    } catch (error) {
+      console.warn(
+        "[di-dau][geoapify][search] falling back to OpenStreetMap",
+        error instanceof Error ? error.message : error
+      );
+    }
+  }
+
   const query = cleanPlainText(input.query, 120);
   if (query.length < 2) return [];
 
