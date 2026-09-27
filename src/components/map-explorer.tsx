@@ -30,6 +30,7 @@ import {
   toActivePlanSnapshot
 } from "@/lib/planner";
 import { placeFromPoiResult, scenarioLabels } from "@/lib/places";
+import { openingStatus } from "@/lib/opening-hours";
 import {
   deriveTasteProfile,
   tasteProfileSummary
@@ -237,6 +238,8 @@ export function MapExplorer() {
   const [placeMedia, setPlaceMedia] = useState<PlaceMedia | null>(null);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [placeCovers, setPlaceCovers] = useState<Record<string, string>>({});
+  const [shortlist, setShortlist] = useState<Place[]>([]);
   const [serverDistances, setServerDistances] = useState<Record<string, number>>({});
   const [backupLoading, setBackupLoading] = useState(false);
   const [viewportBounds, setViewportBounds] = useState<MapBounds | null>(null);
@@ -290,6 +293,7 @@ export function MapExplorer() {
   const ratingDialogRef = useRef<HTMLDialogElement | null>(null);
   const collectionDialogRef = useRef<HTMLDialogElement | null>(null);
   const planDialogRef = useRef<HTMLDialogElement | null>(null);
+  const compareDialogRef = useRef<HTMLDialogElement | null>(null);
   const backupInputRef = useRef<HTMLInputElement | null>(null);
   const placePhotoInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -324,6 +328,60 @@ export function MapExplorer() {
     const timer = window.setInterval(() => setClock(new Date()), 5 * 60 * 1000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    try {
+      const raw = window.sessionStorage.getItem("di-dau-shortlist");
+      if (!raw) return;
+      const parsed: unknown = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return;
+
+      setShortlist(
+        parsed
+          .filter(
+            (item): item is Place =>
+              Boolean(
+                item &&
+                  typeof item === "object" &&
+                  "id" in item &&
+                  typeof (item as { id?: unknown }).id === "string"
+              )
+          )
+          .slice(0, 3)
+      );
+    } catch {
+      window.sessionStorage.removeItem("di-dau-shortlist");
+    }
+  }, []);
+
+  useEffect(() => {
+    window.sessionStorage.setItem(
+      "di-dau-shortlist",
+      JSON.stringify(shortlist)
+    );
+  }, [shortlist]);
+
+  useEffect(() => {
+    const ids = customPlaces.map((place) => place.id).slice(0, 50);
+    if (ids.length === 0) {
+      setPlaceCovers({});
+      return;
+    }
+
+    let active = true;
+    void personalApi
+      .getPlaceCovers(ids)
+      .then(({ covers }) => {
+        if (active) setPlaceCovers(covers);
+      })
+      .catch(() => {
+        if (active) setPlaceCovers({});
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [customPlaces]);
 
   const refreshWeather = useCallback(async (point: UserLocation) => {
     setWeatherLoading(true);
@@ -504,6 +562,7 @@ export function MapExplorer() {
   const selectedPersonalRating = hasSelectedPlace
     ? ratings[selected.id] ?? null
     : null;
+  const selectedOpening = openingStatus(selected.openUntil, clock);
   const selectedVisit = recentVisitByPlace.get(selected.id) ?? null;
   const selectedVisitTime = selectedVisit
     ? new Date(selectedVisit.visitedAt).getTime()
@@ -714,6 +773,30 @@ export function MapExplorer() {
       setSelectedId(visiblePlaces[0]!.id);
     }
   }, [visiblePlaces, selectedId]);
+
+  function toggleShortlist(place: Place) {
+    setShortlist((current) => {
+      const exists = current.some((item) => item.id === place.id);
+      if (exists) {
+        return current.filter((item) => item.id !== place.id);
+      }
+
+      if (current.length >= 3) {
+        setNotice("Shortlist tối đa 3 địa điểm để so sánh nhanh.");
+        return current;
+      }
+
+      return [...current, place];
+    });
+  }
+
+  function openCompare() {
+    if (shortlist.length < 2) {
+      setNotice("Chọn ít nhất 2 địa điểm để so sánh.");
+      return;
+    }
+    compareDialogRef.current?.showModal();
+  }
 
   function requestLocation() {
     if (!navigator.geolocation) {
