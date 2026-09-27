@@ -17,7 +17,8 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - visit history and check-in;
 - edit/delete personal places;
 - collections;
-- OpenStreetMap/Nominatim search and import;
+- real OpenStreetMap discovery: Overpass loads cafe / food / bar / activity POIs from the visible map viewport;
+- Nominatim text search + import for named places;
 - smarter personal ranking with visible recommendation reasons;
 - learned **Taste Profile** from rating, revisit intent and repeat visits; similar places inherit preference signals for scenario, price, noise and crowd level;
 - collection-based recommendations;
@@ -114,6 +115,14 @@ OPEN_METEO_API_KEY=...
 
 The server then switches to Open-Meteo's customer endpoint. Weather data is attributed in the map UI.
 
+Real POI discovery defaults to the public OpenStreetMap Overpass endpoint for the current personal MVP. For a more controlled production deployment, configure:
+
+```bash
+OVERPASS_API_URL=https://your-overpass-instance.example/api/interpreter
+```
+
+Discovery is viewport-bounded, cached server-side, rate-limited, and never runs country-scale queries.
+
 ## Apply the database migration
 
 The schema is versioned at:
@@ -176,9 +185,9 @@ http://localhost:3000
 
 ## Next
 
-1. replace remaining demo seed places with provider-driven real discovery;
-2. add cover-photo thumbnails to result cards without loading full galleries;
-3. enrich OSM/provider imports with better categories and opening-hours metadata;
+1. add lightweight cover-photo thumbnails to saved result cards without loading full galleries;
+2. normalize OSM `opening_hours` into friendly "open now" logic when Google enrichment is absent;
+3. enrich provider categories and accessibility/parking metadata;
 4. add weather forecast awareness for future plans, not only current conditions;
 5. Supabase Auth only when account recovery/multi-device sync is worth the friction;
 6. Groups and group voting after the personal loop is mature.
