@@ -66,6 +66,7 @@ import type {
   RecommendationFeedback,
   RecommendationFeedbackReason,
   ProviderPlaceDetails,
+  RoutingMode,
   Place,
   PlaceMedia,
   PoiDiscoveryFilters,
@@ -128,6 +129,13 @@ const scenarioEmoji: Record<Scenario, string> = {
   fun: "◇",
   chill: "☾"
 };
+
+const routingModeLabels: Record<RoutingMode, string> = {
+  motorcycle: "Xe máy",
+  drive: "Ô tô",
+  walk: "Đi bộ"
+};
+
 
 type PersonalView = "discover" | "saved" | "history" | "collections";
 
@@ -503,6 +511,8 @@ export function MapExplorer() {
   const [planDistance, setPlanDistance] = useState(5);
   const [planDuration, setPlanDuration] = useState<2 | 3 | 4>(4);
   const [planStartTime, setPlanStartTime] = useState("19:00");
+  const [planRoutingMode, setPlanRoutingMode] =
+    useState<RoutingMode>("motorcycle");
   const [planVariant, setPlanVariant] = useState(0);
   const [planWeather, setPlanWeather] = useState<WeatherContext | null>(null);
   const [planWeatherLoading, setPlanWeatherLoading] = useState(false);
@@ -1874,6 +1884,7 @@ export function MapExplorer() {
 
     const preferences = {
       scenario: scenarioOverride,
+      routeMode: planRoutingMode,
       budgetForTwo: planBudget,
       maxDistanceKm: planDistance,
       durationHours: planDuration,
@@ -1892,18 +1903,21 @@ export function MapExplorer() {
 
     if (routingCandidates.length > 0) {
       try {
-        const routing = await personalApi.routeMatrix([
-          {
-            key: "__origin__",
-            latitude: origin.latitude,
-            longitude: origin.longitude
-          },
-          ...routingCandidates.map((place) => ({
-            key: place.id,
-            latitude: place.latitude,
-            longitude: place.longitude
-          }))
-        ]);
+        const routing = await personalApi.routeMatrix(
+          [
+            {
+              key: "__origin__",
+              latitude: origin.latitude,
+              longitude: origin.longitude
+            },
+            ...routingCandidates.map((place) => ({
+              key: place.id,
+              latitude: place.latitude,
+              longitude: place.longitude
+            }))
+          ],
+          planRoutingMode
+        );
         travelMatrix = routing.matrix ?? undefined;
       } catch {
         travelMatrix = undefined;
@@ -1968,6 +1982,9 @@ export function MapExplorer() {
   function openPlanRoute() {
     if (!activePlan || activePlan.stops.length === 0) return;
 
+    const mapsTravelMode =
+      activePlan.routeMode === "walk" ? "walking" : "driving";
+
     if (activePlan.stops.length === 1) {
       const only = activePlan.stops[0]!.place;
       const url = userLocation
@@ -1977,7 +1994,7 @@ export function MapExplorer() {
           ) +
           "&destination=" +
           encodeURIComponent(only.latitude + "," + only.longitude) +
-          "&travelmode=driving"
+          "&travelmode=" + mapsTravelMode
         : "https://www.google.com/maps/search/?api=1&query=" +
           encodeURIComponent(only.latitude + "," + only.longitude);
       window.open(url, "_blank", "noopener,noreferrer");
@@ -1999,7 +2016,7 @@ export function MapExplorer() {
       api: "1",
       origin,
       destination: last.latitude + "," + last.longitude,
-      travelmode: "driving"
+      travelmode: mapsTravelMode
     });
 
     if (waypointStops.length > 0) {
@@ -2032,10 +2049,14 @@ export function MapExplorer() {
   }
 
   function openRunningStopRoute(stop: ActivePlanStopSnapshot) {
+    const mapsTravelMode =
+      runningPlan?.plan.routeMode === "walk"
+        ? "walking"
+        : "driving";
     const params = new URLSearchParams({
       api: "1",
       destination: stop.latitude + "," + stop.longitude,
-      travelmode: "driving"
+      travelmode: mapsTravelMode
     });
 
     if (userLocation) {
@@ -3287,6 +3308,7 @@ export function MapExplorer() {
                       ) : null}
                       <span>· ~{moneyLabel(plan.plan.totalEstimatedCostForTwo)}</span>
                       <span>· {plan.plan.totalDurationMinutes} phút</span>
+                      <span>· {routingModeLabels[plan.plan.routeMode]}</span>
                       {plan.plan.quality ? (
                         <span
                           className={
@@ -4944,6 +4966,21 @@ export function MapExplorer() {
             </label>
 
             <label className="field">
+              <span>Di chuyển</span>
+              <select
+                value={planRoutingMode}
+                onChange={(event) => {
+                  setPlanRoutingMode(event.target.value as RoutingMode);
+                  setActivePlan(null);
+                }}
+              >
+                <option value="motorcycle">Xe máy</option>
+                <option value="drive">Ô tô</option>
+                <option value="walk">Đi bộ</option>
+              </select>
+            </label>
+
+            <label className="field">
               <span>Budget / 2 người</span>
               <select
                 value={planBudget}
@@ -5232,8 +5269,11 @@ export function MapExplorer() {
                     ? activePlan.roadRoutedLegs +
                       "/" +
                       activePlan.stops.length +
-                      " chặng có khoảng cách đường thực tế · xe máy"
-                    : "Geoapify routing chưa khả dụng; đang dùng khoảng cách thẳng + travel-time heuristic."}
+                      " chặng có khoảng cách đường thực tế · " +
+                      routingModeLabels[activePlan.routeMode]
+                    : "Geoapify routing chưa khả dụng; đang dùng fallback " +
+                      routingModeLabels[activePlan.routeMode].toLowerCase() +
+                      " theo khoảng cách thẳng."}
                 </span>
               </div>
 
