@@ -703,7 +703,6 @@ export function MapExplorer() {
         ratings,
         feedbacks: recommendationFeedbacks,
         visits,
-        costProfile: plannerCostProfile
       },
       serverDistances,
       recommendationContext,
@@ -772,7 +771,6 @@ export function MapExplorer() {
         ratings,
         feedbacks: recommendationFeedbacks,
         visits,
-        costProfile: plannerCostProfile
       },
         serverDistances,
         recommendationContext,
@@ -801,7 +799,6 @@ export function MapExplorer() {
         ratings,
         feedbacks: recommendationFeedbacks,
         visits,
-        costProfile: plannerCostProfile
       },
       4
     );
@@ -917,7 +914,8 @@ export function MapExplorer() {
     recommendationFeedbacks,
     visits,
     recommendationContext.localHour,
-    runningNextStop
+    runningNextStop,
+    plannerCostProfile
   ]);
 
   const isPersonalPlace =
@@ -1573,7 +1571,6 @@ export function MapExplorer() {
         ratings,
         feedbacks: recommendationFeedbacks,
         visits,
-        costProfile: plannerCostProfile
       },
       undefined,
       planContext,
