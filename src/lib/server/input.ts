@@ -87,6 +87,36 @@ export function parsePlace(
   const source =
     body.source === "provider" ? "provider" : "personal";
 
+  const averageForTwo =
+    stringValue(body.averageForTwo, 100) || "Chưa có dữ liệu";
+
+  const requestedCostSource =
+    body.costSource === "user" ||
+    body.costSource === "provider_estimate" ||
+    body.costSource === "unknown"
+      ? body.costSource
+      : "unknown";
+
+  const costSource =
+    source === "personal"
+      ? averageForTwo === "Chưa có dữ liệu"
+        ? "unknown"
+        : "user"
+      : requestedCostSource === "provider_estimate"
+        ? "provider_estimate"
+        : requestedCostSource === "user"
+          ? "user"
+          : averageForTwo === "Chưa có dữ liệu"
+            ? "unknown"
+            : "user";
+
+  const costConfidence =
+    costSource === "user"
+      ? 100
+      : costSource === "provider_estimate"
+        ? Math.round(finiteNumber(body.costConfidence ?? 40, 0, 100))
+        : 0;
+
   const tags = Array.isArray(body.tags)
     ? Array.from(
         new Set(
@@ -107,8 +137,9 @@ export function parsePlace(
     longitude: finiteNumber(body.longitude, -180, 180),
     distanceKm: finiteNumber(body.distanceKm ?? 0, 0, 50000),
     priceLabel,
-    averageForTwo:
-      stringValue(body.averageForTwo, 100) || "Chưa có dữ liệu",
+    averageForTwo,
+    costSource,
+    costConfidence,
     publicRating: finiteNumber(body.publicRating ?? 0, 0, 5),
     match: Math.round(finiteNumber(body.match ?? 80, 0, 100)),
     communityNote: stringValue(body.communityNote, 180),
