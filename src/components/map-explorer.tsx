@@ -453,7 +453,8 @@ export function MapExplorer() {
             places: rankedAll,
             signals: { savedIds: saved, ratings, visits },
             maxDistanceKm: 4,
-            limit: 3
+            limit: 3,
+            localHour: recommendationContext.localHour
           })
         : [],
     [
@@ -462,7 +463,8 @@ export function MapExplorer() {
       rankedAll,
       saved,
       ratings,
-      visits
+      visits,
+      recommendationContext.localHour
     ]
   );
 
@@ -978,7 +980,8 @@ export function MapExplorer() {
         places: rankedAll,
         signals: { savedIds: saved, ratings, visits },
         maxDistanceKm: 4,
-        limit: 1
+        limit: 1,
+        localHour: recommendationContext.localHour
       })[0];
 
       setNotice(
@@ -1828,7 +1831,9 @@ export function MapExplorer() {
                     <span>
                       {item.transitionLabel} · {distanceLabel(item.distanceKm)}
                     </span>
-                    <small>{item.reason}</small>
+                    <small>
+                      {item.reason} · ~{moneyLabel(item.estimatedCostForTwo)}
+                    </small>
                   </button>
                 ))}
               </div>
@@ -2120,9 +2125,29 @@ export function MapExplorer() {
                 <b>{activePlan.averageMatch}%</b>
               </div>
 
-              {!activePlan.withinBudget ? (
+              {!activePlan.complete ? (
                 <div className="plan-warning">
-                  Tổng ước lượng đang vượt budget một chút. App vẫn giữ phương án vì độ phù hợp cao nhất trong vùng đã chọn.
+                  Chưa ghép đủ mọi chặng trong khung bạn đặt. Thiếu:{" "}
+                  {activePlan.missingStages
+                    .map((stage) =>
+                      stage === "food"
+                        ? "Ăn uống"
+                        : stage === "activity"
+                          ? "Vui chơi"
+                          : "Cafe / chill"
+                    )
+                    .join(", ")}
+                  . App giữ phương án khả thi thay vì phá budget/thời lượng.
+                </div>
+              ) : !activePlan.withinBudget ? (
+                <div className="plan-warning">
+                  Không có phương án đủ chặng nằm hoàn toàn trong budget; đây là fallback gần nhất.
+                </div>
+              ) : null}
+
+              {!activePlan.withinDuration ? (
+                <div className="plan-warning">
+                  Thời lượng ước tính vượt khung đã chọn. Hãy giảm bán kính hoặc đổi phương án.
                 </div>
               ) : null}
 
@@ -2151,7 +2176,7 @@ export function MapExplorer() {
                     >
                       <span className="plan-stop__top">
                         <small>
-                          {stop.startTime} · {stop.stageLabel}
+                          {stop.startTime}–{stop.endTime} · {stop.stageLabel}
                         </small>
                         <b>{stop.place.match}%</b>
                       </span>
@@ -2162,7 +2187,9 @@ export function MapExplorer() {
                         {index > 0
                           ? " · " +
                             distanceLabel(stop.travelKmFromPrevious) +
-                            " từ chặng trước"
+                            " · ~" +
+                            stop.travelMinutesFromPrevious +
+                            " phút di chuyển"
                           : ""}
                       </span>
                     </button>
@@ -2176,10 +2203,23 @@ export function MapExplorer() {
                   <strong>
                     ~{moneyLabel(activePlan.totalEstimatedCostForTwo)}
                   </strong>
+                  <small>
+                    {activePlan.budgetRemainingForTwo >= 0
+                      ? "Còn " + moneyLabel(activePlan.budgetRemainingForTwo)
+                      : "Vượt " +
+                        moneyLabel(Math.abs(activePlan.budgetRemainingForTwo))}
+                  </small>
                 </div>
                 <div>
-                  <span>Di chuyển</span>
-                  <strong>{activePlan.routeKm.toFixed(1)} km</strong>
+                  <span>Thời lượng</span>
+                  <strong>
+                    {Math.floor(activePlan.totalDurationMinutes / 60)}h{" "}
+                    {activePlan.totalDurationMinutes % 60}p
+                  </strong>
+                  <small>
+                    {activePlan.routeKm.toFixed(1)} km · leg xa nhất{" "}
+                    {activePlan.maxLegKm.toFixed(1)} km
+                  </small>
                 </div>
               </div>
 
