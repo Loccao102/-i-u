@@ -1389,7 +1389,7 @@ export function MapExplorer() {
     );
     const source = cafeOrFood.length >= 3 ? cafeOrFood : rankedAll;
 
-    let picked = todaysEntry
+    let picked: Place | null = todaysEntry
       ? source.find(
           (place) => dailyPlaceKey(place) === todaysEntry.placeKey
         ) ?? null
