@@ -782,9 +782,11 @@ export function buildEveningPlan(input: {
   ).length;
   const retainedStopIds = input.replayTemplate
     ? stops
-        .filter(
-          (stop, index) =>
-            input.replayTemplate?.stops[index]?.placeId === stop.place.id
+        .filter((stop) =>
+          input.replayTemplate?.stops.some(
+            (templateStop) =>
+              templateStop.placeId === stop.place.id
+          )
         )
         .map((stop) => stop.place.id)
     : [];
