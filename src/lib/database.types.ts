@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      active_personal_plans: {
+        Row: {
+          completed_stop_ids: string[]
+          current_stop_index: number
+          id: string
+          owner_key: string
+          plan: Json
+          skipped_stop_ids: string[]
+          started_at: string
+          updated_at: string
+        }
+        Insert: {
+          completed_stop_ids?: string[]
+          current_stop_index?: number
+          id: string
+          owner_key: string
+          plan: Json
+          skipped_stop_ids?: string[]
+          started_at?: string
+          updated_at?: string
+        }
+        Update: {
+          completed_stop_ids?: string[]
+          current_stop_index?: number
+          id?: string
+          owner_key?: string
+          plan?: Json
+          skipped_stop_ids?: string[]
+          started_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       collection_places: {
         Row: {
           collection_id: string
@@ -243,6 +276,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      advance_active_personal_plan: {
+        Args: {
+          p_action: string
+          p_expected_index: number
+          p_owner_key: string
+        }
+        Returns: Json
+      }
       delete_personal_place: {
         Args: { p_owner_key: string; p_place_id: string }
         Returns: boolean

@@ -1,4 +1,7 @@
 import type {
+  ActivePlanAdvanceResult,
+  ActivePersonalPlan,
+  ActivePlanSnapshot,
   BackupImportResult,
   Collection,
   MapBounds,
@@ -231,5 +234,33 @@ export const personalApi = {
     api<BackupImportResult & { mode: "merge" }>(
       "/api/personal/import",
       { method: "POST", body: backup }
-    )
+    ),
+
+  activePlan: {
+    get: () =>
+      api<{ activePlan: ActivePersonalPlan | null }>(
+        "/api/personal/active-plan"
+      ),
+
+    start: (plan: ActivePlanSnapshot) =>
+      api<{ activePlan: ActivePersonalPlan }>(
+        "/api/personal/active-plan",
+        { method: "PUT", body: { plan } }
+      ),
+
+    advance: (
+      action: "complete" | "skip",
+      expectedIndex: number
+    ) =>
+      api<ActivePlanAdvanceResult>(
+        "/api/personal/active-plan",
+        { method: "PATCH", body: { action, expectedIndex } }
+      ),
+
+    cancel: () =>
+      api<{ canceled: true }>(
+        "/api/personal/active-plan",
+        { method: "DELETE" }
+      )
+  }
 };

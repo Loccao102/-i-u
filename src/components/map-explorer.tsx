@@ -24,7 +24,11 @@ import {
   StarIcon
 } from "./icons";
 import { personalApi } from "@/lib/personal-api";
-import { buildEveningPlan, suggestWhatNext } from "@/lib/planner";
+import {
+  buildEveningPlan,
+  suggestWhatNext,
+  toActivePlanSnapshot
+} from "@/lib/planner";
 import { places as seedPlaces, scenarioLabels } from "@/lib/places";
 import {
   deriveTasteProfile,
@@ -36,6 +40,8 @@ import {
   recommendForCollection
 } from "@/lib/search";
 import type {
+  ActivePersonalPlan,
+  ActivePlanStopSnapshot,
   Collection,
   EveningPlan,
   MapBounds,
@@ -209,6 +215,8 @@ export function MapExplorer() {
   const [planStartTime, setPlanStartTime] = useState("19:00");
   const [planVariant, setPlanVariant] = useState(0);
   const [activePlan, setActivePlan] = useState<EveningPlan | null>(null);
+  const [runningPlan, setRunningPlan] =
+    useState<ActivePersonalPlan | null>(null);
 
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [locationStatus, setLocationStatus] = useState<
@@ -247,12 +255,16 @@ export function MapExplorer() {
 
   const loadSnapshot = useCallback(async () => {
     try {
-      const snapshot = await personalApi.snapshot();
+      const [snapshot, activeResult] = await Promise.all([
+        personalApi.snapshot(),
+        personalApi.activePlan.get()
+      ]);
       setCustomPlaces(snapshot.customPlaces);
       setSaved(new Set(snapshot.savedIds));
       setRatings(snapshot.ratings);
       setVisits(snapshot.visits);
       setCollections(snapshot.collections);
+      setRunningPlan(activeResult.activePlan);
       setDataStatus("ready");
     } catch (error) {
       setDataStatus("error");
@@ -428,6 +440,11 @@ export function MapExplorer() {
     );
   }, [selectedCollection, rankedAll, saved, ratings, visits]);
 
+  const runningCurrentStop =
+    runningPlan?.plan.stops[runningPlan.currentStopIndex] ?? null;
+  const runningNextStop =
+    runningPlan?.plan.stops[runningPlan.currentStopIndex + 1] ?? null;
+
   const selected =
     visiblePlaces.find((place) => place.id === selectedId) ??
     rankedAll.find((place) => place.id === selectedId) ??
@@ -445,28 +462,48 @@ export function MapExplorer() {
     clock.getTime() - selectedVisitTime >= 0 &&
     clock.getTime() - selectedVisitTime <= 8 * 60 * 60 * 1000;
 
-  const whatNextSuggestions = useMemo(
-    () =>
-      selectedVisitedRecently
-        ? suggestWhatNext({
-            current: selected,
-            places: rankedAll,
-            signals: { savedIds: saved, ratings, visits },
-            maxDistanceKm: 4,
-            limit: 3,
-            localHour: recommendationContext.localHour
-          })
-        : [],
-    [
-      selectedVisitedRecently,
-      selected,
-      rankedAll,
-      saved,
-      ratings,
-      visits,
-      recommendationContext.localHour
-    ]
-  );
+  const whatNextSuggestions = useMemo(() => {
+    const generic = selectedVisitedRecently
+      ? suggestWhatNext({
+          current: selected,
+          places: rankedAll,
+          signals: { savedIds: saved, ratings, visits },
+          maxDistanceKm: 4,
+          limit: 3,
+          localHour: recommendationContext.localHour
+        })
+      : [];
+
+    if (!runningNextStop) return generic;
+
+    const plannedPlace = rankedAll.find(
+      (place) => place.id === runningNextStop.placeId
+    );
+    if (!plannedPlace) return generic;
+
+    const planned = {
+      place: plannedPlace,
+      distanceKm: runningNextStop.travelKmFromPrevious,
+      estimatedTravelMinutes: runningNextStop.travelMinutesFromPrevious,
+      estimatedCostForTwo: runningNextStop.estimatedCostForTwo,
+      transitionLabel: "Theo plan · " + runningNextStop.stageLabel,
+      reason: "Chặng tiếp theo đã chốt trong kế hoạch"
+    };
+
+    return [
+      planned,
+      ...generic.filter((item) => item.place.id !== plannedPlace.id)
+    ].slice(0, 3);
+  }, [
+    selectedVisitedRecently,
+    selected,
+    rankedAll,
+    saved,
+    ratings,
+    visits,
+    recommendationContext.localHour,
+    runningNextStop
+  ]);
 
   const isPersonalPlace = customIds.has(selected.id);
 
@@ -857,6 +894,146 @@ export function MapExplorer() {
     );
   }
 
+  function focusRunningStop(stop: ActivePlanStopSnapshot) {
+    setSelectedId(stop.placeId);
+    mapRef.current?.flyTo({
+      center: [stop.longitude, stop.latitude],
+      zoom: 14,
+      duration: 650,
+      essential: true
+    });
+  }
+
+  function openRunningStopRoute(stop: ActivePlanStopSnapshot) {
+    const params = new URLSearchParams({
+      api: "1",
+      destination: stop.latitude + "," + stop.longitude,
+      travelmode: "driving"
+    });
+
+    if (userLocation) {
+      params.set(
+        "origin",
+        userLocation.latitude + "," + userLocation.longitude
+      );
+    }
+
+    window.open(
+      "https://www.google.com/maps/dir/?" + params.toString(),
+      "_blank",
+      "noopener,noreferrer"
+    );
+  }
+
+  async function startRunningPlan() {
+    if (!activePlan) return;
+
+    if (
+      runningPlan &&
+      !window.confirm(
+        "Bạn đang có một plan đang đi. Thay bằng phương án mới?"
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const result = await personalApi.activePlan.start(
+        toActivePlanSnapshot(activePlan)
+      );
+      setRunningPlan(result.activePlan);
+      planDialogRef.current?.close();
+
+      const first = result.activePlan.plan.stops[0];
+      if (first) focusRunningStop(first);
+
+      setNotice(
+        "Đã bắt đầu plan · " +
+          result.activePlan.plan.stops.length +
+          " chặng."
+      );
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "Không thể bắt đầu kế hoạch."
+      );
+    }
+  }
+
+  async function advanceRunningPlan(action: "complete" | "skip") {
+    if (!runningPlan) return;
+
+    try {
+      const result = await personalApi.activePlan.advance(
+        action,
+        runningPlan.currentStopIndex
+      );
+      setRunningPlan(result.activePlan);
+
+      if (result.stale) {
+        setNotice(
+          "Plan đã thay đổi ở tab khác. Đã đồng bộ về chặng hiện tại."
+        );
+        return;
+      }
+
+      if (result.recordedVisit) {
+        const snapshot = await personalApi.snapshot();
+        setCustomPlaces(snapshot.customPlaces);
+        setSaved(new Set(snapshot.savedIds));
+        setRatings(snapshot.ratings);
+        setVisits(snapshot.visits);
+        setCollections(snapshot.collections);
+      }
+
+      if (result.finished) {
+        setNotice(
+          action === "complete"
+            ? "Đã hoàn thành plan. Lịch sử chuyến đi đã được cập nhật."
+            : "Plan đã kết thúc."
+        );
+        return;
+      }
+
+      const next =
+        result.activePlan?.plan.stops[
+          result.activePlan.currentStopIndex
+        ];
+      if (next) {
+        focusRunningStop(next);
+        setNotice(
+          action === "complete"
+            ? "Xong chặng · tiếp theo: " + next.name
+            : "Đã bỏ qua · chuyển sang: " + next.name
+        );
+      }
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "Không thể cập nhật kế hoạch."
+      );
+    }
+  }
+
+  async function cancelRunningPlan() {
+    if (!runningPlan) return;
+    if (!window.confirm("Hủy plan đang đi? Lịch sử check-in vẫn được giữ.")) {
+      return;
+    }
+
+    try {
+      await personalApi.activePlan.cancel();
+      setRunningPlan(null);
+      setNotice("Đã hủy plan đang đi.");
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "Không thể hủy kế hoạch."
+      );
+    }
+  }
+
   async function importPoi(result: PoiSearchResult) {
     try {
       const imported = await personalApi.importPoi(result);
@@ -974,6 +1151,13 @@ export function MapExplorer() {
     try {
       await personalApi.checkIn(selected.id);
       await loadSnapshot();
+
+      if (runningCurrentStop?.placeId === selected.id) {
+        setNotice(
+          "Đã check-in chặng hiện tại · khi rời đi bấm Xong chặng."
+        );
+        return;
+      }
 
       const next = suggestWhatNext({
         current: selected,
@@ -1364,6 +1548,55 @@ export function MapExplorer() {
           ))}
         </div>
 
+        {runningPlan && runningCurrentStop ? (
+          <div className="active-plan-strip">
+            <button
+              type="button"
+              className="active-plan-strip__main"
+              onClick={() => focusRunningStop(runningCurrentStop)}
+            >
+              <span>
+                Đang đi · Chặng {runningPlan.currentStopIndex + 1}/
+                {runningPlan.plan.stops.length}
+              </span>
+              <strong>{runningCurrentStop.name}</strong>
+              <small>
+                {runningCurrentStop.startTime}–{runningCurrentStop.endTime} · ~
+                {moneyLabel(runningCurrentStop.estimatedCostForTwo)}
+              </small>
+            </button>
+            <div className="active-plan-strip__actions">
+              <button
+                type="button"
+                onClick={() => openRunningStopRoute(runningCurrentStop)}
+              >
+                Chỉ đường
+              </button>
+              <button
+                type="button"
+                className="active-plan-strip__done"
+                onClick={() => void advanceRunningPlan("complete")}
+              >
+                ✓ Xong
+              </button>
+              <button
+                type="button"
+                onClick={() => void advanceRunningPlan("skip")}
+              >
+                Bỏ qua
+              </button>
+              <button
+                type="button"
+                className="active-plan-strip__cancel"
+                aria-label="Hủy plan"
+                onClick={() => void cancelRunningPlan()}
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         {view === "collections" ? (
           <div className="collection-strip">
             <div className="collection-strip__scroll">
@@ -1486,7 +1719,8 @@ export function MapExplorer() {
           </div>
         ) : null}
 
-        {selectedVisitedRecently && whatNextSuggestions[0] ? (
+        {(selectedVisitedRecently || Boolean(runningPlan)) &&
+        whatNextSuggestions[0] ? (
           <div className="what-next-strip">
             <div>
               <span className="eyebrow">Đi đâu tiếp?</span>
@@ -1803,7 +2037,8 @@ export function MapExplorer() {
             )}
           </section>
 
-          {selectedVisitedRecently && whatNextSuggestions.length > 0 ? (
+          {(selectedVisitedRecently || Boolean(runningPlan)) &&
+          whatNextSuggestions.length > 0 ? (
             <section className="detail-section">
               <span className="eyebrow">Đi đâu tiếp?</span>
               <div className="what-next-list">
@@ -2223,7 +2458,7 @@ export function MapExplorer() {
                 </div>
               </div>
 
-              <div className="plan-actions">
+              <div className="plan-actions plan-actions--three">
                 <button
                   type="button"
                   className="secondary-button"
@@ -2233,10 +2468,17 @@ export function MapExplorer() {
                 </button>
                 <button
                   type="button"
-                  className="primary-button"
+                  className="secondary-button"
                   onClick={openPlanRoute}
                 >
-                  <LocationIcon /> Mở tuyến đường
+                  <LocationIcon /> Xem tuyến
+                </button>
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => void startRunningPlan()}
+                >
+                  Bắt đầu plan
                 </button>
               </div>
             </div>

@@ -1,4 +1,5 @@
 import type {
+  ActivePlanSnapshot,
   EveningPlan,
   EveningPlanPreferences,
   EveningPlanStop,
@@ -638,4 +639,33 @@ export function suggestWhatNext(input: {
     .slice(0, Math.max(1, Math.min(limit, 5)));
 
   return scored.map(({ score: _score, ...item }) => item);
+}
+
+
+export function toActivePlanSnapshot(
+  plan: EveningPlan
+): ActivePlanSnapshot {
+  return {
+    summary: plan.summary,
+    totalEstimatedCostForTwo: plan.totalEstimatedCostForTwo,
+    budgetRemainingForTwo: plan.budgetRemainingForTwo,
+    routeKm: plan.routeKm,
+    totalDurationMinutes: plan.totalDurationMinutes,
+    averageMatch: plan.averageMatch,
+    stops: plan.stops.map((stop) => ({
+      placeId: stop.place.id,
+      name: stop.place.name,
+      latitude: stop.place.latitude,
+      longitude: stop.place.longitude,
+      stage: stop.stage,
+      stageLabel: stop.stageLabel,
+      startTime: stop.startTime,
+      endTime: stop.endTime,
+      estimatedCostForTwo: stop.estimatedCostForTwo,
+      travelKmFromPrevious: stop.travelKmFromPrevious,
+      travelMinutesFromPrevious: stop.travelMinutesFromPrevious,
+      match: stop.place.match,
+      reason: stop.reason
+    }))
+  };
 }
