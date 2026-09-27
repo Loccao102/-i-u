@@ -209,12 +209,11 @@ http://localhost:3000
 
 ## Next
 
-1. add lightweight cover-photo thumbnails to saved result cards without loading full galleries;
-2. normalize OSM `opening_hours` into friendly "open now" logic when Google enrichment is absent;
-3. add weather forecast awareness for future plans, not only current conditions;
-4. add stronger discovery filters (open now, facilities, accessibility, distance);
-5. Supabase Auth only when account recovery/multi-device sync is worth the friction;
-6. Groups and group voting after the personal loop is mature.
+1. add weather forecast awareness for future plans, not only current conditions;
+2. add stronger discovery filters (open now, facilities, accessibility, distance);
+3. improve real-world price/budget estimates from personal history and explicit user input;
+4. Supabase Auth only when account recovery/multi-device sync is worth the friction;
+5. Groups and group voting after the personal loop is mature.
 
 
 ## Manual Vercel deployment
