@@ -24,10 +24,14 @@ import {
   StarIcon
 } from "./icons";
 import { personalApi } from "@/lib/personal-api";
-import { costBadgeLabel } from "@/lib/cost-estimation";
+import {
+  costBadgeLabel,
+  priceLabelForCost
+} from "@/lib/cost-estimation";
 import {
   buildEveningPlan,
   derivePlannerCostProfile,
+  estimateCostForTwo,
   suggestWhatNext,
   toActivePlanSnapshot
 } from "@/lib/planner";
@@ -955,6 +959,27 @@ export function MapExplorer() {
   const dailyPlaceVisited = dailyPlace
     ? visits.some((visit) => visit.placeId === dailyPlace.id)
     : false;
+
+  const selectedProviderCost =
+    selected.costSource === "provider_estimate"
+      ? estimateCostForTwo(selected)
+      : null;
+  const selectedCostChoices = useMemo(() => {
+    if (selectedProviderCost === null) return [];
+
+    const factors = [0.75, 1, 1.25];
+    return Array.from(
+      new Set(
+        factors.map((factor) =>
+          Math.max(
+            20_000,
+            Math.round((selectedProviderCost * factor) / 10_000) *
+              10_000
+          )
+        )
+      )
+    );
+  }, [selectedProviderCost]);
 
   const selectedFeedback = hasSelectedPlace
     ? recommendationFeedbacks[selected.id]
@@ -2046,6 +2071,36 @@ export function MapExplorer() {
       setSelectedId(imported.place.id);
     }
     return imported.place;
+  }
+
+  async function confirmSelectedCost(amountForTwo: number) {
+    if (!hasSelectedPlace) return;
+
+    try {
+      const target = await persistProviderPlace(selected);
+      const updated: Place = {
+        ...target,
+        averageForTwo: moneyLabel(amountForTwo),
+        priceLabel: priceLabelForCost(amountForTwo),
+        costSource: "user",
+        costConfidence: 100
+      };
+
+      await personalApi.updatePlace(target.id, updated);
+      await loadSnapshot();
+      setSelectedId(target.id);
+      setNotice(
+        "Đã ghi nhận chi phí thực tế ~" +
+          moneyLabel(amountForTwo) +
+          " cho 2 người."
+      );
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "Không thể cập nhật chi phí."
+      );
+    }
   }
 
   async function importPoi(result: PoiSearchResult) {
@@ -3896,6 +3951,52 @@ export function MapExplorer() {
               </div>
             )}
           </section>
+
+          {selected.costSource === "provider_estimate" &&
+          selectedProviderCost !== null ? (
+            <section className="cost-correction-card">
+              <div className="cost-correction-card__head">
+                <div>
+                  <span className="eyebrow">Giá này có đúng không?</span>
+                  <strong>{selected.averageForTwo} / 2 người</strong>
+                </div>
+                <span>
+                  {selected.costConfidence ?? 0}% confidence
+                </span>
+              </div>
+              <p>
+                Đây là estimate theo loại địa điểm, không phải giá niêm yết.
+                Chọn mốc gần thực tế nhất để planner học budget của bạn.
+              </p>
+              <div className="cost-correction-options">
+                {selectedCostChoices.map((amount, index) => (
+                  <button
+                    type="button"
+                    key={amount}
+                    onClick={() => void confirmSelectedCost(amount)}
+                  >
+                    <small>
+                      {index === 0
+                        ? "Thấp hơn"
+                        : index === selectedCostChoices.length - 1
+                          ? "Cao hơn"
+                          : "Gần đúng"}
+                    </small>
+                    <strong>{moneyLabel(amount)}</strong>
+                  </button>
+                ))}
+              </div>
+              {isPersonalPlace ? (
+                <button
+                  type="button"
+                  className="cost-correction-edit"
+                  onClick={openEditPlace}
+                >
+                  Nhập con số khác
+                </button>
+              ) : null}
+            </section>
+          ) : null}
 
           <section className="detail-section">
             <span className="eyebrow">Cần biết</span>
