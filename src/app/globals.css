@@ -2253,6 +2253,144 @@ textarea:focus-visible {
   color: #3c4043;
 }
 
+
+.provider-detail-card {
+  margin: 14px 0 10px;
+  border: 1px solid #e2e3de;
+  border-radius: 14px;
+  padding: 11px;
+  background: #fbfbf8;
+  display: grid;
+  gap: 9px;
+}
+
+.provider-detail-card--loading {
+  min-height: 66px;
+  align-content: center;
+  color: var(--muted);
+}
+
+.provider-detail-card--loading strong {
+  color: #585b55;
+  font-size: 11px;
+}
+
+.provider-detail-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.provider-detail-card__head > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.provider-detail-card__head strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.provider-source-badge {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 5px 7px;
+  background: #eaf2eb;
+  color: #52705a;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.provider-detail-description {
+  margin: 0;
+  color: #5b5e57;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.provider-detail-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.provider-detail-chips i {
+  border-radius: 999px;
+  padding: 5px 7px;
+  background: #f0f1ed;
+  color: #5b5f58;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.provider-detail-chips i.provider-detail-chip--facility {
+  background: #edf5ef;
+  color: #42664d;
+}
+
+.provider-fact-grid {
+  margin: 0;
+  display: grid;
+  gap: 7px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.provider-fact-grid div {
+  min-width: 0;
+  border-radius: 10px;
+  padding: 8px;
+  background: white;
+}
+
+.provider-fact-grid dt {
+  margin: 0 0 3px;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.provider-fact-grid dd {
+  margin: 0;
+  color: #4b4e48;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.provider-detail-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.provider-detail-links a {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 8px;
+  background: white;
+  color: #3e5f82;
+  font-size: 8px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.provider-detail-links a:hover {
+  border-color: #b9c9d8;
+  background: #f7fafc;
+}
+
+.provider-detail-note {
+  color: #8a8d86;
+  font-size: 7px;
+  line-height: 1.4;
+}
+
 .google-live-strip {
   border: 1px solid #e2e6e8;
   border-radius: 12px;
