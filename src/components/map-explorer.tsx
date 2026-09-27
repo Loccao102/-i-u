@@ -29,7 +29,7 @@ import {
   suggestWhatNext,
   toActivePlanSnapshot
 } from "@/lib/planner";
-import { places as seedPlaces, scenarioLabels } from "@/lib/places";
+import { placeFromPoiResult, scenarioLabels } from "@/lib/places";
 import {
   deriveTasteProfile,
   tasteProfileSummary
@@ -64,6 +64,29 @@ import {
 } from "@/lib/validation";
 
 const defaultCenter: [number, number] = [105.8342, 21.0278];
+
+const emptyPlace: Place = {
+  id: "",
+  name: "",
+  kind: "Địa điểm",
+  description: "",
+  latitude: defaultCenter[1],
+  longitude: defaultCenter[0],
+  distanceKm: 0,
+  priceLabel: "$",
+  averageForTwo: "Chưa có dữ liệu",
+  publicRating: 0,
+  match: 0,
+  communityNote: "",
+  openUntil: "Chưa rõ",
+  bestTime: "Chưa có dữ liệu",
+  noise: "Vừa",
+  crowd: "Vừa",
+  tags: [],
+  scenarios: [],
+  note: "",
+  accent: "#d9ddd7"
+};
 
 const scenarios: Array<Scenario | "all"> = [
   "all",
@@ -192,13 +215,16 @@ export function MapExplorer() {
   const [view, setView] = useState<PersonalView>("discover");
   const [query, setQuery] = useState("");
   const [scenario, setScenario] = useState<Scenario | "all">("all");
-  const [selectedId, setSelectedId] = useState(seedPlaces[0]!.id);
+  const [selectedId, setSelectedId] = useState("");
   const [selectedCollectionId, setSelectedCollectionId] = useState<
     string | null
   >(null);
 
   const [providerResults, setProviderResults] = useState<PoiSearchResult[]>([]);
+  const [discoveredPoiResults, setDiscoveredPoiResults] =
+    useState<PoiSearchResult[]>([]);
   const [providerLoading, setProviderLoading] = useState(false);
+  const [discoveryLoading, setDiscoveryLoading] = useState(false);
   const [placeMedia, setPlaceMedia] = useState<PlaceMedia | null>(null);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
@@ -302,9 +328,27 @@ export function MapExplorer() {
     }
   }, []);
 
-  const allPlaces = useMemo(
-    () => [...customPlaces, ...seedPlaces],
+  const importedProviderIds = useMemo(
+    () =>
+      new Set(
+        customPlaces
+          .map((place) => place.providerId)
+          .filter((value): value is string => Boolean(value))
+      ),
     [customPlaces]
+  );
+
+  const discoveredPlaces = useMemo(
+    () =>
+      discoveredPoiResults
+        .filter((item) => !importedProviderIds.has(item.providerId))
+        .map(placeFromPoiResult),
+    [discoveredPoiResults, importedProviderIds]
+  );
+
+  const allPlaces = useMemo(
+    () => [...customPlaces, ...discoveredPlaces],
+    [customPlaces, discoveredPlaces]
   );
 
   const tasteProfile = useMemo(
@@ -314,16 +358,6 @@ export function MapExplorer() {
 
   const customIds = useMemo(
     () => new Set(customPlaces.map((place) => place.id)),
-    [customPlaces]
-  );
-
-  const importedProviderIds = useMemo(
-    () =>
-      new Set(
-        customPlaces
-          .map((place) => place.providerId)
-          .filter((value): value is string => Boolean(value))
-      ),
     [customPlaces]
   );
 
@@ -455,9 +489,12 @@ export function MapExplorer() {
     rankedAll.find((place) => place.id === selectedId) ??
     visiblePlaces[0] ??
     rankedAll[0] ??
-    seedPlaces[0]!;
+    emptyPlace;
 
-  const selectedPersonalRating = ratings[selected.id] ?? null;
+  const hasSelectedPlace = Boolean(selected.id);
+  const selectedPersonalRating = hasSelectedPlace
+    ? ratings[selected.id] ?? null
+    : null;
   const selectedVisit = recentVisitByPlace.get(selected.id) ?? null;
   const selectedVisitTime = selectedVisit
     ? new Date(selectedVisit.visitedAt).getTime()
@@ -510,7 +547,8 @@ export function MapExplorer() {
     runningNextStop
   ]);
 
-  const isPersonalPlace = customIds.has(selected.id);
+  const isPersonalPlace =
+    hasSelectedPlace && customIds.has(selected.id);
   const heroUserPhoto = placeMedia?.userPhotos[0] ?? null;
   const heroGooglePhoto = placeMedia?.google?.photos[0] ?? null;
   const heroPhotoUrl = heroUserPhoto?.url ?? heroGooglePhoto?.url ?? null;
@@ -639,14 +677,14 @@ export function MapExplorer() {
   }, [mapReady, visiblePlaces, selectedId, userLocation]);
 
   useEffect(() => {
-    if (!mapReady || !mapRef.current || !selected) return;
+    if (!mapReady || !mapRef.current || !hasSelectedPlace) return;
     mapRef.current.flyTo({
       center: [selected.longitude, selected.latitude],
       zoom: 13,
       duration: 650,
       essential: true
     });
-  }, [mapReady, selected]);
+  }, [mapReady, selected, hasSelectedPlace]);
 
   useEffect(() => {
     if (
@@ -1361,7 +1399,7 @@ export function MapExplorer() {
 
     try {
       await personalApi.deletePlace(selected.id);
-      setSelectedId(seedPlaces[0]!.id);
+      setSelectedId("");
       await loadSnapshot();
       setNotice("Đã xóa địa điểm cá nhân.");
     } catch (error) {
