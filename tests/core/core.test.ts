@@ -39,9 +39,11 @@ function plannerMetrics(
 }
 
 function place(input: Partial<Place> & Pick<Place, "id" | "name">): Place {
+  const { id, name, ...overrides } = input;
+
   return {
-    id: input.id,
-    name: input.name,
+    id,
+    name,
     kind: "Cafe",
     description: "",
     latitude: 21.0278,
@@ -63,7 +65,7 @@ function place(input: Partial<Place> & Pick<Place, "id" | "name">): Place {
     note: "",
     accent: "#d9ddd7",
     source: "personal",
-    ...input
+    ...overrides
   };
 }
 
