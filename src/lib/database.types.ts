@@ -561,7 +561,7 @@ export type Database = {
           p_id: string
           p_owner_key: string
           p_place_id: string
-          p_rating_stars: number
+          p_rating_stars?: number
           p_visited_at: string
           p_window_minutes?: number
         }
