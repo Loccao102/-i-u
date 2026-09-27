@@ -28,7 +28,7 @@ function classify(error: unknown) {
   }
 
   if (
-    /google_place_id|cost_source|cost_confidence|outcome_rating|would_repeat|feedback_note|feedback_at|place_user_photos|active_personal_plans|completed_personal_plans|daily_discoveries|personal_planner_defaults|profile_transfer_codes|public_itinerary_shares|personal_places/i.test(
+    /google_place_id|cost_source|cost_confidence|outcome_rating|would_repeat|feedback_note|feedback_at|place_user_photos|active_personal_plans|completed_personal_plans|daily_discoveries|personal_planner_defaults|profile_transfer_codes|public_itinerary_shares|personal_planner_metrics|personal_places/i.test(
       raw
     ) &&
     /column|relation|schema|does not exist|cache/i.test(raw)
@@ -61,7 +61,7 @@ export async function GET() {
     const client = getSupabaseAdmin();
     const keyKind = getSupabaseServerKeyKind();
 
-    const [places, photos, activePlans, dailyDiscoveries, completedPlans, plannerDefaults, transferCodes, itineraryShares] = await Promise.all([
+    const [places, photos, activePlans, dailyDiscoveries, completedPlans, plannerDefaults, transferCodes, itineraryShares, plannerMetrics] = await Promise.all([
       client
         .from("personal_places")
         .select("id,google_place_id,cost_source,cost_confidence")
@@ -93,6 +93,10 @@ export async function GET() {
       client
         .from("public_itinerary_shares")
         .select("slug,source_kind,revoked_at")
+        .limit(1),
+      client
+        .from("personal_planner_metrics")
+        .select("day,generated_count,started_count,completed_count,replayed_count")
         .limit(1)
     ]);
 
@@ -132,6 +136,11 @@ export async function GET() {
         "Health public_itinerary_shares: " + itineraryShares.error.message
       );
     }
+    if (plannerMetrics.error) {
+      throw new Error(
+        "Health personal_planner_metrics: " + plannerMetrics.error.message
+      );
+    }
 
     return NextResponse.json(
       {
@@ -152,7 +161,8 @@ export async function GET() {
           completedPersonalPlans: true,
           personalPlannerDefaults: true,
           profileTransferCodes: true,
-          publicItineraryShares: true
+          publicItineraryShares: true,
+          personalPlannerMetrics: true
         }
       },
       {

@@ -53,6 +53,14 @@ export default function PrivacyPage() {
         thu hồi.
       </p>
 
+      <h2>Thống kê sử dụng planner</h2>
+      <p>
+        ĐiĐâu chỉ lưu bộ đếm tổng hợp theo ngày cho số plan đã tạo, bắt đầu,
+        hoàn thành và replay. Phần thống kê này không lưu GPS trace, tên hoặc ID
+        địa điểm, route snapshot hay log từng sự kiện và không được đưa vào file
+        backup/import.
+      </p>
+
       <h2>Dữ liệu cá nhân</h2>
       <p>
         Saved, rating, visit, collection, active plan và ảnh tải lên được scope

@@ -12,6 +12,7 @@ import {
   startActivePlan
 } from "@/lib/server/active-plan-repository";
 import { resolveAnonymousProfile } from "@/lib/server/profile";
+import { recordPlannerMetric } from "@/lib/server/planner-metrics";
 import { readJsonObject } from "@/lib/server/request-security";
 
 export const runtime = "nodejs";
@@ -37,7 +38,16 @@ export async function PUT(request: NextRequest) {
   try {
     const body = await readJsonObject(request);
     const plan = parseActivePlanSnapshot(body.plan);
+    const replayed = body.replayed === true;
     const activePlan = await startActivePlan(profile.ownerKey, plan);
+
+    await Promise.allSettled([
+      recordPlannerMetric(profile.ownerKey, "started"),
+      ...(replayed
+        ? [recordPlannerMetric(profile.ownerKey, "replayed")]
+        : [])
+    ]);
+
     return profileJson(profile, { activePlan });
   } catch (error) {
     return errorJson(profile, error, "Không thể bắt đầu kế hoạch.");
@@ -69,6 +79,13 @@ export async function PATCH(request: NextRequest) {
       action,
       expectedIndex
     );
+
+    if (result.finished) {
+      await Promise.allSettled([
+        recordPlannerMetric(profile.ownerKey, "completed")
+      ]);
+    }
+
     return profileJson(profile, result);
   } catch (error) {
     return errorJson(profile, error, "Không thể cập nhật kế hoạch.");
