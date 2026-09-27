@@ -5,6 +5,8 @@ import type {
   ActivePlanSnapshot,
   BackupImportResult,
   Collection,
+  DailyDiscoveryKind,
+  DailyDiscoveryRecord,
   MapBounds,
   NearbyPlaceResult,
   PersonalBackup,
@@ -98,6 +100,17 @@ async function api<T>(
 
 export const personalApi = {
   snapshot: () => api<PersonalSnapshot>("/api/personal"),
+
+  saveDailyDiscovery: (input: {
+    day: string;
+    kind: DailyDiscoveryKind;
+    placeKeys: string[];
+    scenario: string | null;
+  }) =>
+    api<DailyDiscoveryRecord>("/api/personal/daily-discovery", {
+      method: "PUT",
+      body: input
+    }),
 
   createPlace: (place: Place) =>
     api<Place>("/api/personal/places", {
