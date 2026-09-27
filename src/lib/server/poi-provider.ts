@@ -1,6 +1,12 @@
 import "server-only";
 
-import type { MapBounds, PoiSearchResult, Scenario } from "../types";
+import type {
+  MapBounds,
+  PoiDiscoveryAmenity,
+  PoiDiscoveryCategory,
+  PoiSearchResult,
+  Scenario
+} from "../types";
 import { cleanPlainText, suggestScenarios } from "../validation";
 
 const searchCache = new Map<
@@ -83,6 +89,121 @@ async function obeyOverpassRateLimit() {
   });
 
   return overpassQueue;
+}
+
+function discoveryCategories(category: PoiDiscoveryCategory) {
+  if (category === "food") {
+    return [
+      "catering.restaurant",
+      "catering.fast_food",
+      "catering.food_court"
+    ];
+  }
+  if (category === "cafe") return ["catering.cafe"];
+  if (category === "drink") return ["catering.bar", "catering.pub"];
+  if (category === "activity") return ["entertainment", "tourism"];
+
+  return [
+    "catering.restaurant",
+    "catering.cafe",
+    "catering.fast_food",
+    "catering.food_court",
+    "catering.bar",
+    "catering.pub",
+    "entertainment",
+    "tourism"
+  ];
+}
+
+function boundsCenter(bounds: MapBounds) {
+  return {
+    latitude: (bounds.south + bounds.north) / 2,
+    longitude: (bounds.west + bounds.east) / 2
+  };
+}
+
+function distanceKmBetween(
+  a: { latitude: number; longitude: number },
+  b: { latitude: number; longitude: number }
+) {
+  const radius = 6371;
+  const toRadians = (value: number) => (value * Math.PI) / 180;
+  const dLat = toRadians(b.latitude - a.latitude);
+  const dLon = toRadians(b.longitude - a.longitude);
+  const lat1 = toRadians(a.latitude);
+  const lat2 = toRadians(b.latitude);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+
+  return radius * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+function overpassAmenityFilter(amenity: PoiDiscoveryAmenity) {
+  if (amenity === "wifi") {
+    return '["internet_access"]["internet_access"!~"^(no|none)$"]';
+  }
+  if (amenity === "wheelchair") {
+    return '["wheelchair"~"^(yes|limited)$"]';
+  }
+  return "";
+}
+
+function overpassSelectors(
+  category: PoiDiscoveryCategory,
+  amenity: PoiDiscoveryAmenity,
+  bbox: string
+) {
+  const extra = overpassAmenityFilter(amenity);
+  const lines: string[] = [];
+
+  if (category === "all" || category === "food") {
+    lines.push(
+      'nwr["amenity"~"^(restaurant|fast_food|food_court)$"]' +
+        extra +
+        "(" +
+        bbox +
+        ");"
+    );
+  }
+
+  if (category === "all" || category === "cafe") {
+    lines.push(
+      'nwr["amenity"="cafe"]' + extra + "(" + bbox + ");"
+    );
+  }
+
+  if (category === "all" || category === "drink") {
+    lines.push(
+      'nwr["amenity"~"^(bar|pub|biergarten)$"]' +
+        extra +
+        "(" +
+        bbox +
+        ");"
+    );
+  }
+
+  if (category === "all" || category === "activity") {
+    lines.push(
+      'nwr["amenity"~"^(cinema|theatre)$"]' +
+        extra +
+        "(" +
+        bbox +
+        ");",
+      'nwr["leisure"~"^(bowling_alley|amusement_arcade|escape_game|sports_centre)$"]' +
+        extra +
+        "(" +
+        bbox +
+        ");",
+      'nwr["tourism"~"^(attraction|museum|gallery|viewpoint)$"]' +
+        extra +
+        "(" +
+        bbox +
+        ");"
+    );
+  }
+
+  return lines.join("\n  ");
 }
 
 function normalizedBounds(bounds: MapBounds) {
@@ -332,6 +453,9 @@ async function searchGeoapify(input: {
 
 async function discoverGeoapify(input: {
   bounds: MapBounds;
+  category: PoiDiscoveryCategory;
+  amenity: PoiDiscoveryAmenity;
+  radiusKm: 0 | 1 | 3 | 5 | 10;
 }): Promise<PoiSearchResult[]> {
   const key = geoapifyApiKey();
   if (!key) return [];
@@ -342,7 +466,10 @@ async function discoverGeoapify(input: {
     bounds.west.toFixed(3),
     bounds.south.toFixed(3),
     bounds.east.toFixed(3),
-    bounds.north.toFixed(3)
+    bounds.north.toFixed(3),
+    input.category,
+    input.amenity,
+    String(input.radiusKm)
   ].join("|");
 
   const cached = discoveryCache.get(cacheKey);
@@ -351,21 +478,27 @@ async function discoverGeoapify(input: {
   const url = new URL("https://api.geoapify.com/v2/places");
   url.searchParams.set(
     "categories",
-    [
-      "catering.restaurant",
-      "catering.cafe",
-      "catering.fast_food",
-      "catering.food_court",
-      "catering.bar",
-      "catering.pub",
-      "entertainment",
-      "tourism"
-    ].join(",")
+    discoveryCategories(input.category).join(",")
   );
+
+  if (input.amenity === "wifi") {
+    url.searchParams.set("conditions", "internet_access");
+  } else if (input.amenity === "wheelchair") {
+    url.searchParams.set("conditions", "wheelchair");
+  }
+
+  const center = boundsCenter(bounds);
   url.searchParams.set(
     "filter",
-    "rect:" +
-      [bounds.west, bounds.south, bounds.east, bounds.north].join(",")
+    input.radiusKm > 0
+      ? "circle:" +
+          center.longitude +
+          "," +
+          center.latitude +
+          "," +
+          input.radiusKm * 1000
+      : "rect:" +
+          [bounds.west, bounds.south, bounds.east, bounds.north].join(",")
   );
   url.searchParams.set("lang", "vi");
   url.searchParams.set("limit", "20");
@@ -550,10 +683,21 @@ export async function searchPoi(input: {
 
 export async function discoverPoi(input: {
   bounds: MapBounds;
+  category?: PoiDiscoveryCategory;
+  amenity?: PoiDiscoveryAmenity;
+  radiusKm?: 0 | 1 | 3 | 5 | 10;
 }): Promise<PoiSearchResult[]> {
+  const category = input.category ?? "all";
+  const amenity = input.amenity ?? "any";
+  const radiusKm = input.radiusKm ?? 0;
   if (geoapifyApiKey()) {
     try {
-      return await discoverGeoapify(input);
+      return await discoverGeoapify({
+        bounds: input.bounds,
+        category,
+        amenity,
+        radiusKm
+      });
     } catch (error) {
       console.warn(
         "[di-dau][geoapify][discover] falling back to OpenStreetMap",
@@ -567,7 +711,10 @@ export async function discoverPoi(input: {
     bounds.west.toFixed(3),
     bounds.south.toFixed(3),
     bounds.east.toFixed(3),
-    bounds.north.toFixed(3)
+    bounds.north.toFixed(3),
+    category,
+    amenity,
+    String(radiusKm)
   ].join("|");
 
   const cached = discoveryCache.get(key);
@@ -585,9 +732,7 @@ export async function discoverPoi(input: {
   const query = `
 [out:json][timeout:10];
 (
-  nwr["amenity"~"^(cafe|restaurant|fast_food|food_court|bar|pub|biergarten|cinema|theatre)$"](${bbox});
-  nwr["leisure"~"^(bowling_alley|amusement_arcade|escape_game|sports_centre)$"](${bbox});
-  nwr["tourism"~"^(attraction|museum|gallery|viewpoint)$"](${bbox});
+  ${overpassSelectors(category, amenity, bbox)}
 );
 out center 80;
 `.trim();
@@ -692,6 +837,15 @@ out center 80;
       };
     })
     .filter((item): item is PoiSearchResult => item !== null)
+    .filter((item) => {
+      if (radiusKm <= 0) return true;
+      return (
+        distanceKmBetween(boundsCenter(bounds), {
+          latitude: item.latitude,
+          longitude: item.longitude
+        }) <= radiusKm
+      );
+    })
     .slice(0, 60);
 
   discoveryCache.set(key, {
