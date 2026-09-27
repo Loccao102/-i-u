@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { errorJson, profileJson } from "@/lib/server/http";
-import { addVisit } from "@/lib/server/personal-repository";
+import { addVisitIfNew } from "@/lib/server/personal-repository";
 import { resolveAnonymousProfile } from "@/lib/server/profile";
 import { readJsonObject } from "@/lib/server/request-security";
 
@@ -18,8 +18,14 @@ export async function POST(
   try {
     await readJsonObject(request);
     const { placeId } = await context.params;
-    const visit = await addVisit(profile.ownerKey, placeId, null);
-    return profileJson(profile, visit, { status: 201 });
+    const result = await addVisitIfNew(
+      profile.ownerKey,
+      placeId,
+      null
+    );
+    return profileJson(profile, result, {
+      status: result.created ? 201 : 200
+    });
   } catch (error) {
     return errorJson(profile, error, "Không thể check-in.");
   }
