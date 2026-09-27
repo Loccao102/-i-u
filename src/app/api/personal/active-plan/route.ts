@@ -45,10 +45,22 @@ export async function PATCH(request: NextRequest) {
       body.action === "complete" || body.action === "skip"
         ? body.action
         : null;
+    const expectedIndex = Number(body.expectedIndex);
 
-    if (!action) throw new Error("INVALID_BODY");
+    if (
+      !action ||
+      !Number.isInteger(expectedIndex) ||
+      expectedIndex < 0 ||
+      expectedIndex > 2
+    ) {
+      throw new Error("INVALID_BODY");
+    }
 
-    const result = await advanceActivePlan(profile.ownerKey, action);
+    const result = await advanceActivePlan(
+      profile.ownerKey,
+      action,
+      expectedIndex
+    );
     return profileJson(profile, result);
   } catch (error) {
     return errorJson(profile, error, "Không thể cập nhật kế hoạch.");
