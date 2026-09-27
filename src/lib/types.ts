@@ -108,6 +108,7 @@ export type PersonalSnapshot = {
   visits: VisitRecord[];
   collections: Collection[];
   dailyDiscoveries?: DailyDiscoveryRecord[];
+  completedPlans?: CompletedPersonalPlan[];
 };
 
 export type PoiDiscoveryCategory =
@@ -202,6 +203,7 @@ export type BackupImportResult = {
   collections: number;
   collectionPlaces: number;
   dailyDiscoveries: number;
+  completedPlans: number;
 };
 
 
@@ -304,6 +306,7 @@ export type EveningPlanStop = {
 };
 
 export type EveningPlan = {
+  scenario: Scenario;
   stops: EveningPlanStop[];
   totalEstimatedCostForTwo: number;
   budgetRemainingForTwo: number;
@@ -362,6 +365,7 @@ export type ActivePlanStopSnapshot = {
 };
 
 export type ActivePlanSnapshot = {
+  scenario: Scenario | null;
   summary: string;
   totalEstimatedCostForTwo: number;
   budgetRemainingForTwo: number;
@@ -379,6 +383,15 @@ export type ActivePersonalPlan = {
   skippedStopIds: string[];
   startedAt: string;
   updatedAt: string;
+};
+
+export type CompletedPersonalPlan = {
+  id: string;
+  plan: ActivePlanSnapshot;
+  completedStopIds: string[];
+  skippedStopIds: string[];
+  startedAt: string;
+  completedAt: string;
 };
 
 export type ActivePlanAdvanceResult = {
