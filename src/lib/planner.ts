@@ -8,6 +8,7 @@ import type {
   Place,
   PlannerCostProfile,
   PlannerTravelMatrix,
+  PlanOutcomeProfile,
   RecommendationFeedback,
   PlanStage,
   Scenario,
@@ -15,6 +16,7 @@ import type {
   VisitRecord
 } from "./types";
 import { openingStatus } from "./opening-hours";
+import { scorePlanOutcomeMatch } from "./plan-outcomes";
 import { haversineKm } from "./search";
 
 type PlannerSignals = {
@@ -23,6 +25,7 @@ type PlannerSignals = {
   feedbacks?: Readonly<Record<string, RecommendationFeedback>>;
   visits: ReadonlyArray<VisitRecord>;
   costProfile?: PlannerCostProfile;
+  planOutcomes?: PlanOutcomeProfile;
 };
 
 const stageLabels: Record<PlanStage, string> = {
@@ -481,12 +484,17 @@ function candidateScore(input: {
         ? 12
         : 0;
 
+  const outcomeBonus = signals.planOutcomes
+    ? scorePlanOutcomeMatch(place, signals.planOutcomes, scenario).score
+    : 0;
+
   return (
     place.match +
     (matchesStage(place, stage) ? 28 : 0) +
     (place.scenarios.includes(scenario) ? 10 : 0) +
     novelty +
-    variantScore -
+    variantScore +
+    outcomeBonus -
     routePenalty -
     feedbackPenalty
   );
