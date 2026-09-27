@@ -24,7 +24,11 @@ import {
   StarIcon
 } from "./icons";
 import { personalApi } from "@/lib/personal-api";
-import { buildEveningPlan, suggestWhatNext } from "@/lib/planner";
+import {
+  buildEveningPlan,
+  suggestWhatNext,
+  toActivePlanSnapshot
+} from "@/lib/planner";
 import { places as seedPlaces, scenarioLabels } from "@/lib/places";
 import {
   deriveTasteProfile,
@@ -36,6 +40,8 @@ import {
   recommendForCollection
 } from "@/lib/search";
 import type {
+  ActivePersonalPlan,
+  ActivePlanStopSnapshot,
   Collection,
   EveningPlan,
   MapBounds,
@@ -209,6 +215,8 @@ export function MapExplorer() {
   const [planStartTime, setPlanStartTime] = useState("19:00");
   const [planVariant, setPlanVariant] = useState(0);
   const [activePlan, setActivePlan] = useState<EveningPlan | null>(null);
+  const [runningPlan, setRunningPlan] =
+    useState<ActivePersonalPlan | null>(null);
 
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [locationStatus, setLocationStatus] = useState<
@@ -247,12 +255,16 @@ export function MapExplorer() {
 
   const loadSnapshot = useCallback(async () => {
     try {
-      const snapshot = await personalApi.snapshot();
+      const [snapshot, activeResult] = await Promise.all([
+        personalApi.snapshot(),
+        personalApi.activePlan.get()
+      ]);
       setCustomPlaces(snapshot.customPlaces);
       setSaved(new Set(snapshot.savedIds));
       setRatings(snapshot.ratings);
       setVisits(snapshot.visits);
       setCollections(snapshot.collections);
+      setRunningPlan(activeResult.activePlan);
       setDataStatus("ready");
     } catch (error) {
       setDataStatus("error");
