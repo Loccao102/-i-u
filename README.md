@@ -21,6 +21,8 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - Nominatim text search + import for named places;
 - safe client-side interpretation of common OSM opening_hours formats;
 - temporary 2–3 place shortlist with quick comparison for match, distance, price, opening state and rating;
+- recommendation feedback loop: "Không hợp gu", "Không phải lúc này", "Quá xa", "Quá đắt";
+- feedback-aware ranking: durable taste learning only for real preference signals, with contextual/decaying penalties for temporary signals;
 - smarter personal ranking with visible recommendation reasons;
 - learned **Taste Profile** from rating, revisit intent and repeat visits; similar places inherit preference signals for scenario, price, noise and crowd level;
 - collection-based recommendations;

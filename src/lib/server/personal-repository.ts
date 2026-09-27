@@ -9,6 +9,7 @@ import type {
   NearbyPlaceResult,
   PersonalRating,
   PersonalSnapshot,
+  RecommendationFeedback,
   Place,
   Scenario,
   ViewportPlaceResult,
@@ -148,6 +149,60 @@ async function listRatings(
   return result;
 }
 
+async function listRecommendationFeedbacks(
+  ownerKey: string
+): Promise<Record<string, RecommendationFeedback>> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("recommendation_feedback")
+    .select(
+      "place_id,reason,scenario,distance_km,created_at,updated_at"
+    )
+    .eq("owner_key", ownerKey)
+    .order("updated_at", { ascending: false })
+    .limit(5000);
+
+  dbError(error, "List recommendation feedback");
+
+  const result: Record<string, RecommendationFeedback> = {};
+  for (const row of data ?? []) {
+    const placeId = String(row.place_id);
+    const reason = row.reason;
+
+    if (
+      reason !== "not_taste" &&
+      reason !== "not_now" &&
+      reason !== "too_far" &&
+      reason !== "too_expensive"
+    ) {
+      continue;
+    }
+
+    const scenario =
+      row.scenario === "date" ||
+      row.scenario === "friends" ||
+      row.scenario === "food" ||
+      row.scenario === "coffee" ||
+      row.scenario === "fun" ||
+      row.scenario === "chill"
+        ? row.scenario
+        : null;
+
+    result[placeId] = {
+      placeId,
+      reason,
+      scenario,
+      distanceKm:
+        row.distance_km === null || row.distance_km === undefined
+          ? null
+          : Number(row.distance_km),
+      createdAt: String(row.created_at),
+      updatedAt: String(row.updated_at)
+    };
+  }
+
+  return result;
+}
+
 async function listVisits(ownerKey: string): Promise<VisitRecord[]> {
   const { data, error } = await getSupabaseAdmin()
     .from("visits")
@@ -208,20 +263,28 @@ async function listCollections(ownerKey: string): Promise<Collection[]> {
 export async function getPersonalSnapshot(
   ownerKey: string
 ): Promise<PersonalSnapshot> {
-  const [customPlaces, savedIds, ratings, visits, collections] =
-    await Promise.all([
-      listPlaces(ownerKey),
-      listSaved(ownerKey),
-      listRatings(ownerKey),
-      listVisits(ownerKey),
-      listCollections(ownerKey)
-    ]);
-
-  return {
-    version: 2,
+  const [
     customPlaces,
     savedIds,
     ratings,
+    recommendationFeedbacks,
+    visits,
+    collections
+  ] = await Promise.all([
+    listPlaces(ownerKey),
+    listSaved(ownerKey),
+    listRatings(ownerKey),
+    listRecommendationFeedbacks(ownerKey),
+    listVisits(ownerKey),
+    listCollections(ownerKey)
+  ]);
+
+  return {
+    version: 3,
+    customPlaces,
+    savedIds,
+    ratings,
+    recommendationFeedbacks,
     visits,
     collections
   };
@@ -336,6 +399,42 @@ export async function saveRating(
     );
 
   dbError(error, "Save rating");
+}
+
+export async function saveRecommendationFeedback(
+  ownerKey: string,
+  feedback: RecommendationFeedback
+) {
+  const { error } = await getSupabaseAdmin()
+    .from("recommendation_feedback")
+    .upsert(
+      {
+        owner_key: ownerKey,
+        place_id: feedback.placeId,
+        reason: feedback.reason,
+        scenario: feedback.scenario,
+        distance_km: feedback.distanceKm,
+        created_at: feedback.createdAt,
+        updated_at: feedback.updatedAt
+      },
+      { onConflict: "owner_key,place_id" }
+    );
+
+  dbError(error, "Save recommendation feedback");
+  return feedback;
+}
+
+export async function deleteRecommendationFeedback(
+  ownerKey: string,
+  placeId: string
+) {
+  const { error } = await getSupabaseAdmin()
+    .from("recommendation_feedback")
+    .delete()
+    .eq("owner_key", ownerKey)
+    .eq("place_id", placeId);
+
+  dbError(error, "Delete recommendation feedback");
 }
 
 export async function addVisit(
@@ -610,6 +709,25 @@ export async function mergePersonalBackup(
     dbError(error, "Import ratings");
   }
 
+  const feedbackRows = Object.values(
+    snapshot.recommendationFeedbacks
+  ).map((feedback) => ({
+    owner_key: ownerKey,
+    place_id: mapPlaceId(feedback.placeId),
+    reason: feedback.reason,
+    scenario: feedback.scenario,
+    distance_km: feedback.distanceKm,
+    created_at: feedback.createdAt,
+    updated_at: feedback.updatedAt
+  }));
+
+  if (feedbackRows.length > 0) {
+    const { error } = await client
+      .from("recommendation_feedback")
+      .upsert(feedbackRows, { onConflict: "owner_key,place_id" });
+    dbError(error, "Import recommendation feedback");
+  }
+
   const visitRows = snapshot.visits.map((visit) => ({
     owner_key: ownerKey,
     id: visit.id,
@@ -667,6 +785,7 @@ export async function mergePersonalBackup(
     places,
     saved: savedRows.length,
     ratings: ratingRows.length,
+    recommendationFeedbacks: feedbackRows.length,
     visits: visitRows.length,
     collections: collectionRows.length,
     collectionPlaces: collectionPlaceRows.length

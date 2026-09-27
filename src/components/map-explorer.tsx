@@ -48,6 +48,8 @@ import type {
   MapBounds,
   PersonalBackup,
   PersonalRating,
+  RecommendationFeedback,
+  RecommendationFeedbackReason,
   Place,
   PlaceMedia,
   PoiSearchResult,
@@ -160,6 +162,22 @@ function revisitLabel(value: RatingDraft["revisit"]) {
   return "Không muốn quay lại";
 }
 
+const recommendationFeedbackLabels: Record<
+  RecommendationFeedbackReason,
+  string
+> = {
+  not_taste: "Không hợp gu",
+  not_now: "Không phải lúc này",
+  too_far: "Quá xa",
+  too_expensive: "Quá đắt"
+};
+
+function feedbackLabel(feedback: RecommendationFeedback | undefined) {
+  return feedback
+    ? recommendationFeedbackLabels[feedback.reason]
+    : null;
+}
+
 function placeIcon(place: Pick<Place, "kind">) {
   if (place.kind.includes("Activity")) return "◇";
   if (place.kind.includes("Restaurant")) return "◉";
@@ -216,6 +234,9 @@ export function MapExplorer() {
   const [customPlaces, setCustomPlaces] = useState<Place[]>([]);
   const [saved, setSaved] = useState(() => new Set<string>());
   const [ratings, setRatings] = useState<Record<string, PersonalRating>>({});
+  const [recommendationFeedbacks, setRecommendationFeedbacks] = useState<
+    Record<string, RecommendationFeedback>
+  >({});
   const [visits, setVisits] = useState<VisitRecord[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [dataStatus, setDataStatus] = useState<
@@ -306,6 +327,7 @@ export function MapExplorer() {
       setCustomPlaces(snapshot.customPlaces);
       setSaved(new Set(snapshot.savedIds));
       setRatings(snapshot.ratings);
+      setRecommendationFeedbacks(snapshot.recommendationFeedbacks);
       setVisits(snapshot.visits);
       setCollections(snapshot.collections);
       setRunningPlan(activeResult.activePlan);
@@ -419,8 +441,14 @@ export function MapExplorer() {
   );
 
   const tasteProfile = useMemo(
-    () => deriveTasteProfile(allPlaces, ratings, visits),
-    [allPlaces, ratings, visits]
+    () =>
+      deriveTasteProfile(
+        allPlaces,
+        ratings,
+        visits,
+        recommendationFeedbacks
+      ),
+    [allPlaces, ratings, visits, recommendationFeedbacks]
   );
 
   const customIds = useMemo(
@@ -457,7 +485,12 @@ export function MapExplorer() {
       query,
       scenario,
       userLocation,
-      { savedIds: saved, ratings, visits },
+      {
+        savedIds: saved,
+        ratings,
+        feedbacks: recommendationFeedbacks,
+        visits
+      },
       serverDistances,
       recommendationContext,
       tasteProfile
@@ -500,6 +533,7 @@ export function MapExplorer() {
     userLocation,
     saved,
     ratings,
+    recommendationFeedbacks,
     visits,
     view,
     selectedCollection,
@@ -519,7 +553,12 @@ export function MapExplorer() {
         "",
         "all",
         userLocation,
-        { savedIds: saved, ratings, visits },
+        {
+        savedIds: saved,
+        ratings,
+        feedbacks: recommendationFeedbacks,
+        visits
+      },
         serverDistances,
         recommendationContext,
         tasteProfile
@@ -529,6 +568,7 @@ export function MapExplorer() {
       userLocation,
       saved,
       ratings,
+      recommendationFeedbacks,
       visits,
       serverDistances,
       recommendationContext,
@@ -541,10 +581,22 @@ export function MapExplorer() {
     return recommendForCollection(
       selectedCollection,
       rankedAll,
-      { savedIds: saved, ratings, visits },
+      {
+        savedIds: saved,
+        ratings,
+        feedbacks: recommendationFeedbacks,
+        visits
+      },
       4
     );
-  }, [selectedCollection, rankedAll, saved, ratings, visits]);
+  }, [
+    selectedCollection,
+    rankedAll,
+    saved,
+    ratings,
+    recommendationFeedbacks,
+    visits
+  ]);
 
   const shortlistView = useMemo(
     () =>
@@ -576,6 +628,9 @@ export function MapExplorer() {
     ? ratings[selected.id] ?? null
     : null;
   const selectedOpening = openingStatus(selected.openUntil, clock);
+  const selectedFeedback = hasSelectedPlace
+    ? recommendationFeedbacks[selected.id]
+    : undefined;
   const selectedVisit = recentVisitByPlace.get(selected.id) ?? null;
   const selectedVisitTime = selectedVisit
     ? new Date(selectedVisit.visitedAt).getTime()
@@ -590,7 +645,12 @@ export function MapExplorer() {
       ? suggestWhatNext({
           current: selected,
           places: rankedAll,
-          signals: { savedIds: saved, ratings, visits },
+          signals: {
+        savedIds: saved,
+        ratings,
+        feedbacks: recommendationFeedbacks,
+        visits
+      },
           maxDistanceKm: 4,
           limit: 3,
           localHour: recommendationContext.localHour
@@ -623,6 +683,7 @@ export function MapExplorer() {
     rankedAll,
     saved,
     ratings,
+    recommendationFeedbacks,
     visits,
     recommendationContext.localHour,
     runningNextStop
@@ -1008,7 +1069,12 @@ export function MapExplorer() {
   function surpriseMe() {
     const picked = pickSurprisePlace(
       visiblePlaces.length > 0 ? visiblePlaces : rankedAll,
-      { savedIds: saved, ratings, visits }
+      {
+        savedIds: saved,
+        ratings,
+        feedbacks: recommendationFeedbacks,
+        visits
+      }
     );
 
     if (!picked) {
@@ -1056,7 +1122,12 @@ export function MapExplorer() {
         durationHours: planDuration,
         startTime: planStartTime
       },
-      signals: { savedIds: saved, ratings, visits },
+      signals: {
+        savedIds: saved,
+        ratings,
+        feedbacks: recommendationFeedbacks,
+        visits
+      },
       origin: plannerOrigin(),
       variant: nextVariant
     });
@@ -1458,7 +1529,12 @@ export function MapExplorer() {
       const next = suggestWhatNext({
         current: target,
         places: rankedAll,
-        signals: { savedIds: saved, ratings, visits },
+        signals: {
+        savedIds: saved,
+        ratings,
+        feedbacks: recommendationFeedbacks,
+        visits
+      },
         maxDistanceKm: 4,
         limit: 1,
         localHour: recommendationContext.localHour
@@ -1476,6 +1552,52 @@ export function MapExplorer() {
     } catch (error) {
       setNotice(
         error instanceof Error ? error.message : "Không thể check-in."
+      );
+    }
+  }
+
+  async function setSelectedRecommendationFeedback(
+    reason: RecommendationFeedbackReason
+  ) {
+    if (!hasSelectedPlace) return;
+
+    try {
+      const target = await persistProviderPlace(selected);
+      await personalApi.setRecommendationFeedback(target.id, {
+        reason,
+        scenario: scenario === "all" ? null : scenario,
+        distanceKm:
+          Number.isFinite(target.distanceKm) && target.distanceKm > 0
+            ? target.distanceKm
+            : null
+      });
+      await loadSnapshot();
+      setSelectedId(target.id);
+      setNotice(
+        "Đã ghi nhận: " + recommendationFeedbackLabels[reason] +
+        ". Ranking đã được cập nhật."
+      );
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "Không thể lưu phản hồi gợi ý."
+      );
+    }
+  }
+
+  async function clearSelectedRecommendationFeedback() {
+    if (!selectedFeedback) return;
+
+    try {
+      await personalApi.clearRecommendationFeedback(selected.id);
+      await loadSnapshot();
+      setNotice("Đã hoàn tác phản hồi gợi ý.");
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "Không thể hoàn tác phản hồi."
       );
     }
   }
@@ -2669,6 +2791,59 @@ export function MapExplorer() {
               ).map((reason) => (
                 <span key={reason}>{reason}</span>
               ))}
+            </div>
+
+            <div className="recommendation-feedback">
+              <div className="recommendation-feedback__head">
+                <div>
+                  <strong>Gợi ý này chưa đúng?</strong>
+                  <span>
+                    Phản hồi giúp ĐiĐâu học mà không cần chờ bạn check-in.
+                  </span>
+                </div>
+                {selectedFeedback ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void clearSelectedRecommendationFeedback()
+                    }
+                  >
+                    Hoàn tác
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="recommendation-feedback__options">
+                {(Object.keys(
+                  recommendationFeedbackLabels
+                ) as RecommendationFeedbackReason[]).map((reason) => (
+                  <button
+                    key={reason}
+                    type="button"
+                    className={
+                      selectedFeedback?.reason === reason
+                        ? "is-active"
+                        : ""
+                    }
+                    onClick={() =>
+                      void setSelectedRecommendationFeedback(reason)
+                    }
+                  >
+                    {recommendationFeedbackLabels[reason]}
+                  </button>
+                ))}
+              </div>
+
+              {selectedFeedback ? (
+                <small>
+                  Đang áp dụng: {feedbackLabel(selectedFeedback)}
+                  {selectedFeedback.reason === "not_now"
+                    ? " · tự giảm tác động theo thời gian"
+                    : selectedFeedback.reason === "too_far"
+                      ? " · tự nhẹ đi khi bạn ở gần hơn"
+                      : ""}
+                </small>
+              ) : null}
             </div>
           </section>
 

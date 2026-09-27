@@ -1,6 +1,7 @@
 import type {
   PersonalRating,
   Place,
+  RecommendationFeedback,
   Scenario,
   TasteProfile,
   VisitRecord
@@ -69,7 +70,8 @@ function strongest<K>(
 export function deriveTasteProfile(
   places: ReadonlyArray<Place>,
   ratings: Readonly<Record<string, PersonalRating>>,
-  visits: ReadonlyArray<VisitRecord>
+  visits: ReadonlyArray<VisitRecord>,
+  feedbacks: Readonly<Record<string, RecommendationFeedback>> = {}
 ): TasteProfile {
   const byId = new Map(places.map((place) => [place.id, place]));
   const visitCounts = new Map<string, number>();
@@ -122,6 +124,31 @@ export function deriveTasteProfile(
     add(priceBuckets, place.priceLabel, weakPositive);
     add(noiseBuckets, place.noise, weakPositive);
     add(crowdBuckets, place.crowd, weakPositive);
+  }
+
+  for (const [placeId, feedback] of Object.entries(feedbacks)) {
+    const place = byId.get(placeId);
+    if (!place) continue;
+
+    if (feedback.reason === "not_taste") {
+      observedPlaces.add(placeId);
+      const contexts = feedback.scenario
+        ? [feedback.scenario]
+        : place.scenarios;
+
+      for (const scenario of contexts) {
+        add(scenarioBuckets, scenario, -1.6);
+      }
+
+      add(noiseBuckets, place.noise, -1.1);
+      add(crowdBuckets, place.crowd, -0.8);
+      add(priceBuckets, place.priceLabel, -0.25);
+    }
+
+    if (feedback.reason === "too_expensive") {
+      observedPlaces.add(placeId);
+      add(priceBuckets, place.priceLabel, -1.8);
+    }
   }
 
   const scenarioScores: Partial<Record<Scenario, number>> = {};
