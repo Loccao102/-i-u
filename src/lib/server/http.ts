@@ -67,3 +67,50 @@ export function errorJson(
     { status: mapped?.status ?? 400 }
   );
 }
+
+
+export function internalErrorJson(
+  profile: AnonymousProfile,
+  error: unknown,
+  fallback: string
+) {
+  const raw =
+    error instanceof Error ? error.message : String(error ?? "UNKNOWN_ERROR");
+
+  // Log the real server-side failure for Vercel/Supabase diagnostics,
+  // but never return raw database/env details to the browser.
+  console.error("[di-dau][server]", raw);
+
+  let status = 500;
+  let code = "INTERNAL_ERROR";
+  let message = fallback;
+
+  if (raw.startsWith("Missing required server env:")) {
+    status = 503;
+    code = "SERVER_CONFIG_MISSING";
+    message =
+      "Thiếu cấu hình Supabase trên môi trường deploy. Kiểm tra Environment Variables trên Vercel.";
+  } else if (
+    /google_place_id|place_user_photos|active_personal_plans/i.test(raw) &&
+    /column|relation|schema|does not exist|cache/i.test(raw)
+  ) {
+    status = 503;
+    code = "DATABASE_SCHEMA_MISMATCH";
+    message =
+      "Supabase schema của môi trường deploy chưa đồng bộ migration mới.";
+  } else if (
+    /supabase|list places|list saved|list ratings|list visits|list collections/i.test(
+      raw
+    )
+  ) {
+    status = 503;
+    code = "DATABASE_UNAVAILABLE";
+    message = "Không thể đọc dữ liệu Supabase lúc này.";
+  }
+
+  return profileJson(
+    profile,
+    { error: message, code },
+    { status }
+  );
+}
