@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import type {
   ActivePlanSnapshot,
   Collection,
+  DailyDiscoveryRecord,
   PersonalBackup,
   PersonalRating,
   PersonalSnapshot,
@@ -265,6 +266,23 @@ function isoDate(value: unknown) {
   return date.toISOString();
 }
 
+function dateOnly(value: unknown) {
+  const raw = stringValue(value, 10, true);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    throw new Error("INVALID_BODY");
+  }
+
+  const parsed = new Date(raw + "T00:00:00Z");
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    parsed.toISOString().slice(0, 10) !== raw
+  ) {
+    throw new Error("INVALID_BODY");
+  }
+
+  return raw;
+}
+
 export function parsePersonalBackup(value: unknown): PersonalSnapshot {
   const envelope = objectValue(value);
   if (
@@ -379,6 +397,54 @@ export function parsePersonalBackup(value: unknown): PersonalSnapshot {
     };
   });
 
+  const rawDailyDiscoveries = Array.isArray(data.dailyDiscoveries)
+    ? data.dailyDiscoveries
+    : [];
+  if (rawDailyDiscoveries.length > 120) {
+    throw new Error("INVALID_BODY");
+  }
+
+  const dailyDiscoveries: DailyDiscoveryRecord[] =
+    rawDailyDiscoveries.map((item) => {
+      const row = objectValue(item);
+      const kind =
+        row.kind === "place" || row.kind === "route"
+          ? row.kind
+          : null;
+      if (!kind) throw new Error("INVALID_BODY");
+
+      const rawPlaceKeys = Array.isArray(row.placeKeys)
+        ? row.placeKeys
+        : [];
+      if (rawPlaceKeys.length < 1 || rawPlaceKeys.length > 3) {
+        throw new Error("INVALID_BODY");
+      }
+
+      const placeKeys = Array.from(
+        new Set(
+          rawPlaceKeys.map((key) => stringValue(key, 180, true))
+        )
+      );
+      if (placeKeys.length < 1 || placeKeys.length > 3) {
+        throw new Error("INVALID_BODY");
+      }
+
+      const scenario =
+        typeof row.scenario === "string" &&
+        scenarios.has(row.scenario as Scenario)
+          ? (row.scenario as Scenario)
+          : null;
+
+      return {
+        day: dateOnly(row.day),
+        kind,
+        placeKeys,
+        scenario,
+        createdAt: isoDate(row.createdAt),
+        updatedAt: isoDate(row.updatedAt ?? row.createdAt)
+      };
+    });
+
   return {
     version: 3,
     customPlaces,
@@ -386,7 +452,8 @@ export function parsePersonalBackup(value: unknown): PersonalSnapshot {
     ratings,
     recommendationFeedbacks,
     visits,
-    collections
+    collections,
+    dailyDiscoveries
   };
 }
 
