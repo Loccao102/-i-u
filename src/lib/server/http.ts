@@ -90,6 +90,11 @@ export function internalErrorJson(
     code = "SERVER_CONFIG_MISSING";
     message =
       "Thiếu cấu hình Supabase trên môi trường deploy. Kiểm tra Environment Variables trên Vercel.";
+  } else if (raw.startsWith("Invalid server env:")) {
+    status = 503;
+    code = "SERVER_CONFIG_INVALID";
+    message =
+      "Supabase server key hoặc URL trên Vercel không hợp lệ. Không dùng publishable/anon key cho biến server.";
   } else if (
     /google_place_id|place_user_photos|active_personal_plans/i.test(raw) &&
     /column|relation|schema|does not exist|cache/i.test(raw)
@@ -99,7 +104,7 @@ export function internalErrorJson(
     message =
       "Supabase schema của môi trường deploy chưa đồng bộ migration mới.";
   } else if (
-    /supabase|list places|list saved|list ratings|list visits|list collections/i.test(
+    /supabase|permission denied|row-level security|list places|list saved|list ratings|list visits|list collections|get active plan/i.test(
       raw
     )
   ) {
