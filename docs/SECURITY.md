@@ -125,3 +125,22 @@ Current weather is fetched server-side from Open-Meteo using either:
 Coordinates used for weather are transient and are not stored by ĐiĐâu.
 
 The app displays Open-Meteo attribution in the map UI. The free endpoint is only appropriate for the current personal/non-commercial phase; commercial use should configure a licensed Open-Meteo plan.
+
+
+## Active plan persistence
+
+The current plan is intentionally stored separately from ratings, visits and collections.
+
+`active_personal_plans`:
+
+- has one row at most per anonymous `owner_key`;
+- has RLS enabled;
+- explicitly denies `anon` and `authenticated`;
+- grants CRUD only to the server-side `service_role`;
+- stores only a validated 1–3 stop plan snapshot and progress metadata;
+- does not store live GPS;
+- is deleted automatically when the last stop is completed/skipped or when the user cancels.
+
+Plan progress uses a `SECURITY INVOKER` RPC with a row lock and an expected stop index. This prevents stale actions from another browser tab from advancing the wrong stop.
+
+Completing a plan stop can create a visit signal, but the server first checks for a recent visit to the same place to avoid duplicate check-ins.
