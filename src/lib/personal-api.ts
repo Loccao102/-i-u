@@ -9,6 +9,8 @@ import type {
   NearbyPlaceResult,
   PersonalBackup,
   PersonalRating,
+  RecommendationFeedback,
+  RecommendationFeedbackReason,
   PlaceMedia,
   PlaceUserPhoto,
   PersonalSnapshot,
@@ -193,6 +195,25 @@ export const personalApi = {
     api<VisitRecord>(
       "/api/personal/checkins/" + encodeURIComponent(placeId),
       { method: "POST", body: {} }
+    ),
+
+  setRecommendationFeedback: (
+    placeId: string,
+    input: {
+      reason: RecommendationFeedbackReason;
+      scenario: string | null;
+      distanceKm: number | null;
+    }
+  ) =>
+    api<RecommendationFeedback>(
+      "/api/personal/feedback/" + encodeURIComponent(placeId),
+      { method: "PUT", body: input }
+    ),
+
+  clearRecommendationFeedback: (placeId: string) =>
+    api<{ deleted: true }>(
+      "/api/personal/feedback/" + encodeURIComponent(placeId),
+      { method: "DELETE" }
     ),
 
   createCollection: (input: {
