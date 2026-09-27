@@ -833,50 +833,48 @@ export function MapExplorer() {
 
   const weeklyRevisitCandidate = useMemo(() => {
     const now = clock.getTime();
+    const candidates: Array<{
+      place: Place;
+      daysSinceVisit: number;
+      stars: number;
+      score: number;
+    }> = [];
 
-    return rankedAll
-      .map((place) => {
-        const rating = ratings[place.id];
-        const visit = recentVisitByPlace.get(place.id);
-        if (!rating || !visit) return null;
-        if (rating.stars < 4 || rating.revisit === "no") return null;
+    for (const place of rankedAll) {
+      const rating = ratings[place.id];
+      const visit = recentVisitByPlace.get(place.id);
+      if (!rating || !visit) continue;
+      if (rating.stars < 4 || rating.revisit === "no") continue;
 
-        const visitedAt = new Date(visit.visitedAt).getTime();
-        if (!Number.isFinite(visitedAt)) return null;
+      const visitedAt = new Date(visit.visitedAt).getTime();
+      if (!Number.isFinite(visitedAt)) continue;
 
-        const daysSinceVisit = Math.floor(
-          Math.max(0, now - visitedAt) / (24 * 60 * 60 * 1000)
-        );
-        if (daysSinceVisit < 7) return null;
+      const daysSinceVisit = Math.floor(
+        Math.max(0, now - visitedAt) / (24 * 60 * 60 * 1000)
+      );
+      if (daysSinceVisit < 7) continue;
 
-        const revisitBonus = rating.revisit === "yes" ? 14 : 4;
-        return {
-          place,
-          daysSinceVisit,
-          stars: rating.stars,
-          score:
-            place.match +
-            rating.stars * 8 +
-            revisitBonus +
-            Math.min(20, daysSinceVisit / 2)
-        };
-      })
-      .filter(
-        (
-          item
-        ): item is {
-          place: Place;
-          daysSinceVisit: number;
-          stars: number;
-          score: number;
-        } => item !== null
-      )
-      .sort(
+      const revisitBonus = rating.revisit === "yes" ? 14 : 4;
+      candidates.push({
+        place,
+        daysSinceVisit,
+        stars: rating.stars,
+        score:
+          place.match +
+          rating.stars * 8 +
+          revisitBonus +
+          Math.min(20, daysSinceVisit / 2)
+      });
+    }
+
+    return (
+      candidates.sort(
         (a, b) =>
           b.score - a.score ||
           b.stars - a.stars ||
           b.daysSinceVisit - a.daysSinceVisit
-      )[0] ?? null;
+      )[0] ?? null
+    );
   }, [rankedAll, ratings, recentVisitByPlace, clock]);
 
   const collectionSuggestions = useMemo(() => {
