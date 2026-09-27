@@ -35,6 +35,8 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - PostGIS-backed nearby distance lookup for persisted places;
 - PostGIS viewport search for the map area currently on screen;
 - **Surprise Me** weighted toward strong matches and places you have not over-visited;
+- **Khám phá hôm nay** with a deterministic daily place and daily route: the place stays stable for the day, prefers never-visited options and avoids recent daily picks stored locally for up to 21 days;
+- daily routes use a date seed for variety while still respecting personal taste, budget, distance, hourly weather forecast and scheduled opening-hours guardrails;
 - time-aware ranking (morning / lunch / afternoon / evening / late);
 - weather-aware ranking with visible explanation;
 - compact **Evening Plan Builder** that combines 1–3 nearby stops from mood, budget, duration and radius;
@@ -214,9 +216,10 @@ http://localhost:3000
 
 1. improve real-world price/budget estimates from personal history and explicit user input;
 2. add provider pagination/refresh controls for denser city areas;
-3. add a daily discovery loop for one new place or one new route each day;
-4. Supabase Auth only when account recovery/multi-device sync is worth the friction;
-5. Groups and group voting after the personal loop is mature.
+3. add provider pagination/refresh controls for denser city areas;
+4. improve real-world price/budget estimates from personal history and explicit user input;
+5. Supabase Auth only when account recovery/multi-device sync is worth the friction;
+6. Groups and group voting after the personal loop is mature.
 
 
 ## Manual Vercel deployment
