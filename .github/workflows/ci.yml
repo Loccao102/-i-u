@@ -21,5 +21,7 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Typecheck
         run: npm run typecheck
+      - name: Core tests
+        run: npm run test:core
       - name: Build
         run: npm run build

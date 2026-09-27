@@ -38,6 +38,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Core tests
+        run: npm run test:core
+
       - name: Production build check
         run: npm run build
 
@@ -88,6 +91,6 @@ jobs:
             echo "- Trigger: manual"
             echo "- Branch: main"
             echo "- Commit: `$GITHUB_SHA`"
-            echo "- CI verification: passed"
+            echo "- Typecheck + core tests + build: passed"
             echo "- Vercel deploy hook: triggered"
           } >> "$GITHUB_STEP_SUMMARY"

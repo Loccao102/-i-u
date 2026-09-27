@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "incremental": false,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "outDir": ".core-test-dist",
+    "rootDir": ".",
+    "isolatedModules": false,
+    "paths": {},
+    "types": ["node"]
+  },
+  "include": ["tests/core/**/*.ts"]
+}

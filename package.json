@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:core": "node -e \"require('fs').rmSync('.core-test-dist',{recursive:true,force:true})\" && tsc -p tsconfig.core-test.json && node --test .core-test-dist/tests/core/core.test.js"
   },
   "dependencies": {
     "maplibre-gl": "6.11.2",
