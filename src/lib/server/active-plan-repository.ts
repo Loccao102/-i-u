@@ -101,13 +101,15 @@ async function hasRecentVisit(ownerKey: string, placeId: string) {
 
 export async function advanceActivePlan(
   ownerKey: string,
-  action: "complete" | "skip"
+  action: "complete" | "skip",
+  expectedIndex: number
 ): Promise<ActivePlanAdvanceResult> {
   const { data, error } = await getSupabaseAdmin().rpc(
     "advance_active_personal_plan",
     {
       p_owner_key: ownerKey,
-      p_action: action
+      p_action: action,
+      p_expected_index: expectedIndex
     }
   );
 
@@ -122,7 +124,17 @@ export async function advanceActivePlan(
     return {
       activePlan: null,
       finished: false,
-      recordedVisit: false
+      recordedVisit: false,
+      stale: false
+    };
+  }
+
+  if (result.stale === true) {
+    return {
+      activePlan: await getActivePlan(ownerKey),
+      finished: false,
+      recordedVisit: false,
+      stale: true
     };
   }
 
@@ -143,7 +155,8 @@ export async function advanceActivePlan(
   return {
     activePlan: finished ? null : await getActivePlan(ownerKey),
     finished,
-    recordedVisit
+    recordedVisit,
+    stale: false
   };
 }
 
