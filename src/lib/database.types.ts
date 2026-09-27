@@ -140,6 +140,8 @@ export type Database = {
           average_for_two: string
           best_time: string
           community_note: string
+          cost_confidence: number
+          cost_source: string
           created_at: string
           crowd: string
           description: string
@@ -170,6 +172,8 @@ export type Database = {
           average_for_two?: string
           best_time?: string
           community_note?: string
+          cost_confidence?: number
+          cost_source?: string
           created_at?: string
           crowd?: string
           description?: string
@@ -200,6 +204,8 @@ export type Database = {
           average_for_two?: string
           best_time?: string
           community_note?: string
+          cost_confidence?: number
+          cost_source?: string
           created_at?: string
           crowd?: string
           description?: string
