@@ -37,8 +37,9 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - PostGIS-backed nearby distance lookup for persisted places;
 - PostGIS viewport search for the map area currently on screen;
 - **Surprise Me** weighted toward strong matches and places you have not over-visited;
-- **Khám phá hôm nay** with a deterministic daily place and daily route: the place stays stable for the day, prefers never-visited options and avoids recent daily picks stored locally for up to 21 days;
-- daily routes use a date seed for variety while still respecting personal taste, budget, distance, hourly weather forecast and scheduled opening-hours guardrails;
+- **Khám phá hôm nay** with profile-persisted daily place and route history: the place stays stable when the same daily candidate is available, prefers never-visited options and avoids recent daily picks across sessions;
+- a compact 7-day discovery insight shows active discovery days, unique suggested places and generated routes;
+- daily routes use a date seed for variety, avoid place keys used by routes in the previous 7 days when possible, and still respect personal taste, budget, distance, hourly weather forecast and scheduled opening-hours guardrails;
 - time-aware ranking (morning / lunch / afternoon / evening / late);
 - weather-aware ranking with visible explanation;
 - compact **Evening Plan Builder** that combines 1–3 nearby stops from mood, budget, duration and radius;
@@ -158,13 +159,13 @@ Discovery is viewport-bounded, cached server-side, rate-limited, and never runs 
 
 ## Apply the database migration
 
-The schema is versioned at:
+The schema is versioned in `supabase/migrations/`. Apply the baseline and every incremental migration in order. The daily-discovery history table is added by:
 
 ```text
-supabase/migrations/0001_personal_core.sql
+supabase/migrations/20260927063759_daily_discovery_history.sql
 ```
 
-Apply it through the Supabase SQL Editor, Supabase CLI, or the connected Supabase tooling.
+Apply migrations through the Supabase SQL Editor, Supabase CLI, or the connected Supabase tooling.
 
 See [docs/SUPABASE.md](docs/SUPABASE.md).
 
@@ -218,8 +219,8 @@ http://localhost:3000
 
 ## Next
 
-1. add lightweight daily-discovery history/insights beyond device-local anti-repeat;
-2. make daily routes more novelty-aware across multiple days, not only deterministic by date;
+1. add a lightweight weekly discovery recap with revisit prompts and favorite discovery patterns;
+2. improve provider-derived price signals so fewer places start with unknown cost;
 3. Supabase Auth only when account recovery/multi-device sync is worth the friction;
 4. Groups and group voting after the personal loop is mature.
 
