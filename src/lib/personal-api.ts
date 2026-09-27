@@ -133,6 +133,12 @@ export const personalApi = {
       body: { slug }
     }),
 
+  resetProfile: () =>
+    api<{ reset: true; removedPhotoObjects: number }>(
+      "/api/personal/profile-reset",
+      { method: "DELETE", body: { confirm: "XOA" } }
+    ),
+
   profileTransfer: {
     create: () =>
       api<{ code: string; expiresAt: string }>(
