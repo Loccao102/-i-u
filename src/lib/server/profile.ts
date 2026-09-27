@@ -12,12 +12,16 @@ export type AnonymousProfile = {
   isNew: boolean;
 };
 
+export function createAnonymousProfileToken() {
+  return randomBytes(32).toString("hex");
+}
+
 export function resolveAnonymousProfile(
   request: NextRequest
 ): AnonymousProfile {
   const existing = request.cookies.get(COOKIE_NAME)?.value;
   const isValid = Boolean(existing && TOKEN_PATTERN.test(existing));
-  const token = isValid ? existing! : randomBytes(32).toString("hex");
+  const token = isValid ? existing! : createAnonymousProfileToken();
 
   return {
     token,
