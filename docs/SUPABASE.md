@@ -29,7 +29,7 @@ supabase/migrations/20260927081109_personal_planner_defaults.sql
 supabase/migrations/20260927083839_profile_transfer_codes.sql
 supabase/migrations/20260927094900_public_itinerary_shares.sql
 supabase/migrations/20260927095409_encrypt_profile_transfer_tokens.sql
-supabase/migrations/20260927073327_completed_plan_feedback.sql
+supabase/migrations/20260927152302_planner_telemetry.sql
 ```
 
 The provider-cost migration adds `cost_source` and `cost_confidence` to
@@ -149,7 +149,8 @@ where schemaname = 'public'
     'completed_personal_plans',
     'personal_planner_defaults',
     'profile_transfer_codes',
-    'public_itinerary_shares'
+    'public_itinerary_shares',
+    'personal_planner_metrics'
   );
 ```
 
@@ -189,3 +190,23 @@ The profile transfer table stores only AES-GCM ciphertext derived from the
 one-time transfer code. Raw profile tokens are not stored in the database.
 Redeeming a code deletes the matching row and returns the ciphertext in one
 database mutation, so a successful code cannot be redeemed twice.
+
+
+### Planner telemetry
+
+Planner telemetry is intentionally aggregate-only. The database stores one row
+per anonymous owner per local Vietnam day with four counters:
+
+- generated;
+- started;
+- completed;
+- replayed.
+
+No GPS trace, place ID, route snapshot, search query, or individual event row is
+stored for this telemetry. Browser roles have deny-all RLS on
+`personal_planner_metrics`; increments happen server-side through the
+service-role-only `increment_personal_planner_metric` function.
+
+Planner telemetry is not included in JSON backup/import. Profile transfer keeps
+the same owner identity, so existing counters naturally remain with that
+profile.
