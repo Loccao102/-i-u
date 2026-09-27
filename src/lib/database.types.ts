@@ -276,6 +276,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      advance_active_personal_plan: {
+        Args: { p_action: string; p_owner_key: string }
+        Returns: Json
+      }
       delete_personal_place: {
         Args: { p_owner_key: string; p_place_id: string }
         Returns: boolean
