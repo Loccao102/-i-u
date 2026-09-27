@@ -11,6 +11,7 @@ import type {
   PlanOutcomeProfile,
   RecommendationFeedback,
   PlanStage,
+  RoutingMode,
   Scenario,
   UserLocation,
   VisitRecord
@@ -197,8 +198,28 @@ function minimumFutureMinutes(stages: PlanStage[]) {
   );
 }
 
-function travelMinutes(distanceKm: number) {
-  return Math.max(8, Math.min(30, Math.round(6 + distanceKm * 4.5)));
+function travelMinutes(
+  distanceKm: number,
+  mode: RoutingMode = "motorcycle"
+) {
+  if (mode === "walk") {
+    return Math.max(
+      4,
+      Math.min(180, Math.round(distanceKm * 12.5))
+    );
+  }
+
+  if (mode === "drive") {
+    return Math.max(
+      7,
+      Math.min(75, Math.round(7 + distanceKm * 3.6))
+    );
+  }
+
+  return Math.max(
+    6,
+    Math.min(60, Math.round(5 + distanceKm * 3.8))
+  );
 }
 
 function travelMetric(input: {
@@ -206,6 +227,7 @@ function travelMetric(input: {
   previous: Place | null;
   place: Place;
   matrix?: PlannerTravelMatrix;
+  routeMode: RoutingMode;
 }) {
   const fromKey = input.previous?.id ?? "__origin__";
   const metric = input.matrix?.[fromKey]?.[input.place.id];
@@ -235,7 +257,7 @@ function travelMetric(input: {
 
   return {
     distanceKm,
-    durationMinutes: travelMinutes(distanceKm),
+    durationMinutes: travelMinutes(distanceKm, input.routeMode),
     source: "heuristic" as const
   };
 }
@@ -512,13 +534,15 @@ function buildWithGuardrails(input: {
           origin,
           previous,
           place,
-          matrix: travelMatrix
+          matrix: travelMatrix,
+          routeMode: preferences.routeMode
         });
         const originMetric = travelMetric({
           origin,
           previous: null,
           place,
-          matrix: travelMatrix
+          matrix: travelMatrix,
+          routeMode: preferences.routeMode
         });
         const travelKm = metric.distanceKm;
         const travelMin =
@@ -722,6 +746,7 @@ export function buildEveningPlan(input: {
 
   return {
     scenario: preferences.scenario,
+    routeMode: preferences.routeMode,
     stops,
     totalEstimatedCostForTwo,
     budgetRemainingForTwo:
@@ -891,6 +916,7 @@ export function toActivePlanSnapshot(
 
   return {
     scenario: plan.scenario,
+    routeMode: plan.routeMode,
     summary: plan.summary,
     totalEstimatedCostForTwo: plan.totalEstimatedCostForTwo,
     budgetRemainingForTwo: plan.budgetRemainingForTwo,
