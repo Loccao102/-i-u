@@ -306,29 +306,41 @@ export type Database = {
       }
       personal_planner_metrics: {
         Row: {
+          canceled_count: number
           completed_count: number
           day: string
           generated_count: number
+          generation_failed_count: number
+          initial_generated_count: number
           owner_key: string
           replayed_count: number
+          rerolled_count: number
           started_count: number
           updated_at: string
         }
         Insert: {
+          canceled_count?: number
           completed_count?: number
           day: string
           generated_count?: number
+          generation_failed_count?: number
+          initial_generated_count?: number
           owner_key: string
           replayed_count?: number
+          rerolled_count?: number
           started_count?: number
           updated_at?: string
         }
         Update: {
+          canceled_count?: number
           completed_count?: number
           day?: string
           generated_count?: number
+          generation_failed_count?: number
+          initial_generated_count?: number
           owner_key?: string
           replayed_count?: number
+          rerolled_count?: number
           started_count?: number
           updated_at?: string
         }
