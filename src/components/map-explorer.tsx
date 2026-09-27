@@ -2147,6 +2147,10 @@ export function MapExplorer() {
     }
 
     const detected = suggestScenarios(validated.value.note);
+    const enteredCost = cleanPlainText(
+      String(data.get("averageForTwo") ?? ""),
+      100
+    );
     const place: Place = {
       id: crypto.randomUUID(),
       name: validated.value.name,
@@ -2155,8 +2159,8 @@ export function MapExplorer() {
       latitude: validated.value.latitude,
       longitude: validated.value.longitude,
       distanceKm: 0,
-      priceLabel: "$$",
-      averageForTwo: "Chưa có dữ liệu",
+      priceLabel: "$",
+      averageForTwo: enteredCost || "Chưa có dữ liệu",
       publicRating: 0,
       match: 75,
       communityNote: "Địa điểm cá nhân",
@@ -3867,6 +3871,15 @@ export function MapExplorer() {
           <label className="field">
             <span>Ghi chú</span>
             <textarea name="note" rows={4} maxLength={300} placeholder="Yên, hợp date, đi tối đẹp…" />
+          </label>
+          <label className="field">
+            <span>Chi phí 2 người (không bắt buộc)</span>
+            <input
+              name="averageForTwo"
+              maxLength={100}
+              placeholder="Ví dụ: 250k, 350k hoặc 300-450k"
+            />
+            <small>Dữ liệu này giúp planner học mức chi tiêu thực tế của bạn.</small>
           </label>
           <button className="primary-button primary-button--wide" type="submit">
             Lưu địa điểm
