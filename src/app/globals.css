@@ -2369,3 +2369,67 @@ textarea:focus-visible {
     display: none;
   }
 }
+
+
+.detail-empty-state {
+  min-height: 100%;
+  padding: 36px 24px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 9px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.detail-empty-state__icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-soft);
+  color: #687169;
+  font-size: 24px;
+}
+
+.detail-empty-state strong {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.detail-empty-state > span:last-child {
+  max-width: 290px;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.osm-attribution {
+  position: absolute;
+  z-index: 2;
+  right: 12px;
+  bottom: 8px;
+  border-radius: 7px;
+  padding: 3px 6px;
+  background: rgba(255,255,255,.86);
+  color: #5b625d;
+  text-decoration: none;
+  font-size: 8px;
+  backdrop-filter: blur(8px);
+}
+
+.osm-attribution:hover {
+  text-decoration: underline;
+}
+
+.real-data-label {
+  color: #52715c;
+}
+
+@media (max-width: 760px) {
+  .osm-attribution {
+    right: 8px;
+    bottom: 6px;
+    font-size: 7px;
+  }
+}
