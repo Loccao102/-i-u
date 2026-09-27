@@ -504,7 +504,18 @@ export function parsePersonalBackup(value: unknown): PersonalSnapshot {
           new Set(rawSkipped.map((id) => boundedId(id)))
         ).slice(0, 3),
         startedAt: isoDate(row.startedAt),
-        completedAt: isoDate(row.completedAt)
+        completedAt: isoDate(row.completedAt),
+        outcomeRating:
+          row.outcomeRating === null || row.outcomeRating === undefined
+            ? null
+            : Math.round(finiteNumber(row.outcomeRating, 1, 5)),
+        wouldRepeat:
+          typeof row.wouldRepeat === "boolean" ? row.wouldRepeat : null,
+        feedbackNote: stringValue(row.feedbackNote, 300),
+        feedbackAt:
+          row.feedbackAt === null || row.feedbackAt === undefined
+            ? null
+            : isoDate(row.feedbackAt)
       };
     });
 
