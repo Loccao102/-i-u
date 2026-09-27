@@ -2139,7 +2139,11 @@ export function MapExplorer() {
         {providerResults.length > 0 ? (
           <div className="provider-results">
             <div className="provider-results__title">
-              <strong>OpenStreetMap</strong>
+              <strong>
+                {providerResults[0]?.provider === "geoapify"
+                  ? "Geoapify"
+                  : "OpenStreetMap"}
+              </strong>
               <span>{providerResults.length} kết quả ngoài</span>
             </div>
             {providerResults.slice(0, 4).map((item) => {
@@ -2242,7 +2246,7 @@ export function MapExplorer() {
                 {view === "collections"
                   ? "Tạo bộ sưu tập rồi thêm địa điểm từ phần chi tiết."
                   : discoveryLoading
-                    ? "Đang lấy POI OpenStreetMap trong viewport hiện tại."
+                    ? "Đang lấy POI thật trong viewport hiện tại."
                     : "Pan/zoom bản đồ rồi bấm “Tìm khu vực này”, hoặc tìm theo tên ở ô phía trên."}
               </span>
             </div>
@@ -2315,7 +2319,11 @@ export function MapExplorer() {
                             : ""}
                         </i>
                         {place.source === "provider" ? (
-                          <em>OSM</em>
+                          <em>
+                            {place.providerId?.startsWith("geoapify:")
+                              ? "Geoapify"
+                              : "OSM"}
+                          </em>
                         ) : null}
                       </span>
 
@@ -2535,7 +2543,11 @@ export function MapExplorer() {
             <div>
               <span className="eyebrow">
                 {selected.kind}
-                {selected.source === "provider" ? " · OSM" : ""}
+                {selected.source === "provider"
+                  ? selected.providerId?.startsWith("geoapify:")
+                    ? " · Geoapify"
+                    : " · OSM"
+                  : ""}
               </span>
               <h2>{selected.name}</h2>
             </div>
@@ -3041,7 +3053,11 @@ export function MapExplorer() {
                   <div className="compare-card__body">
                     <span className="eyebrow">
                       {place.kind}
-                      {place.source === "provider" ? " · OSM" : ""}
+                      {place.source === "provider"
+                        ? place.providerId?.startsWith("geoapify:")
+                          ? " · Geoapify"
+                          : " · OSM"
+                        : ""}
                     </span>
                     <h3>{place.name}</h3>
 
