@@ -14,6 +14,8 @@ import type {
   RecommendationFeedback,
   RecommendationFeedbackReason,
   ProviderPlaceDetails,
+  RoutingMatrixPoint,
+  RoutingMatrixResult,
   PlaceMedia,
   PlaceUserPhoto,
   PersonalSnapshot,
@@ -381,6 +383,12 @@ export const personalApi = {
       "/api/personal/viewport?" + params.toString()
     );
   },
+
+  routeMatrix: (points: RoutingMatrixPoint[]) =>
+    api<RoutingMatrixResult>("/api/routing/matrix", {
+      method: "POST",
+      body: { points }
+    }),
 
   weather: (location: UserLocation, targetAt?: string) => {
     const params = new URLSearchParams({
