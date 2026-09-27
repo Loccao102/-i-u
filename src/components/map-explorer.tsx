@@ -631,6 +631,17 @@ export function MapExplorer() {
       latitude: center.lat,
       longitude: center.lng
     });
+
+    const raw = mapRef.current.getBounds();
+    void refreshDiscovery(
+      {
+        west: raw.getWest(),
+        south: raw.getSouth(),
+        east: raw.getEast(),
+        north: raw.getNorth()
+      },
+      false
+    );
   }, [mapReady, refreshWeather]);
 
   useEffect(() => {
@@ -746,6 +757,34 @@ export function MapExplorer() {
     );
   }
 
+  async function refreshDiscovery(
+    bounds: MapBounds,
+    announce = false
+  ) {
+    setDiscoveryLoading(true);
+    try {
+      const result = await personalApi.discoverPoi(bounds);
+      setDiscoveredPoiResults(result.results);
+      if (announce) {
+        setNotice(
+          result.results.length > 0
+            ? "Đã tìm " + result.results.length + " địa điểm thật trong vùng."
+            : "Chưa tìm thấy POI phù hợp trong vùng này."
+        );
+      }
+    } catch (error) {
+      if (announce) {
+        setNotice(
+          error instanceof Error
+            ? error.message
+            : "Không thể tải địa điểm thật."
+        );
+      }
+    } finally {
+      setDiscoveryLoading(false);
+    }
+  }
+
   function switchView(next: PersonalView) {
     setView(next);
     setQuery("");
@@ -804,8 +843,9 @@ export function MapExplorer() {
     setViewportPersonalIds(null);
 
     try {
-      const [viewportResult] = await Promise.all([
+      const [viewportResult, discoveryResult] = await Promise.all([
         personalApi.viewport(bounds),
+        personalApi.discoverPoi(bounds),
         refreshWeather({
           latitude: center.lat,
           longitude: center.lng
@@ -815,6 +855,7 @@ export function MapExplorer() {
       setViewportPersonalIds(
         new Set(viewportResult.results.map((item) => item.placeId))
       );
+      setDiscoveredPoiResults(discoveryResult.results);
 
       const cleaned = cleanPlainText(query, 120);
       if (cleaned.length >= 2) {
@@ -823,7 +864,11 @@ export function MapExplorer() {
         setProviderResults([]);
       }
 
-      setNotice("Đã lọc theo vùng bản đồ đang nhìn.");
+      setNotice(
+        "Đã tìm " +
+          discoveryResult.results.length +
+          " địa điểm thật trong vùng bản đồ."
+      );
     } catch (error) {
       setNotice(
         error instanceof Error
@@ -1984,9 +2029,11 @@ export function MapExplorer() {
           <button
             type="button"
             onClick={() => void searchCurrentArea()}
-            disabled={viewportLoading}
+            disabled={viewportLoading || discoveryLoading}
           >
-            {viewportLoading ? "Đang tìm…" : "Tìm khu vực này"}
+            {viewportLoading || discoveryLoading
+              ? "Đang tìm…"
+              : "Tìm khu vực này"}
           </button>
         </div>
 
