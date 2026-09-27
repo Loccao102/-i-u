@@ -144,3 +144,14 @@ The current plan is intentionally stored separately from ratings, visits and col
 Plan progress uses a `SECURITY INVOKER` RPC with a row lock and an expected stop index. This prevents stale actions from another browser tab from advancing the wrong stop.
 
 Completing a plan stop can create a visit signal, but the server first checks for a recent visit to the same place to avoid duplicate check-ins.
+
+
+## Place photos and Google Places
+
+User-uploaded place photos are stored in a private Supabase Storage bucket. The browser never receives the Supabase secret key. Uploads are same-origin only, limited to supported image MIME types, capped at 8 MB, stored under an opaque owner-derived path, and served through short-lived signed URLs.
+
+Photo metadata lives in `place_user_photos`, which has RLS enabled, explicitly denies `anon` and `authenticated`, and is accessed only by the server-side service role.
+
+If `GOOGLE_PLACES_API_KEY` is configured, the server may resolve a saved place to a Google Place ID. Only that Place ID is persisted. Google Places content, photo resource names and photo URLs are fetched live with `cache: no-store` and are not stored in Supabase.
+
+Google content is displayed only in the place detail panel, not as Google-derived pins on the MapLibre map. The UI displays Google Maps attribution and photo author attribution where supplied.
