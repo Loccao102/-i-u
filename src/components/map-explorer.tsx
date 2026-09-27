@@ -816,6 +816,69 @@ export function MapExplorer() {
     ]
   );
 
+  const weeklyFavoriteScenario = useMemo(() => {
+    const counts = new Map<Scenario, number>();
+
+    for (const item of recentDailyActivity) {
+      if (item.kind !== "route" || !item.scenario) continue;
+      counts.set(
+        item.scenario,
+        (counts.get(item.scenario) ?? 0) + 1
+      );
+    }
+
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  }, [recentDailyActivity]);
+
+  const weeklyRevisitCandidate = useMemo(() => {
+    const now = clock.getTime();
+
+    return rankedAll
+      .map((place) => {
+        const rating = ratings[place.id];
+        const visit = recentVisitByPlace.get(place.id);
+        if (!rating || !visit) return null;
+        if (rating.stars < 4 || rating.revisit === "no") return null;
+
+        const visitedAt = new Date(visit.visitedAt).getTime();
+        if (!Number.isFinite(visitedAt)) return null;
+
+        const daysSinceVisit = Math.floor(
+          Math.max(0, now - visitedAt) / (24 * 60 * 60 * 1000)
+        );
+        if (daysSinceVisit < 7) return null;
+
+        const revisitBonus = rating.revisit === "yes" ? 14 : 4;
+        return {
+          place,
+          daysSinceVisit,
+          stars: rating.stars,
+          score:
+            place.match +
+            rating.stars * 8 +
+            revisitBonus +
+            Math.min(20, daysSinceVisit / 2)
+        };
+      })
+      .filter(
+        (
+          item
+        ): item is {
+          place: Place;
+          daysSinceVisit: number;
+          stars: number;
+          score: number;
+        } => item !== null
+      )
+      .sort(
+        (a, b) =>
+          b.score - a.score ||
+          b.stars - a.stars ||
+          b.daysSinceVisit - a.daysSinceVisit
+      )[0] ?? null;
+  }, [rankedAll, ratings, recentVisitByPlace, clock]);
+
   const collectionSuggestions = useMemo(() => {
     if (!selectedCollection) return [];
     return recommendForCollection(
@@ -1599,6 +1662,27 @@ export function MapExplorer() {
         "Route đã tạo nhưng chưa lưu được lịch sử chống lặp."
       );
     }
+  }
+
+  function focusWeeklyRevisit() {
+    if (!weeklyRevisitCandidate) return;
+
+    const place = weeklyRevisitCandidate.place;
+    setSelectedId(place.id);
+    mapRef.current?.flyTo({
+      center: [place.longitude, place.latitude],
+      zoom: 14,
+      duration: 700,
+      essential: true
+    });
+    dailyDialogRef.current?.close();
+    setNotice(
+      "↻ Gợi ý quay lại · " +
+        place.name +
+        " · bạn từng chấm " +
+        weeklyRevisitCandidate.stars +
+        "/5."
+    );
   }
 
   function plannerOrigin(): UserLocation {
@@ -4125,6 +4209,51 @@ export function MapExplorer() {
               <strong>{dailyInsights.routes}</strong>
               <small>lộ trình đã gợi ý</small>
             </div>
+          </section>
+
+          <section className="weekly-recap-card">
+            <div className="weekly-recap-card__head">
+              <div>
+                <span className="eyebrow">Nhịp tuần này</span>
+                <strong>
+                  {weeklyFavoriteScenario
+                    ? scenarioLabels[weeklyFavoriteScenario]
+                    : "Đang học gu khám phá"}
+                </strong>
+              </div>
+              <span>
+                {dailyInsights.days > 0
+                  ? dailyInsights.days + "/7 ngày"
+                  : "Chưa có dữ liệu"}
+              </span>
+            </div>
+
+            <p>
+              {weeklyFavoriteScenario
+                ? "Mood xuất hiện nhiều nhất trong route tuần này. ĐiĐâu vẫn đổi địa điểm để tránh biến một gu thành một vòng lặp."
+                : "Tạo vài route trong tuần, ĐiĐâu sẽ bắt đầu nhận ra kiểu buổi đi bạn hay chọn."}
+            </p>
+
+            {weeklyRevisitCandidate ? (
+              <button
+                type="button"
+                className="weekly-revisit"
+                onClick={focusWeeklyRevisit}
+              >
+                <span>
+                  <small>Đáng quay lại</small>
+                  <strong>{weeklyRevisitCandidate.place.name}</strong>
+                </span>
+                <b>
+                  ★ {weeklyRevisitCandidate.stars}/5 ·{" "}
+                  {weeklyRevisitCandidate.daysSinceVisit} ngày
+                </b>
+              </button>
+            ) : (
+              <small className="weekly-recap-card__empty">
+                Khi có một nơi bạn chấm từ 4★ và đã hơn 7 ngày chưa quay lại, gợi ý revisit sẽ xuất hiện ở đây.
+              </small>
+            )}
           </section>
 
           <section className="daily-place-card">
