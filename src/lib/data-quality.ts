@@ -11,6 +11,7 @@ export type DataRepairPrompt = {
   issues: DataQualityIssue[];
   planAppearances: number;
   recentAppearances: number;
+  lowQualityAppearances: number;
   priority: number;
   recurring: boolean;
   reason: string;
@@ -50,7 +51,7 @@ export function deriveDataRepairPrompts(
 ): DataRepairPrompt[] {
   const appearances = new Map<
     string,
-    { total: number; recent: number }
+    { total: number; recent: number; lowQuality: number }
   >();
 
   for (const completed of completedPlans.slice(0, 60)) {
@@ -63,10 +64,14 @@ export function deriveDataRepairPrompts(
     for (const stop of completed.plan.stops) {
       const current = appearances.get(stop.placeId) ?? {
         total: 0,
-        recent: 0
+        recent: 0,
+        lowQuality: 0
       };
       current.total += 1;
       if (recent) current.recent += 1;
+      if (completed.plan.quality && completed.plan.quality.score < 85) {
+        current.lowQuality += 1;
+      }
       appearances.set(stop.placeId, current);
     }
   }
@@ -79,22 +84,32 @@ export function deriveDataRepairPrompts(
 
       const usage = appearances.get(place.id) ?? {
         total: 0,
-        recent: 0
+        recent: 0,
+        lowQuality: 0
       };
-      const recurring = usage.total >= 2;
+      const legacyRecurring =
+        usage.lowQuality === 0 && usage.total >= 2;
+      const recurring =
+        usage.lowQuality >= 2 || legacyRecurring;
       const priority =
         issues.length * 4 +
         Math.min(4, usage.total) * 2 +
         Math.min(3, usage.recent) * 2 +
+        Math.min(3, usage.lowQuality) * 4 +
         (recurring ? 4 : 0);
 
-      const reason = recurring
-        ? "Đã xuất hiện trong " +
-          usage.total +
-          " plan nhưng dữ liệu vẫn chưa đủ chắc."
-        : usage.total === 1
-          ? "Đã từng nằm trong plan; bổ sung dữ liệu sẽ tăng độ tin cậy lần sau."
-          : "Đã lưu nhưng còn dữ liệu quan trọng chưa xác minh.";
+      const reason =
+        usage.lowQuality >= 2
+          ? "Đã nằm trong " +
+            usage.lowQuality +
+            " plan chất lượng thấp; nên bổ sung dữ liệu trước khi dùng lại."
+          : recurring
+            ? "Đã xuất hiện trong " +
+              usage.total +
+              " plan cũ nhưng dữ liệu vẫn chưa đủ chắc."
+            : usage.total === 1
+              ? "Đã từng nằm trong plan; bổ sung dữ liệu sẽ tăng độ tin cậy lần sau."
+              : "Đã lưu nhưng còn dữ liệu quan trọng chưa xác minh.";
 
       return [{
         placeId: place.id,
@@ -102,6 +117,7 @@ export function deriveDataRepairPrompts(
         issues,
         planAppearances: usage.total,
         recentAppearances: usage.recent,
+        lowQualityAppearances: usage.lowQuality,
         priority,
         recurring,
         reason
@@ -110,6 +126,7 @@ export function deriveDataRepairPrompts(
     .sort(
       (a, b) =>
         b.priority - a.priority ||
+        b.lowQualityAppearances - a.lowQualityAppearances ||
         b.recentAppearances - a.recentAppearances ||
         b.planAppearances - a.planAppearances ||
         a.name.localeCompare(b.name, "vi")
