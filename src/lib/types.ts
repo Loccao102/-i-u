@@ -307,8 +307,18 @@ export type PlannerReplayTemplate = {
   sourcePlanId: string;
   stops: Array<{
     placeId: string;
+    name?: string;
     stage: PlanStage;
   }>;
+};
+
+export type EveningPlanReplayReplacement = {
+  stage: PlanStage;
+  originalPlaceId: string;
+  originalName: string;
+  replacementPlaceId: string | null;
+  replacementName: string | null;
+  reason: string;
 };
 
 export type EveningPlanReplayInfo = {
@@ -316,6 +326,7 @@ export type EveningPlanReplayInfo = {
   originalStopCount: number;
   retainedStopIds: string[];
   replacedStopCount: number;
+  replacements: EveningPlanReplayReplacement[];
 };
 
 export type EveningPlanStop = {

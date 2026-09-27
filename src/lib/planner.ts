@@ -502,6 +502,118 @@ function candidateScore(input: {
   );
 }
 
+function replayReplacementReason(input: {
+  places: Place[];
+  preferredPlaceId: string;
+  stage: PlanStage;
+  signals: PlannerSignals;
+  scenario: Scenario;
+  origin: UserLocation;
+  previous: Place | null;
+  travelMatrix?: PlannerTravelMatrix;
+  routeMode: RoutingMode;
+  maxDistanceKm: number;
+  stageBudget: number;
+  remainingBudget: number;
+  relaxedBudget: boolean;
+  scheduledStart: Date;
+  stageMinutes: number;
+  usedMinutes: number;
+  reserveMinutes: number;
+  maxDurationMinutes: number;
+}) {
+  const preferred = input.places.find(
+    (place) => place.id === input.preferredPlaceId
+  );
+  if (!preferred) {
+    return "Địa điểm cũ không còn trong dữ liệu hiện tại.";
+  }
+
+  if (!matchesStage(preferred, input.stage)) {
+    return "Loại địa điểm cũ không còn khớp với chặng này.";
+  }
+
+  const rating = input.signals.ratings[preferred.id];
+  if (rating?.revisit === "no") {
+    return "Bạn từng đánh dấu không muốn quay lại địa điểm cũ.";
+  }
+
+  const feedback = input.signals.feedbacks?.[preferred.id];
+  if (feedback?.reason === "not_taste") {
+    return "Tín hiệu cá nhân hiện tại cho biết địa điểm cũ không hợp gu.";
+  }
+
+  if (feedback?.reason === "not_now") {
+    const feedbackTime = new Date(feedback.updatedAt).getTime();
+    const stillFresh =
+      Number.isFinite(feedbackTime) &&
+      Date.now() - feedbackTime <= 24 * 60 * 60 * 1000;
+    const sameContext =
+      !feedback.scenario || feedback.scenario === input.scenario;
+    if (stillFresh && sameContext) {
+      return "Bạn vừa đánh dấu địa điểm cũ là không phù hợp lúc này.";
+    }
+  }
+
+  const metric = travelMetric({
+    origin: input.origin,
+    previous: input.previous,
+    place: preferred,
+    matrix: input.travelMatrix,
+    routeMode: input.routeMode
+  });
+  const originMetric = travelMetric({
+    origin: input.origin,
+    previous: null,
+    place: preferred,
+    matrix: input.travelMatrix,
+    routeMode: input.routeMode
+  });
+
+  if (originMetric.distanceKm > input.maxDistanceKm) {
+    return "Địa điểm cũ nằm ngoài bán kính bạn đang chọn.";
+  }
+
+  if (
+    input.previous &&
+    metric.distanceKm > Math.max(3.5, input.maxDistanceKm * 0.7)
+  ) {
+    return "Quãng đường từ chặng trước tới địa điểm cũ quá xa.";
+  }
+
+  const availability = openingAvailability(
+    preferred,
+    input.scheduledStart,
+    input.stageMinutes
+  );
+  if (availability === "closed") {
+    return "Địa điểm cũ đóng cửa trong khung giờ dự kiến.";
+  }
+
+  if (
+    input.usedMinutes +
+      (input.previous ? metric.durationMinutes : 0) +
+      input.stageMinutes +
+      input.reserveMinutes >
+    input.maxDurationMinutes
+  ) {
+    return "Chặng cũ không còn vừa khung thời lượng hôm nay.";
+  }
+
+  const cost = estimateCostForTwo(
+    preferred,
+    input.signals.costProfile
+  );
+  if (
+    (!input.relaxedBudget && cost > input.remainingBudget) ||
+    cost > input.stageBudget
+  ) {
+    return "Chi phí hiện tại của chặng cũ không còn phù hợp budget.";
+  }
+
+  return "Có phương án khác được xếp hạng phù hợp hơn với điều kiện hôm nay.";
+}
+
 function buildWithGuardrails(input: {
   places: Place[];
   preferences: EveningPlanPreferences;
@@ -540,6 +652,14 @@ function buildWithGuardrails(input: {
   }> = [];
 
   const missingStages: PlanStage[] = [];
+  const replacements: Array<{
+    stage: PlanStage;
+    originalPlaceId: string;
+    originalName: string;
+    replacementPlaceId: string | null;
+    replacementName: string | null;
+    reason: string;
+  }> = [];
   const used = new Set<string>();
   let previous: Place | null = null;
   let remainingBudget = preferences.budgetForTwo;
@@ -650,6 +770,67 @@ function buildWithGuardrails(input: {
       .sort((a, b) => b.score - a.score);
 
     const chosen = stageCandidates[0];
+    const templateStop = replayTemplate?.stops[index];
+
+    if (
+      templateStop &&
+      (!chosen || chosen.place.id !== templateStop.placeId)
+    ) {
+      const stageMin = stageDurationMinutes(stage);
+      const preferredPlace = places.find(
+        (place) => place.id === templateStop.placeId
+      );
+      const preferredMetric = preferredPlace
+        ? travelMetric({
+            origin,
+            previous,
+            place: preferredPlace,
+            matrix: travelMatrix,
+            routeMode: preferences.routeMode
+          })
+        : null;
+      const scheduledStart = new Date(
+        planStart.getTime() +
+          (usedMinutes +
+            (selected.length > 0
+              ? preferredMetric?.durationMinutes ?? 0
+              : 0)) *
+            60 *
+            1000
+      );
+
+      replacements.push({
+        stage,
+        originalPlaceId: templateStop.placeId,
+        originalName:
+          templateStop.name ??
+          preferredPlace?.name ??
+          "Địa điểm cũ",
+        replacementPlaceId: chosen?.place.id ?? null,
+        replacementName: chosen?.place.name ?? null,
+        reason: replayReplacementReason({
+          places,
+          preferredPlaceId: templateStop.placeId,
+          stage,
+          signals,
+          scenario: preferences.scenario,
+          origin,
+          previous,
+          travelMatrix,
+          routeMode: preferences.routeMode,
+          maxDistanceKm: preferences.maxDistanceKm,
+          stageBudget,
+          remainingBudget,
+          relaxedBudget,
+          scheduledStart,
+          stageMinutes: stageMin,
+          usedMinutes,
+          reserveMinutes,
+          maxDurationMinutes
+        })
+      });
+    }
+
     if (!chosen) {
       missingStages.push(stage);
       continue;
@@ -673,6 +854,7 @@ function buildWithGuardrails(input: {
   return {
     selected,
     missingStages,
+    replacements,
     usedMinutes
   };
 }
@@ -798,7 +980,8 @@ export function buildEveningPlan(input: {
         replacedStopCount: Math.max(
           0,
           input.replayTemplate.stops.length - retainedStopIds.length
-        )
+        ),
+        replacements: generated.replacements
       }
     : null;
 

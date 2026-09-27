@@ -3153,6 +3153,7 @@ export function MapExplorer() {
       sourcePlanId: plan.id,
       stops: plan.plan.stops.map((stop) => ({
         placeId: stop.placeId,
+        name: stop.name,
         stage: stop.stage
       }))
     };
@@ -5810,17 +5811,43 @@ export function MapExplorer() {
 
               {activePlan.replay ? (
                 <section className="plan-replay-result">
-                  <strong>
-                    Giữ {activePlan.replay.retainedStopIds.length}/
-                    {activePlan.replay.originalStopCount} chặng cũ
-                  </strong>
-                  <span>
-                    {activePlan.replay.replacedStopCount > 0
-                      ? "Đã thay " +
-                        activePlan.replay.replacedStopCount +
-                        " chặng theo điều kiện hôm nay."
-                      : "Route cũ vẫn vượt qua các kiểm tra hiện tại."}
-                  </span>
+                  <div className="plan-replay-result__summary">
+                    <strong>
+                      Giữ {activePlan.replay.retainedStopIds.length}/
+                      {activePlan.replay.originalStopCount} chặng cũ
+                    </strong>
+                    <span>
+                      {activePlan.replay.replacedStopCount > 0
+                        ? "Đã thay " +
+                          activePlan.replay.replacedStopCount +
+                          " chặng theo điều kiện hôm nay."
+                        : "Route cũ vẫn vượt qua các kiểm tra hiện tại."}
+                    </span>
+                  </div>
+
+                  {activePlan.replay.replacements.length > 0 ? (
+                    <div className="plan-replay-reasons">
+                      {activePlan.replay.replacements.map(
+                        (replacement) => (
+                          <div
+                            key={
+                              replacement.stage +
+                              ":" +
+                              replacement.originalPlaceId
+                            }
+                          >
+                            <b>
+                              {replacement.originalName}
+                              {replacement.replacementName
+                                ? " → " + replacement.replacementName
+                                : ""}
+                            </b>
+                            <small>{replacement.reason}</small>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  ) : null}
                 </section>
               ) : null}
 

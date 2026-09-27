@@ -4079,6 +4079,11 @@ textarea:focus-visible {
   border-radius: 12px;
   padding: 9px 10px;
   background: #f6faf6;
+  display: grid;
+  gap: 8px;
+}
+
+.plan-replay-result__summary {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -4090,21 +4095,52 @@ textarea:focus-visible {
   font-size: 9px;
 }
 
-.plan-replay-result span {
+.plan-replay-result__summary > span {
   color: #6d786f;
   font-size: 8px;
   line-height: 1.4;
   text-align: right;
 }
 
+.plan-replay-reasons {
+  border-top: 1px solid #dfe8e0;
+  padding-top: 7px;
+  display: grid;
+  gap: 6px;
+}
+
+.plan-replay-reasons > div {
+  display: grid;
+  gap: 2px;
+}
+
+.plan-replay-reasons b {
+  overflow: hidden;
+  color: #4f5f53;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-replay-reasons small {
+  color: #758078;
+  font-size: 8px;
+  line-height: 1.4;
+}
+
 @media (max-width: 620px) {
-  .plan-replay-banner,
-  .plan-replay-result {
+  .plan-replay-banner {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .plan-replay-result span {
+  .plan-replay-result__summary {
+    align-items: start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .plan-replay-result__summary > span {
     text-align: left;
   }
 }
