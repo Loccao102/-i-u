@@ -7,6 +7,7 @@ import type { Json } from "../database.types";
 import type {
   ActivePlanSnapshot,
   ItineraryShareSource,
+  OwnedItineraryShare,
   PublicItineraryShare
 } from "../types";
 
@@ -114,6 +115,30 @@ export async function createItineraryShare(
   }
 
   throw new Error("ITINERARY_SHARE_UNAVAILABLE");
+}
+
+export async function listOwnedItineraryShares(
+  ownerKey: string
+): Promise<OwnedItineraryShare[]> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("public_itinerary_shares")
+    .select(
+      "slug,plan,source_kind,source_plan_id,created_at"
+    )
+    .eq("owner_key", ownerKey)
+    .is("revoked_at", null)
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  dbError(error, "List itinerary shares");
+
+  return (data ?? []).map((row) => ({
+    ...mapShare(row),
+    sourcePlanId:
+      typeof row.source_plan_id === "string"
+        ? row.source_plan_id
+        : null
+  }));
 }
 
 export async function getPublicItineraryShare(
