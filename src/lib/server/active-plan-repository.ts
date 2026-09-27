@@ -85,38 +85,6 @@ export async function startActivePlan(
   return mapActivePlan(data as ActivePlanRow);
 }
 
-async function archiveCompletedPlan(
-  ownerKey: string,
-  activePlan: ActivePersonalPlan,
-  action: "complete" | "skip",
-  stopId: string | null
-) {
-  const completedStopIds = new Set(activePlan.completedStopIds);
-  const skippedStopIds = new Set(activePlan.skippedStopIds);
-
-  if (stopId) {
-    if (action === "complete") completedStopIds.add(stopId);
-    else skippedStopIds.add(stopId);
-  }
-
-  const { error } = await getSupabaseAdmin()
-    .from("completed_personal_plans")
-    .upsert(
-      {
-        id: activePlan.id,
-        owner_key: ownerKey,
-        plan: activePlan.plan as unknown as Json,
-        completed_stop_ids: Array.from(completedStopIds),
-        skipped_stop_ids: Array.from(skippedStopIds),
-        started_at: activePlan.startedAt,
-        completed_at: new Date().toISOString()
-      },
-      { onConflict: "id" }
-    );
-
-  dbError(error, "Archive completed plan");
-}
-
 async function hasRecentVisit(ownerKey: string, placeId: string) {
   const since = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
   const { data, error } = await getSupabaseAdmin()
@@ -136,8 +104,6 @@ export async function advanceActivePlan(
   action: "complete" | "skip",
   expectedIndex: number
 ): Promise<ActivePlanAdvanceResult> {
-  const before = await getActivePlan(ownerKey);
-
   const { data, error } = await getSupabaseAdmin().rpc(
     "advance_active_personal_plan",
     {
@@ -185,10 +151,6 @@ export async function advanceActivePlan(
   }
 
   const finished = result.finished === true;
-
-  if (finished && before) {
-    await archiveCompletedPlan(ownerKey, before, action, stopId);
-  }
 
   return {
     activePlan: finished ? null : await getActivePlan(ownerKey),
