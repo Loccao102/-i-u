@@ -213,6 +213,7 @@ export type BackupImportResult = {
   collectionPlaces: number;
   dailyDiscoveries: number;
   completedPlans: number;
+  plannerDefaults: number;
 };
 
 
