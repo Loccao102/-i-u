@@ -603,6 +603,13 @@ export function parseActivePlanSnapshot(value: unknown): ActivePlanSnapshot {
       ? (root.scenario as Scenario)
       : null;
 
+  const routeMode =
+    root.routeMode === "drive" ||
+    root.routeMode === "walk" ||
+    root.routeMode === "motorcycle"
+      ? root.routeMode
+      : "motorcycle";
+
   let quality: ActivePlanSnapshot["quality"] = null;
   if (
     root.quality &&
@@ -647,6 +654,7 @@ export function parseActivePlanSnapshot(value: unknown): ActivePlanSnapshot {
 
   return {
     scenario,
+    routeMode,
     summary: stringValue(root.summary, 180, true),
     totalEstimatedCostForTwo: Math.round(
       finiteNumber(root.totalEstimatedCostForTwo, 0, 60_000_000)
