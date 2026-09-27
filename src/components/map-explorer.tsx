@@ -894,6 +894,136 @@ export function MapExplorer() {
     );
   }
 
+  function focusRunningStop(stop: ActivePlanStopSnapshot) {
+    setSelectedId(stop.placeId);
+    mapRef.current?.flyTo({
+      center: [stop.longitude, stop.latitude],
+      zoom: 14,
+      duration: 650,
+      essential: true
+    });
+  }
+
+  function openRunningStopRoute(stop: ActivePlanStopSnapshot) {
+    const params = new URLSearchParams({
+      api: "1",
+      destination: stop.latitude + "," + stop.longitude,
+      travelmode: "driving"
+    });
+
+    if (userLocation) {
+      params.set(
+        "origin",
+        userLocation.latitude + "," + userLocation.longitude
+      );
+    }
+
+    window.open(
+      "https://www.google.com/maps/dir/?" + params.toString(),
+      "_blank",
+      "noopener,noreferrer"
+    );
+  }
+
+  async function startRunningPlan() {
+    if (!activePlan) return;
+
+    if (
+      runningPlan &&
+      !window.confirm(
+        "Bạn đang có một plan đang đi. Thay bằng phương án mới?"
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const result = await personalApi.activePlan.start(
+        toActivePlanSnapshot(activePlan)
+      );
+      setRunningPlan(result.activePlan);
+      planDialogRef.current?.close();
+
+      const first = result.activePlan.plan.stops[0];
+      if (first) focusRunningStop(first);
+
+      setNotice(
+        "Đã bắt đầu plan · " +
+          result.activePlan.plan.stops.length +
+          " chặng."
+      );
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "Không thể bắt đầu kế hoạch."
+      );
+    }
+  }
+
+  async function advanceRunningPlan(action: "complete" | "skip") {
+    if (!runningPlan) return;
+
+    try {
+      const result = await personalApi.activePlan.advance(action);
+      setRunningPlan(result.activePlan);
+
+      if (result.recordedVisit) {
+        const snapshot = await personalApi.snapshot();
+        setCustomPlaces(snapshot.customPlaces);
+        setSaved(new Set(snapshot.savedIds));
+        setRatings(snapshot.ratings);
+        setVisits(snapshot.visits);
+        setCollections(snapshot.collections);
+      }
+
+      if (result.finished) {
+        setNotice(
+          action === "complete"
+            ? "Đã hoàn thành plan. Lịch sử chuyến đi đã được cập nhật."
+            : "Plan đã kết thúc."
+        );
+        return;
+      }
+
+      const next =
+        result.activePlan?.plan.stops[
+          result.activePlan.currentStopIndex
+        ];
+      if (next) {
+        focusRunningStop(next);
+        setNotice(
+          action === "complete"
+            ? "Xong chặng · tiếp theo: " + next.name
+            : "Đã bỏ qua · chuyển sang: " + next.name
+        );
+      }
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "Không thể cập nhật kế hoạch."
+      );
+    }
+  }
+
+  async function cancelRunningPlan() {
+    if (!runningPlan) return;
+    if (!window.confirm("Hủy plan đang đi? Lịch sử check-in vẫn được giữ.")) {
+      return;
+    }
+
+    try {
+      await personalApi.activePlan.cancel();
+      setRunningPlan(null);
+      setNotice("Đã hủy plan đang đi.");
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "Không thể hủy kế hoạch."
+      );
+    }
+  }
+
   async function importPoi(result: PoiSearchResult) {
     try {
       const imported = await personalApi.importPoi(result);
@@ -1011,6 +1141,13 @@ export function MapExplorer() {
     try {
       await personalApi.checkIn(selected.id);
       await loadSnapshot();
+
+      if (runningCurrentStop?.placeId === selected.id) {
+        setNotice(
+          "Đã check-in chặng hiện tại · khi rời đi bấm Xong chặng."
+        );
+        return;
+      }
 
       const next = suggestWhatNext({
         current: selected,
