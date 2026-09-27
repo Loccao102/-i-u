@@ -23,6 +23,7 @@ import type {
   PlaceMedia,
   PlaceUserPhoto,
   PersonalSnapshot,
+  PlannerDefaults,
   Place,
   PoiDiscoveryFilters,
   PoiDiscoveryPage,
@@ -106,6 +107,14 @@ async function api<T>(
 
 export const personalApi = {
   snapshot: () => api<PersonalSnapshot>("/api/personal"),
+
+  savePlannerDefaults: (
+    input: Omit<PlannerDefaults, "updatedAt">
+  ) =>
+    api<PlannerDefaults>("/api/personal/planner-defaults", {
+      method: "PUT",
+      body: input
+    }),
 
   saveDailyDiscovery: (input: {
     day: string;
