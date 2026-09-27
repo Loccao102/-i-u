@@ -30,6 +30,7 @@ supabase/migrations/20260927083839_profile_transfer_codes.sql
 supabase/migrations/20260927094900_public_itinerary_shares.sql
 supabase/migrations/20260927095409_encrypt_profile_transfer_tokens.sql
 supabase/migrations/20260927152302_planner_telemetry.sql
+supabase/migrations/20260927153331_profile_data_reset.sql
 ```
 
 The provider-cost migration adds `cost_source` and `cost_confidence` to
@@ -210,3 +211,20 @@ service-role-only `increment_personal_planner_metric` function.
 Planner telemetry is not included in JSON backup/import. Profile transfer keeps
 the same owner identity, so existing counters naturally remain with that
 profile.
+
+
+### Profile data reset
+
+The server-only `delete_personal_profile(owner_key)` RPC deletes every current
+owner-scoped database row across the personal core, including saved places,
+ratings, visits, collections, recommendation feedback, daily discoveries,
+active/completed plans, planner defaults/metrics, transfer codes and public
+itinerary-share records.
+
+Uploaded photo objects are removed from the private Storage bucket before the
+database RPC runs. The browser cookie is rotated only after Storage cleanup and
+the database reset both succeed. This means a server failure does not switch the
+browser to a new owner identity while old profile rows are still present.
+
+Reset requires the explicit confirmation string `XOA` and an additional UI
+confirmation. JSON backup does not contain uploaded photo binaries.
