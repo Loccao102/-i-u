@@ -122,6 +122,10 @@ export function derivePlannerCostProfile(
     const explicit = parseMoney(place.averageForTwo);
     if (explicit === null) continue;
 
+    // Only real user-entered/legacy costs train the personal spending profile.
+    // Provider category estimates are intentionally excluded.
+    if (place.costSource === "provider_estimate") continue;
+
     all.push(explicit);
     grouped[costStage(place)].push(explicit);
   }
@@ -144,11 +148,25 @@ export function estimateCostForTwo(
   costProfile?: PlannerCostProfile
 ) {
   const explicit = parseMoney(place.averageForTwo);
-  if (explicit !== null) return explicit;
-
   const learned =
     costProfile?.byStage[costStage(place)] ??
     costProfile?.overallMedian;
+
+  if (explicit !== null && place.costSource === "provider_estimate") {
+    if (learned === null || learned === undefined) return explicit;
+
+    const confidence = Math.max(
+      20,
+      Math.min(70, place.costConfidence ?? 40)
+    );
+    const providerWeight = confidence / 100;
+    const blended =
+      explicit * providerWeight + learned * (1 - providerWeight);
+
+    return Math.round(blended / 10_000) * 10_000;
+  }
+
+  if (explicit !== null) return explicit;
 
   return learned ?? fallbackCost[place.priceLabel];
 }
