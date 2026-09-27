@@ -726,6 +726,19 @@ export function MapExplorer() {
           zoom: 13,
           duration: 700
         });
+        mapRef.current?.once("moveend", () => {
+          const raw = mapRef.current?.getBounds();
+          if (!raw) return;
+          void refreshDiscovery(
+            {
+              west: raw.getWest(),
+              south: raw.getSouth(),
+              east: raw.getEast(),
+              north: raw.getNorth()
+            },
+            false
+          );
+        });
         setNotice(
           "GPS chỉ dùng trong phiên hiện tại và không được ghi vào Supabase."
         );
@@ -1978,12 +1991,16 @@ export function MapExplorer() {
               <strong>
                 {view === "collections" && collections.length === 0
                   ? "Chưa có bộ sưu tập."
-                  : "Chưa có địa điểm trong chế độ này."}
+                  : discoveryLoading && view === "discover"
+                    ? "Đang tải địa điểm thật…"
+                    : "Chưa có địa điểm trong chế độ này."}
               </strong>
               <span>
                 {view === "collections"
                   ? "Tạo bộ sưu tập rồi thêm địa điểm từ phần chi tiết."
-                  : "Thử đổi bộ lọc hoặc tìm POI thật ở ô phía trên."}
+                  : discoveryLoading
+                    ? "Đang lấy POI OpenStreetMap trong viewport hiện tại."
+                    : "Pan/zoom bản đồ rồi bấm “Tìm khu vực này”, hoặc tìm theo tên ở ô phía trên."}
               </span>
             </div>
           ) : (
@@ -2126,6 +2143,8 @@ export function MapExplorer() {
       </section>
 
       <aside className="detail-pane" aria-label="Chi tiết địa điểm">
+        {hasSelectedPlace ? (
+          <>
         <div
           className={
             "detail-hero" +
@@ -2503,6 +2522,21 @@ export function MapExplorer() {
             {selected.note ? <blockquote>“{selected.note}”</blockquote> : null}
           </section>
         </div>
+          </>
+        ) : (
+          <div className="detail-empty-state">
+            <span className="detail-empty-state__icon">⌖</span>
+            <strong>
+              {discoveryLoading
+                ? "Đang tìm địa điểm thật…"
+                : "Chọn một địa điểm trên bản đồ"}
+            </strong>
+            <span>
+              ĐiĐâu lấy POI thật trong vùng đang nhìn. Pan/zoom bản đồ rồi bấm
+              “Tìm khu vực này” nếu bạn muốn đổi khu vực.
+            </span>
+          </div>
+        )}
       </aside>
 
       {notice ? (
