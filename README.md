@@ -32,6 +32,10 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - per-stop start/end time, travel time and estimated cost;
 - multi-stop Google Maps route handoff;
 - **What next?** recommendations after a recent check-in, using transition type, time of day, distance, travel time, cost and current personal ranking;
+- persisted **active plan lifecycle**: start → resume after reload → complete/skip each stop → auto-finish;
+- one active plan per anonymous profile, intentionally without calendar/history bloat;
+- completing a stop records a visit only when there is no recent duplicate check-in;
+- active-plan progress uses expected-stop concurrency checks so stale actions from another tab cannot skip a stop;
 - JSON export/import backup with merge semantics;
 - responsive web UI.
 
@@ -162,7 +166,7 @@ http://localhost:3000
 
 1. enrich provider imports with better opening-hours/price metadata;
 2. add weather forecast awareness for future plans, not only current conditions;
-3. optionally save/favorite generated plans without turning the product into a calendar app;
-4. add lightweight feedback on recommendations so the learned taste model can distinguish "not now" from "not my taste";
+3. add lightweight feedback on recommendations so the learned taste model can distinguish "not now" from "not my taste";
+4. improve plan alternatives with provider POIs that are not saved yet;
 5. Supabase Auth only when account recovery/multi-device sync is worth the friction;
 6. Groups and group voting after the personal loop is mature.
