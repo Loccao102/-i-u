@@ -211,9 +211,9 @@ http://localhost:3000
 
 ## Next
 
-1. add weather forecast awareness for future plans, not only current conditions;
-2. improve real-world price/budget estimates from personal history and explicit user input;
-3. add provider pagination/refresh controls for denser city areas;
+1. improve real-world price/budget estimates from personal history and explicit user input;
+2. add provider pagination/refresh controls for denser city areas;
+3. add plan-level opening-hours guardrails for every scheduled stop;
 4. Supabase Auth only when account recovery/multi-device sync is worth the friction;
 5. Groups and group voting after the personal loop is mature.
 
