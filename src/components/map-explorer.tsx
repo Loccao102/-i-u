@@ -440,6 +440,11 @@ export function MapExplorer() {
     );
   }, [selectedCollection, rankedAll, saved, ratings, visits]);
 
+  const runningCurrentStop =
+    runningPlan?.plan.stops[runningPlan.currentStopIndex] ?? null;
+  const runningNextStop =
+    runningPlan?.plan.stops[runningPlan.currentStopIndex + 1] ?? null;
+
   const selected =
     visiblePlaces.find((place) => place.id === selectedId) ??
     rankedAll.find((place) => place.id === selectedId) ??
@@ -457,28 +462,48 @@ export function MapExplorer() {
     clock.getTime() - selectedVisitTime >= 0 &&
     clock.getTime() - selectedVisitTime <= 8 * 60 * 60 * 1000;
 
-  const whatNextSuggestions = useMemo(
-    () =>
-      selectedVisitedRecently
-        ? suggestWhatNext({
-            current: selected,
-            places: rankedAll,
-            signals: { savedIds: saved, ratings, visits },
-            maxDistanceKm: 4,
-            limit: 3,
-            localHour: recommendationContext.localHour
-          })
-        : [],
-    [
-      selectedVisitedRecently,
-      selected,
-      rankedAll,
-      saved,
-      ratings,
-      visits,
-      recommendationContext.localHour
-    ]
-  );
+  const whatNextSuggestions = useMemo(() => {
+    const generic = selectedVisitedRecently
+      ? suggestWhatNext({
+          current: selected,
+          places: rankedAll,
+          signals: { savedIds: saved, ratings, visits },
+          maxDistanceKm: 4,
+          limit: 3,
+          localHour: recommendationContext.localHour
+        })
+      : [];
+
+    if (!runningNextStop) return generic;
+
+    const plannedPlace = rankedAll.find(
+      (place) => place.id === runningNextStop.placeId
+    );
+    if (!plannedPlace) return generic;
+
+    const planned = {
+      place: plannedPlace,
+      distanceKm: runningNextStop.travelKmFromPrevious,
+      estimatedTravelMinutes: runningNextStop.travelMinutesFromPrevious,
+      estimatedCostForTwo: runningNextStop.estimatedCostForTwo,
+      transitionLabel: "Theo plan · " + runningNextStop.stageLabel,
+      reason: "Chặng tiếp theo đã chốt trong kế hoạch"
+    };
+
+    return [
+      planned,
+      ...generic.filter((item) => item.place.id !== plannedPlace.id)
+    ].slice(0, 3);
+  }, [
+    selectedVisitedRecently,
+    selected,
+    rankedAll,
+    saved,
+    ratings,
+    visits,
+    recommendationContext.localHour,
+    runningNextStop
+  ]);
 
   const isPersonalPlace = customIds.has(selected.id);
 
