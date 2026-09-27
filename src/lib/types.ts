@@ -99,6 +99,14 @@ export type DailyDiscoveryRecord = {
   updatedAt: string;
 };
 
+export type PlannerDefaults = {
+  routeMode: RoutingMode;
+  budgetForTwo: number;
+  maxDistanceKm: 3 | 5 | 8 | 12;
+  durationHours: 2 | 3 | 4;
+  updatedAt: string | null;
+};
+
 export type PersonalSnapshot = {
   version: 3;
   customPlaces: Place[];
@@ -109,6 +117,7 @@ export type PersonalSnapshot = {
   collections: Collection[];
   dailyDiscoveries?: DailyDiscoveryRecord[];
   completedPlans?: CompletedPersonalPlan[];
+  plannerDefaults?: PlannerDefaults;
 };
 
 export type PoiDiscoveryCategory =
@@ -204,6 +213,7 @@ export type BackupImportResult = {
   collectionPlaces: number;
   dailyDiscoveries: number;
   completedPlans: number;
+  plannerDefaults: number;
 };
 
 
