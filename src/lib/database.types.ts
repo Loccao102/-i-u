@@ -178,6 +178,71 @@ export type Database = {
         }
         Relationships: []
       }
+      group_poll_votes: {
+        Row: {
+          created_at: string
+          place_id: string
+          poll_id: string
+          updated_at: string
+          voter_key: string
+        }
+        Insert: {
+          created_at?: string
+          place_id: string
+          poll_id: string
+          updated_at?: string
+          voter_key: string
+        }
+        Update: {
+          created_at?: string
+          place_id?: string
+          poll_id?: string
+          updated_at?: string
+          voter_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_poll_votes_poll_id_fkey"
+            columns: ["poll_id"]
+            isOneToOne: false
+            referencedRelation: "group_polls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_polls: {
+        Row: {
+          candidates: Json
+          closed_at: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          owner_key: string
+          slug: string
+          title: string
+        }
+        Insert: {
+          candidates: Json
+          closed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          owner_key: string
+          slug: string
+          title: string
+        }
+        Update: {
+          candidates?: Json
+          closed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          owner_key?: string
+          slug?: string
+          title?: string
+        }
+        Relationships: []
+      }
       personal_places: {
         Row: {
           accent: string

@@ -530,6 +530,34 @@ export type OwnedItineraryShare = PublicItineraryShare & {
   sourcePlanId: string | null;
 };
 
+export type GroupPollCandidate = {
+  placeId: string;
+  name: string;
+  kind: string;
+  latitude: number;
+  longitude: number;
+  address: string;
+  averageForTwo: string;
+  publicRating: number;
+  match: number;
+};
+
+export type GroupPollCandidateResult = GroupPollCandidate & {
+  votes: number;
+};
+
+export type GroupPoll = {
+  slug: string;
+  title: string;
+  candidates: GroupPollCandidateResult[];
+  totalVotes: number;
+  myVote: string | null;
+  createdAt: string;
+  expiresAt: string;
+  closedAt: string | null;
+  isOpen: boolean;
+};
+
 export type ActivePlanAdvanceResult = {
   activePlan: ActivePersonalPlan | null;
   finished: boolean;

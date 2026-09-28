@@ -508,6 +508,7 @@ export function MapExplorer() {
   const [serverDistances, setServerDistances] = useState<Record<string, number>>({});
   const [backupLoading, setBackupLoading] = useState(false);
   const [shareLoading, setShareLoading] = useState(false);
+  const [groupPollLoading, setGroupPollLoading] = useState(false);
   const [profileTransferLoading, setProfileTransferLoading] = useState(false);
   const [profileTransferCode, setProfileTransferCode] = useState("");
   const [profileTransferExpiresAt, setProfileTransferExpiresAt] =
@@ -1522,6 +1523,41 @@ export function MapExplorer() {
       return;
     }
     compareDialogRef.current?.showModal();
+  }
+
+  async function createGroupPollFromShortlist() {
+    if (shortlist.length < 2 || groupPollLoading) {
+      if (shortlist.length < 2) {
+        setNotice("Chọn ít nhất 2 địa điểm để tạo poll nhóm.");
+      }
+      return;
+    }
+
+    setGroupPollLoading(true);
+    try {
+      const { poll } = await personalApi.createGroupPoll(
+        shortlist,
+        "Cả nhóm đi đâu?"
+      );
+      const url = window.location.origin + "/g/" + poll.slug;
+
+      try {
+        await navigator.clipboard.writeText(url);
+        setNotice("Đã tạo poll 24 giờ và copy link vào clipboard.");
+      } catch {
+        setNotice("Đã tạo poll 24 giờ. Link đã mở ở tab mới.");
+      }
+
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "Không thể tạo phiên bình chọn nhóm."
+      );
+    } finally {
+      setGroupPollLoading(false);
+    }
   }
 
   function requestLocation() {
@@ -5168,6 +5204,23 @@ export function MapExplorer() {
                 </article>
               );
             })}
+          </div>
+
+          <div className="compare-group-poll">
+            <div>
+              <strong>Đi cùng nhiều người?</strong>
+              <span>
+                Tạo link vote 24 giờ từ shortlist này. Mỗi trình duyệt có 1
+                lựa chọn và có thể đổi ý.
+              </span>
+            </div>
+            <button
+              type="button"
+              disabled={groupPollLoading || shortlist.length < 2}
+              onClick={() => void createGroupPollFromShortlist()}
+            >
+              {groupPollLoading ? "Đang tạo…" : "Tạo poll nhóm"}
+            </button>
           </div>
         </div>
       </dialog>

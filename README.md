@@ -28,6 +28,7 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - OpenStreetMap Nominatim/Overpass remain as a no-key fallback so the current deployment keeps working;
 - safe client-side interpretation of common OSM opening_hours formats;
 - temporary 2–3 place shortlist with quick comparison for match, distance, price, opening state and rating;
+- anonymous **Group Polls** from a 2–3 place shortlist: one 24-hour capability link, one vote per browser/profile, live vote totals and vote switching without sign-in;
 - recommendation feedback loop: "Không hợp gu", "Không phải lúc này", "Quá xa", "Quá đắt";
 - feedback-aware ranking: durable taste learning only for real preference signals, with contextual/decaying penalties for temporary signals;
 - smarter personal ranking with visible recommendation reasons;
@@ -207,6 +208,7 @@ supabase/migrations/20260927172409_reset_planner_telemetry_after_semantics_chang
 supabase/migrations/20260927173434_idempotent_active_plan_start.sql
 supabase/migrations/20260927174110_idempotent_personal_visits.sql
 supabase/migrations/20260927174553_idempotent_personal_visits_optional_rating.sql
+supabase/migrations/20260928165500_group_polls_mvp.sql
 supabase/migrations/20260927153331_profile_data_reset.sql
 ```
 
@@ -279,7 +281,7 @@ persisted into active-plan snapshots.
 1. collect enough real Planner Health samples before considering any automatic tuning;
 2. add richer friction attribution only if telemetry shows a repeatable problem, instead of adding more counters pre-emptively;
 3. add Supabase Auth only when account recovery and permanent multi-device identity are worth the friction; the one-time transfer code covers the anonymous phase;
-4. Groups and group voting after the personal loop is mature.
+4. expand Group Polls only after real usage: owner close/reopen, optional multi-choice and turning the winning place into a fresh plan.
 
 
 ## Manual Vercel deployment
