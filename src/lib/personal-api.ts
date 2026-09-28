@@ -10,6 +10,7 @@ import type {
   CompletedPersonalPlan,
   CompletedPlanFeedbackInput,
   DailyDiscoveryKind,
+  GroupPoll,
   ItineraryShareSource,
   OwnedItineraryShare,
   DailyDiscoveryRecord,
@@ -133,6 +134,24 @@ export const personalApi = {
       method: "DELETE",
       body: { slug }
     }),
+
+  createGroupPoll: (candidates: Place[], title?: string) =>
+    api<{ poll: GroupPoll }>("/api/personal/group-polls", {
+      method: "POST",
+      body: { candidates, title }
+    }),
+
+  groupPoll: {
+    get: (slug: string) =>
+      api<{ poll: GroupPoll }>(
+        "/api/groups/" + encodeURIComponent(slug)
+      ),
+    vote: (slug: string, placeId: string) =>
+      api<{ poll: GroupPoll }>(
+        "/api/groups/" + encodeURIComponent(slug),
+        { method: "PUT", body: { placeId } }
+      )
+  },
 
   resetProfile: () =>
     api<{ reset: true; removedPhotoObjects: number }>(
