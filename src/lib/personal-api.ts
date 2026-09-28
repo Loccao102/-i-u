@@ -282,7 +282,7 @@ export const personalApi = {
     ),
 
   checkIn: (placeId: string) =>
-    api<VisitRecord>(
+    api<{ visit: VisitRecord; created: boolean }>(
       "/api/personal/checkins/" + encodeURIComponent(placeId),
       { method: "POST", body: {} }
     ),

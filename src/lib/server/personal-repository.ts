@@ -709,29 +709,73 @@ export async function deleteRecommendationFeedback(
   dbError(error, "Delete recommendation feedback");
 }
 
+export async function addVisitIfNew(
+  ownerKey: string,
+  placeId: string,
+  ratingStars: number | null,
+  visitedAt = new Date().toISOString()
+): Promise<{ visit: VisitRecord; created: boolean }> {
+  const { data, error } = await getSupabaseAdmin().rpc(
+    "add_personal_visit_if_new",
+    {
+      p_owner_key: ownerKey,
+      p_id: randomUUID(),
+      p_place_id: placeId,
+      p_visited_at: visitedAt,
+      p_window_minutes: 120,
+      ...(ratingStars === null
+        ? {}
+        : { p_rating_stars: ratingStars })
+    }
+  );
+
+  dbError(error, "Add visit");
+
+  const result =
+    data && typeof data === "object" && !Array.isArray(data)
+      ? (data as Record<string, unknown>)
+      : {};
+  const rawVisit =
+    result.visit &&
+    typeof result.visit === "object" &&
+    !Array.isArray(result.visit)
+      ? (result.visit as Record<string, unknown>)
+      : null;
+
+  if (!rawVisit) {
+    throw new Error("Add visit: invalid database response");
+  }
+
+  const rawStars = rawVisit.ratingStars;
+  const visit: VisitRecord = {
+    id: String(rawVisit.id ?? ""),
+    placeId: String(rawVisit.placeId ?? ""),
+    visitedAt: String(rawVisit.visitedAt ?? ""),
+    ratingStars:
+      rawStars === null || rawStars === undefined
+        ? null
+        : Number(rawStars)
+  };
+
+  if (!visit.id || !visit.placeId || !visit.visitedAt) {
+    throw new Error("Add visit: incomplete database response");
+  }
+
+  return {
+    visit,
+    created: result.created === true
+  };
+}
+
 export async function addVisit(
   ownerKey: string,
   placeId: string,
   ratingStars: number | null,
   visitedAt = new Date().toISOString()
 ): Promise<VisitRecord> {
-  const visit: VisitRecord = {
-    id: randomUUID(),
-    placeId,
-    visitedAt,
-    ratingStars
-  };
-
-  const { error } = await getSupabaseAdmin().from("visits").insert({
-    owner_key: ownerKey,
-    id: visit.id,
-    place_id: visit.placeId,
-    visited_at: visit.visitedAt,
-    rating_stars: visit.ratingStars
-  });
-
-  dbError(error, "Add visit");
-  return visit;
+  return (
+    await addVisitIfNew(ownerKey, placeId, ratingStars, visitedAt)
+  ).visit;
 }
 
 export async function createCollection(

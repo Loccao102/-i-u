@@ -9,7 +9,7 @@ import type {
   ActivePlanSnapshot
 } from "../types";
 import { parseActivePlanSnapshot } from "./input";
-import { addVisit } from "./personal-repository";
+import { addVisitIfNew } from "./personal-repository";
 import { getSupabaseAdmin } from "./supabase";
 
 function dbError(error: { message?: string } | null, context: string) {
@@ -109,20 +109,6 @@ export async function startActivePlan(
   };
 }
 
-async function hasRecentVisit(ownerKey: string, placeId: string) {
-  const since = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-  const { data, error } = await getSupabaseAdmin()
-    .from("visits")
-    .select("id")
-    .eq("owner_key", ownerKey)
-    .eq("place_id", placeId)
-    .gte("visited_at", since)
-    .limit(1);
-
-  dbError(error, "Check recent plan visit");
-  return (data?.length ?? 0) > 0;
-}
-
 export async function advanceActivePlan(
   ownerKey: string,
   action: "complete" | "skip",
@@ -167,11 +153,12 @@ export async function advanceActivePlan(
   let recordedVisit = false;
 
   if (action === "complete" && stopId) {
-    const alreadyVisited = await hasRecentVisit(ownerKey, stopId);
-    if (!alreadyVisited) {
-      await addVisit(ownerKey, stopId, null);
-      recordedVisit = true;
-    }
+    const visitResult = await addVisitIfNew(
+      ownerKey,
+      stopId,
+      null
+    );
+    recordedVisit = visitResult.created;
   }
 
   const finished = result.finished === true;
