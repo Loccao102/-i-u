@@ -623,6 +623,7 @@ function buildWithGuardrails(input: {
   relaxedBudget: boolean;
   travelMatrix?: PlannerTravelMatrix;
   replayTemplate?: PlannerReplayTemplate | null;
+  anchorPlaceId?: string | null;
 }) {
   const {
     places,
@@ -632,12 +633,14 @@ function buildWithGuardrails(input: {
     variant,
     relaxedBudget,
     travelMatrix,
-    replayTemplate
+    replayTemplate,
+    anchorPlaceId
   } = input;
   const stages =
     replayTemplate?.stops.length
       ? replayTemplate.stops.map((stop) => stop.stage)
       : stagesFor(preferences.scenario, preferences.durationHours);
+  const activeAnchorPlaceId = replayTemplate ? null : anchorPlaceId ?? null;
   const maxDurationMinutes = preferences.durationHours * 60;
   const planStart = planStartDate(preferences);
 
@@ -767,7 +770,12 @@ function buildWithGuardrails(input: {
           travelSource: "road" | "heuristic";
         } => item !== null
       )
-      .sort((a, b) => b.score - a.score);
+      .sort((a, b) => {
+        const aIsAnchor = activeAnchorPlaceId === a.place.id;
+        const bIsAnchor = activeAnchorPlaceId === b.place.id;
+        if (aIsAnchor !== bIsAnchor) return aIsAnchor ? -1 : 1;
+        return b.score - a.score;
+      });
 
     const chosen = stageCandidates[0];
     const templateStop = replayTemplate?.stops[index];
@@ -867,6 +875,7 @@ export function buildEveningPlan(input: {
   variant?: number;
   travelMatrix?: PlannerTravelMatrix;
   replayTemplate?: PlannerReplayTemplate | null;
+  anchorPlaceId?: string | null;
 }): EveningPlan | null {
   const { places, preferences, signals, origin } = input;
   const variant = input.variant ?? 0;
@@ -879,7 +888,8 @@ export function buildEveningPlan(input: {
     variant,
     relaxedBudget: false,
     travelMatrix: input.travelMatrix,
-    replayTemplate: input.replayTemplate
+    replayTemplate: input.replayTemplate,
+    anchorPlaceId: input.anchorPlaceId
   });
 
   if (generated.selected.length === 0) {
@@ -891,7 +901,8 @@ export function buildEveningPlan(input: {
       variant,
       relaxedBudget: true,
       travelMatrix: input.travelMatrix,
-      replayTemplate: input.replayTemplate
+      replayTemplate: input.replayTemplate,
+      anchorPlaceId: input.anchorPlaceId
     });
   }
 
