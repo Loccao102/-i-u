@@ -86,6 +86,10 @@ export function errorJson(
       status: 410,
       message: "Phiên bình chọn đã hết hạn hoặc đã đóng."
     },
+    GROUP_POLL_FORBIDDEN: {
+      status: 403,
+      message: "Chỉ người tạo poll trên profile này mới có thể đóng hoặc mở lại."
+    },
     PROFILE_RESET_CONFIRMATION_REQUIRED: {
       status: 400,
       message: "Nhập XOA để xác nhận xóa toàn bộ dữ liệu profile."
