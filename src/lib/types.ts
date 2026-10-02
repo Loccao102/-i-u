@@ -556,6 +556,7 @@ export type GroupPoll = {
   expiresAt: string;
   closedAt: string | null;
   isOpen: boolean;
+  isOwner: boolean;
 };
 
 export type ActivePlanAdvanceResult = {
