@@ -4889,6 +4889,12 @@ textarea:focus-visible {
   text-decoration: none;
 }
 
+.group-poll-hero__actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
 .group-poll-hero__top button {
   border: 1px solid #d6ddd5;
   border-radius: 999px;
@@ -4898,6 +4904,11 @@ textarea:focus-visible {
   cursor: pointer;
   font-size: 9px;
   font-weight: 800;
+}
+
+.group-poll-hero__top button:disabled {
+  opacity: .55;
+  cursor: wait;
 }
 
 .group-poll-hero h1,
@@ -4932,6 +4943,45 @@ textarea:focus-visible {
   color: #5c675f;
   font-size: 9px;
   font-weight: 800;
+}
+
+.group-poll-result {
+  margin-top: 12px;
+  border: 1px solid #c9dbc9;
+  border-radius: 16px;
+  padding: 13px 14px;
+  background: #f3f8f3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.group-poll-result > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.group-poll-result strong {
+  font-size: 15px;
+}
+
+.group-poll-result small {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.group-poll-result a {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 9px 11px;
+  background: #315d3e;
+  color: white;
+  font-size: 9px;
+  font-weight: 900;
+  text-decoration: none;
 }
 
 .group-poll-error {
@@ -5082,9 +5132,19 @@ textarea:focus-visible {
 
 @media (max-width: 760px) {
   .compare-group-poll,
-  .group-poll-footer {
+  .group-poll-footer,
+  .group-poll-result {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .group-poll-hero__actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .group-poll-result a {
+    text-align: center;
   }
 
   .compare-group-poll button {
