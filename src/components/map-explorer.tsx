@@ -451,6 +451,103 @@ function daypartLabel(hour: number) {
   return "Muộn";
 }
 
+function pollAnchorScenarios(kind: string, name: string): Scenario[] {
+  const value = (kind + " " + name).toLocaleLowerCase("vi-VN");
+
+  if (
+    /restaurant|food|nhà hàng|quán ăn|bún|phở|cơm|lẩu|nướng|pizza|burger/.test(
+      value
+    )
+  ) {
+    return ["date", "friends", "food"];
+  }
+
+  if (
+    /activity|sport|museum|park|vui chơi|bowling|billiard|bida|game|cinema|rạp|karaoke|workshop/.test(
+      value
+    )
+  ) {
+    return ["date", "friends", "fun"];
+  }
+
+  return ["date", "friends", "coffee", "chill"];
+}
+
+function pollAnchorScenario(place: Place): Scenario {
+  if (place.scenarios.includes("fun")) return "fun";
+  if (place.scenarios.includes("food")) return "food";
+  return "coffee";
+}
+
+function parsePollPlanAnchor(params: URLSearchParams): Place | null {
+  if (!params.get("fromPoll")) return null;
+
+  const name = (params.get("anchorName") ?? "").trim().slice(0, 100);
+  const kind = (params.get("anchorKind") ?? "Địa điểm").trim().slice(0, 80);
+  const latitude = Number(params.get("anchorLat"));
+  const longitude = Number(params.get("anchorLng"));
+
+  if (
+    name.length < 2 ||
+    !Number.isFinite(latitude) ||
+    latitude < -90 ||
+    latitude > 90 ||
+    !Number.isFinite(longitude) ||
+    longitude < -180 ||
+    longitude > 180
+  ) {
+    return null;
+  }
+
+  const sourceId = (params.get("anchorId") ?? "").trim().slice(0, 180);
+  const providerId = sourceId.startsWith("provider:")
+    ? sourceId.slice("provider:".length).trim() || undefined
+    : undefined;
+  const id = /^[0-9a-f-]{36}$/i.test(sourceId)
+    ? sourceId
+    : globalThis.crypto.randomUUID();
+  const averageForTwo =
+    (params.get("anchorCost") ?? "").trim().slice(0, 100) ||
+    "Chưa có dữ liệu";
+  const publicRating = Math.max(
+    0,
+    Math.min(5, Number(params.get("anchorRating")) || 0)
+  );
+  const match = Math.max(
+    0,
+    Math.min(100, Math.round(Number(params.get("anchorMatch")) || 72))
+  );
+  const scenarios = pollAnchorScenarios(kind, name);
+
+  return {
+    id,
+    name,
+    kind,
+    description: "Địa điểm được chuyển từ poll nhóm.",
+    latitude,
+    longitude,
+    distanceKm: 0,
+    priceLabel: "$",
+    averageForTwo,
+    costSource: "unknown",
+    costConfidence: 0,
+    publicRating,
+    match,
+    communityNote: "Lựa chọn từ poll nhóm · dữ liệu snapshot khi tạo poll.",
+    openUntil: "Chưa rõ",
+    bestTime: "Theo kế hoạch nhóm",
+    noise: "Vừa",
+    crowd: "Vừa",
+    tags: ["Vote nhóm"],
+    scenarios,
+    note: "",
+    accent: "#7b9e87",
+    source: providerId ? "provider" : "personal",
+    providerId,
+    address: (params.get("anchorAddress") ?? "").trim().slice(0, 260) || undefined
+  };
+}
+
 export function MapExplorer() {
   const [customPlaces, setCustomPlaces] = useState<Place[]>([]);
   const [saved, setSaved] = useState(() => new Set<string>());
@@ -537,6 +634,7 @@ export function MapExplorer() {
   const [planStartLoading, setPlanStartLoading] = useState(false);
   const [planReplayTemplate, setPlanReplayTemplate] =
     useState<PlannerReplayTemplate | null>(null);
+  const [planAnchor, setPlanAnchor] = useState<Place | null>(null);
   const [plannerMetrics, setPlannerMetrics] =
     useState<PlannerMetricsSummary | null>(null);
   const [activePlan, setActivePlan] = useState<EveningPlan | null>(null);
@@ -579,6 +677,8 @@ export function MapExplorer() {
 
   const planStartInFlightRef = useRef(false);
   const checkInInFlightRef = useRef(false);
+  const pollHandoffHandledRef = useRef(false);
+  const planAnchorDiscoveryStartedRef = useRef(false);
   const mapNodeRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markerRefs = useRef<MapLibreMarker[]>([]);
@@ -639,6 +739,38 @@ export function MapExplorer() {
   useEffect(() => {
     void loadSnapshot();
   }, [loadSnapshot]);
+
+  useEffect(() => {
+    if (dataStatus !== "ready" || pollHandoffHandledRef.current) return;
+
+    pollHandoffHandledRef.current = true;
+    const anchor = parsePollPlanAnchor(
+      new URLSearchParams(window.location.search)
+    );
+    if (!anchor) return;
+
+    setPlanAnchor(anchor);
+    setView("discover");
+    setScenario("all");
+    setSelectedId(anchor.id);
+    setPlanReplayTemplate(null);
+    setPlanVariant(0);
+    setPlanWeather(null);
+    setActivePlan(null);
+    setPlanScenario(pollAnchorScenario(anchor));
+    setNotice(
+      "Đã nhận lựa chọn từ poll · đang tìm thêm địa điểm quanh " +
+        anchor.name +
+        "."
+    );
+
+    planDialogRef.current?.showModal();
+    window.history.replaceState(
+      null,
+      "",
+      window.location.pathname + window.location.hash
+    );
+  }, [dataStatus]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(new Date()), 5 * 60 * 1000);
@@ -747,10 +879,13 @@ export function MapExplorer() {
     ]
   );
 
-  const allPlaces = useMemo(
-    () => [...customPlaces, ...discoveredPlaces],
-    [customPlaces, discoveredPlaces]
-  );
+  const allPlaces = useMemo(() => {
+    const base = [...customPlaces, ...discoveredPlaces];
+    if (!planAnchor || base.some((place) => place.id === planAnchor.id)) {
+      return base;
+    }
+    return [...base, planAnchor];
+  }, [customPlaces, discoveredPlaces, planAnchor]);
 
   const plannerCostProfile = useMemo(
     () => derivePlannerCostProfile(customPlaces),
@@ -1786,6 +1921,28 @@ export function MapExplorer() {
     }
   }
 
+  useEffect(() => {
+    if (
+      !mapReady ||
+      !mapRef.current ||
+      !planAnchor ||
+      planAnchorDiscoveryStartedRef.current
+    ) {
+      return;
+    }
+
+    planAnchorDiscoveryStartedRef.current = true;
+    mapRef.current.flyTo({
+      center: [planAnchor.longitude, planAnchor.latitude],
+      zoom: 14,
+      duration: 650,
+      essential: true
+    });
+    mapRef.current.once("moveend", () => {
+      void searchCurrentArea();
+    });
+  }, [mapReady, planAnchor]);
+
   function clearViewportFilter() {
     setViewportBounds(null);
     setViewportPersonalIds(null);
@@ -2021,6 +2178,12 @@ export function MapExplorer() {
   }
 
   function plannerOrigin(): UserLocation {
+    if (planAnchor) {
+      return {
+        latitude: planAnchor.latitude,
+        longitude: planAnchor.longitude
+      };
+    }
     if (userLocation) return userLocation;
     const center = mapRef.current?.getCenter();
     return center
@@ -2110,12 +2273,26 @@ export function MapExplorer() {
     let travelMatrix: PlannerTravelMatrix | undefined;
     const routingSource =
       preferredSource.length > 0 ? preferredSource : source;
-    const routingCandidates = plannerRoutingCandidates(
+    let routingCandidates = plannerRoutingCandidates(
       routingSource,
       preferences,
       6,
       replayTemplate
     );
+    if (planAnchor) {
+      const anchorCandidate = routingSource.find(
+        (place) => place.id === planAnchor.id
+      );
+      if (
+        anchorCandidate &&
+        !routingCandidates.some((place) => place.id === anchorCandidate.id)
+      ) {
+        routingCandidates = [
+          anchorCandidate,
+          ...routingCandidates
+        ].slice(0, 6);
+      }
+    }
 
     if (routingCandidates.length > 0) {
       try {
@@ -2155,7 +2332,8 @@ export function MapExplorer() {
         origin,
         variant: nextVariant,
         travelMatrix,
-        replayTemplate
+        replayTemplate,
+        anchorPlaceId: planAnchor?.id ?? null
       });
 
     let result = build(preferredSource);
@@ -2177,6 +2355,16 @@ export function MapExplorer() {
     setPlanWeatherLoading(false);
     setPlanVariant(nextVariant);
     setActivePlan(result);
+
+    if (
+      result &&
+      planAnchor &&
+      !result.stops.some((stop) => stop.place.id === planAnchor.id)
+    ) {
+      setNotice(
+        "Mốc nhóm không vượt qua guardrail hiện tại (giờ mở cửa, khoảng cách, budget hoặc thời lượng), nên planner không ép chèn vào route."
+      );
+    }
 
     if (result) {
       void personalApi.plannerMetrics
@@ -2479,6 +2667,20 @@ export function MapExplorer() {
 
   async function persistProviderPlace(place: Place) {
     if (customIds.has(place.id)) return place;
+
+    if (
+      planAnchor &&
+      place.id === planAnchor.id &&
+      (place.source !== "provider" || !place.providerId)
+    ) {
+      const created = await personalApi.createPlace({
+        ...place,
+        source: "personal",
+        providerId: undefined
+      });
+      setPlanAnchor(created);
+      return created;
+    }
 
     if (place.source !== "provider" || !place.providerId) {
       throw new Error("Địa điểm này chưa thể lưu tự động.");
@@ -5836,6 +6038,29 @@ export function MapExplorer() {
             Ghép các chặng gần nhau theo gu, budget, mood và dự báo thời tiết đúng giờ bạn định đi.
           </p>
 
+          {planAnchor ? (
+            <section className="plan-replay-banner">
+              <div>
+                <span className="eyebrow">Mốc từ poll nhóm</span>
+                <strong>{planAnchor.name}</strong>
+                <small>
+                  Planner dùng chỗ này làm tâm route và ưu tiên giữ nó nếu vẫn
+                  phù hợp giờ mở cửa, khoảng cách, budget và thời lượng.
+                </small>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setPlanAnchor(null);
+                  setActivePlan(null);
+                  planAnchorDiscoveryStartedRef.current = false;
+                }}
+              >
+                Bỏ mốc nhóm
+              </button>
+            </section>
+          ) : null}
+
           {planReplayTemplate ? (
             <section className="plan-replay-banner">
               <div>
@@ -6053,14 +6278,20 @@ export function MapExplorer() {
           <button
             className="primary-button primary-button--wide"
             type="button"
-            disabled={planWeatherLoading}
+            disabled={
+              planWeatherLoading || Boolean(planAnchor && viewportLoading)
+            }
             onClick={() => void generatePlan(0)}
           >
-            {planWeatherLoading
-              ? "Đang xem dự báo…"
-              : planReplayTemplate
-                ? "Tạo lại plan hôm nay"
-                : "Tạo kế hoạch"}
+            {planAnchor && viewportLoading
+              ? "Đang tìm địa điểm quanh mốc…"
+              : planWeatherLoading
+                ? "Đang xem dự báo…"
+                : planReplayTemplate
+                  ? "Tạo lại plan hôm nay"
+                  : planAnchor
+                    ? "Tạo kế hoạch quanh mốc nhóm"
+                    : "Tạo kế hoạch"}
           </button>
 
           {planWeather ? (

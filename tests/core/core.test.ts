@@ -281,3 +281,60 @@ test("valid replay keeps the original stop and replay metadata stays ephemeral",
   assert.equal("replay" in snapshot, false);
   assert.ok(snapshot.quality);
 });
+
+test("planner keeps a valid anchored place even when another candidate scores higher", () => {
+  const anchor = place({
+    id: "anchor-cafe",
+    name: "Cafe cả nhóm chọn",
+    match: 55
+  });
+  const higherScore = place({
+    id: "high-score-cafe",
+    name: "Cafe điểm cao hơn",
+    match: 99
+  });
+
+  const plan = buildEveningPlan({
+    places: [higherScore, anchor],
+    preferences,
+    signals,
+    origin: {
+      latitude: 21.0278,
+      longitude: 105.8342
+    },
+    anchorPlaceId: anchor.id
+  });
+
+  assert.ok(plan);
+  assert.equal(plan.stops[0]?.place.id, anchor.id);
+});
+
+test("planner does not force an anchored place through opening-hours guardrails", () => {
+  const closedAnchor = place({
+    id: "anchor-closed",
+    name: "Cafe poll đã đóng cửa",
+    match: 99,
+    openUntil: "Mo 08:00-10:00"
+  });
+  const fallback = place({
+    id: "anchor-fallback",
+    name: "Cafe fallback",
+    match: 70,
+    openUntil: "24/7"
+  });
+
+  const plan = buildEveningPlan({
+    places: [closedAnchor, fallback],
+    preferences,
+    signals,
+    origin: {
+      latitude: 21.0278,
+      longitude: 105.8342
+    },
+    anchorPlaceId: closedAnchor.id
+  });
+
+  assert.ok(plan);
+  assert.equal(plan.stops[0]?.place.id, fallback.id);
+});
+
