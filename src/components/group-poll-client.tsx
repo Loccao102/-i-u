@@ -49,6 +49,7 @@ export function GroupPollClient({ slug }: GroupPollClientProps) {
   const [votingId, setVotingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [managing, setManaging] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -85,6 +86,16 @@ export function GroupPollClient({ slug }: GroupPollClientProps) {
     [poll]
   );
 
+  const leaders = useMemo(
+    () =>
+      poll && leaderVotes > 0
+        ? poll.candidates.filter(
+            (candidate) => candidate.votes === leaderVotes
+          )
+        : [],
+    [poll, leaderVotes]
+  );
+
   async function vote(placeId: string) {
     if (!poll?.isOpen || votingId) return;
 
@@ -101,6 +112,25 @@ export function GroupPollClient({ slug }: GroupPollClientProps) {
       );
     } finally {
       setVotingId(null);
+    }
+  }
+
+  async function setPollOpen(open: boolean) {
+    if (!poll?.isOwner || managing) return;
+
+    setManaging(true);
+    setError(null);
+    try {
+      const result = await personalApi.groupPoll.setOpen(slug, open);
+      setPoll(result.poll);
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Không thể cập nhật trạng thái poll."
+      );
+    } finally {
+      setManaging(false);
     }
   }
 
@@ -140,9 +170,24 @@ export function GroupPollClient({ slug }: GroupPollClientProps) {
       <header className="group-poll-hero">
         <div className="group-poll-hero__top">
           <a href="/" className="group-poll-brand">ĐiĐâu</a>
-          <button type="button" onClick={() => void copyLink()}>
-            {copied ? "Đã copy" : "Copy link"}
-          </button>
+          <div className="group-poll-hero__actions">
+            {poll.isOwner ? (
+              <button
+                type="button"
+                disabled={managing}
+                onClick={() => void setPollOpen(!poll.isOpen)}
+              >
+                {managing
+                  ? "Đang cập nhật…"
+                  : poll.isOpen
+                    ? "Đóng poll"
+                    : "Mở lại 24h"}
+              </button>
+            ) : null}
+            <button type="button" onClick={() => void copyLink()}>
+              {copied ? "Đã copy" : "Copy link"}
+            </button>
+          </div>
         </div>
         <span className="eyebrow">Vote nhóm · không cần tài khoản</span>
         <h1>{poll.title}</h1>
@@ -154,10 +199,50 @@ export function GroupPollClient({ slug }: GroupPollClientProps) {
           <span>{poll.totalVotes} lượt vote</span>
           <span>Hết hạn {formatExpiry(poll.expiresAt)}</span>
           <span>{poll.isOpen ? "Đang mở" : "Đã đóng"}</span>
+          {poll.isOwner ? <span>Bạn là người tạo poll</span> : null}
         </div>
       </header>
 
       {error ? <div className="group-poll-error">{error}</div> : null}
+
+      {!poll.isOpen ? (
+        <section className="group-poll-result">
+          {leaders.length === 1 ? (
+            <>
+              <div>
+                <span className="eyebrow">Kết quả hiện tại</span>
+                <strong>{leaders[0]!.name}</strong>
+                <small>
+                  Dẫn đầu với {leaders[0]!.votes} lượt vote. Poll đã đóng nên
+                  kết quả sẽ không đổi cho tới khi người tạo mở lại.
+                </small>
+              </div>
+              <a href={plannerHandoffHref(slug, leaders[0]!)}>
+                Chốt kèo & lên plan →
+              </a>
+            </>
+          ) : leaders.length > 1 ? (
+            <div>
+              <span className="eyebrow">Kết quả đang hòa</span>
+              <strong>
+                {leaders.map((candidate) => candidate.name).join(" · ")}
+              </strong>
+              <small>
+                Mỗi lựa chọn đang có {leaderVotes} lượt vote. Người tạo có thể
+                mở lại poll nếu muốn cả nhóm phân định tiếp.
+              </small>
+            </div>
+          ) : (
+            <div>
+              <span className="eyebrow">Poll đã đóng</span>
+              <strong>Chưa có lượt vote nào</strong>
+              <small>
+                Người tạo có thể mở lại poll thêm 24 giờ để tiếp tục bình chọn.
+              </small>
+            </div>
+          )}
+        </section>
+      ) : null}
 
       <section className="group-poll-grid">
         {poll.candidates.map((candidate) => {

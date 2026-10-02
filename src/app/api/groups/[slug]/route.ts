@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
 import {
   castGroupPollVote,
-  getGroupPoll
+  getGroupPoll,
+  setGroupPollOpen
 } from "@/lib/server/group-poll";
 import { errorJson, profileJson } from "@/lib/server/http";
 import { resolveAnonymousProfile } from "@/lib/server/profile";
@@ -65,3 +66,29 @@ export async function PUT(
     );
   }
 }
+
+export async function PATCH(
+  request: NextRequest,
+  context: RouteContext
+) {
+  const profile = resolveAnonymousProfile(request);
+
+  try {
+    const body = await readJsonObject(request);
+    const { slug } = await context.params;
+    const poll = await setGroupPollOpen(
+      slug,
+      profile.ownerKey,
+      body.open
+    );
+
+    return profileJson(profile, { poll });
+  } catch (error) {
+    return errorJson(
+      profile,
+      error,
+      "Không thể cập nhật trạng thái phiên bình chọn."
+    );
+  }
+}
+

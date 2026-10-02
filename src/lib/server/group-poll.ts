@@ -100,6 +100,7 @@ function parseCandidates(value: unknown): GroupPollCandidate[] {
 
 type PollRow = {
   id: string;
+  owner_key: string;
   slug: string;
   title: string;
   candidates: unknown;
@@ -144,7 +145,8 @@ function mapPoll(
     createdAt: row.created_at,
     expiresAt: row.expires_at,
     closedAt: row.closed_at,
-    isOpen
+    isOpen,
+    isOwner: row.owner_key === voterKey
   };
 }
 
@@ -154,7 +156,7 @@ async function getPollRow(slug: string): Promise<PollRow | null> {
   const { data, error } = await getSupabaseAdmin()
     .from("group_polls")
     .select(
-      "id,slug,title,candidates,created_at,expires_at,closed_at"
+      "id,owner_key,slug,title,candidates,created_at,expires_at,closed_at"
     )
     .eq("slug", slug)
     .maybeSingle();
@@ -188,7 +190,7 @@ export async function createGroupPoll(
         candidates: candidates as unknown as Json
       })
       .select(
-        "id,slug,title,candidates,created_at,expires_at,closed_at"
+        "id,owner_key,slug,title,candidates,created_at,expires_at,closed_at"
       )
       .single();
 
@@ -261,3 +263,40 @@ export async function castGroupPollVote(
   if (!poll) throw new Error("GROUP_POLL_NOT_FOUND");
   return poll;
 }
+
+export async function setGroupPollOpen(
+  slug: string,
+  ownerKey: string,
+  openRaw: unknown
+): Promise<GroupPoll> {
+  if (typeof openRaw !== "boolean") throw new Error("INVALID_BODY");
+
+  const row = await getPollRow(slug);
+  if (!row) throw new Error("GROUP_POLL_NOT_FOUND");
+  if (row.owner_key !== ownerKey) throw new Error("GROUP_POLL_FORBIDDEN");
+
+  const now = new Date();
+  const update = openRaw
+    ? {
+        closed_at: null,
+        expires_at: new Date(
+          now.getTime() + 24 * 60 * 60 * 1000
+        ).toISOString()
+      }
+    : {
+        closed_at: now.toISOString()
+      };
+
+  const { error } = await getSupabaseAdmin()
+    .from("group_polls")
+    .update(update)
+    .eq("id", row.id)
+    .eq("owner_key", ownerKey);
+
+  dbError(error, openRaw ? "Reopen group poll" : "Close group poll");
+
+  const poll = await getGroupPoll(slug, ownerKey);
+  if (!poll) throw new Error("GROUP_POLL_NOT_FOUND");
+  return poll;
+}
+

@@ -150,6 +150,11 @@ export const personalApi = {
       api<{ poll: GroupPoll }>(
         "/api/groups/" + encodeURIComponent(slug),
         { method: "PUT", body: { placeId } }
+      ),
+    setOpen: (slug: string, open: boolean) =>
+      api<{ poll: GroupPoll }>(
+        "/api/groups/" + encodeURIComponent(slug),
+        { method: "PATCH", body: { open } }
       )
   },
 
