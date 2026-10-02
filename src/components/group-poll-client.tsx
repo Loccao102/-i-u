@@ -23,6 +23,26 @@ function ratingLabel(value: number) {
   return value > 0 ? "★ " + value.toFixed(1) : "Chưa có rating";
 }
 
+function plannerHandoffHref(
+  slug: string,
+  candidate: GroupPoll["candidates"][number]
+) {
+  const params = new URLSearchParams({
+    fromPoll: slug,
+    anchorId: candidate.placeId,
+    anchorName: candidate.name,
+    anchorKind: candidate.kind,
+    anchorLat: String(candidate.latitude),
+    anchorLng: String(candidate.longitude),
+    anchorAddress: candidate.address,
+    anchorCost: candidate.averageForTwo,
+    anchorRating: String(candidate.publicRating),
+    anchorMatch: String(candidate.match)
+  });
+
+  return "/?" + params.toString();
+}
+
 export function GroupPollClient({ slug }: GroupPollClientProps) {
   const [poll, setPoll] = useState<GroupPoll | null>(null);
   const [loading, setLoading] = useState(true);
@@ -147,6 +167,7 @@ export function GroupPollClient({ slug }: GroupPollClientProps) {
             api: "1",
             query: candidate.latitude + "," + candidate.longitude
           });
+          const plannerHref = plannerHandoffHref(slug, candidate);
 
           return (
             <article
@@ -188,6 +209,11 @@ export function GroupPollClient({ slug }: GroupPollClientProps) {
                       ? "✓ Lựa chọn của bạn"
                       : "Vote chỗ này"}
                 </button>
+                <a href={plannerHref}>
+                  {leading && leaderVotes > 0
+                    ? "Chốt kèo & lên plan →"
+                    : "Lên plan quanh chỗ này →"}
+                </a>
                 <a
                   href={"https://www.google.com/maps/search/?" + params.toString()}
                   target="_blank"
