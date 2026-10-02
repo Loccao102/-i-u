@@ -28,7 +28,7 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - OpenStreetMap Nominatim/Overpass remain as a no-key fallback so the current deployment keeps working;
 - safe client-side interpretation of common OSM opening_hours formats;
 - temporary 2–3 place shortlist with quick comparison for match, distance, price, opening state and rating;
-- anonymous **Group Polls** from a 2–3 place shortlist: one 24-hour capability link, one vote per browser/profile, live vote totals and vote switching without sign-in;
+- anonymous **Group Polls** from a 2–3 place shortlist: one 24-hour capability link, one vote per browser/profile, live vote totals and vote switching without sign-in; the creator profile can close the poll early or reopen it for a fresh 24-hour window, with winner/tie state shown explicitly;
 - **Group Poll → Planner handoff**: any poll candidate can open ĐiĐâu as a route anchor; the app recenters, discovers nearby real POIs, prioritizes the chosen place, and still refuses to force it through opening-hours, distance, budget or duration guardrails;
 - recommendation feedback loop: "Không hợp gu", "Không phải lúc này", "Quá xa", "Quá đắt";
 - feedback-aware ranking: durable taste learning only for real preference signals, with contextual/decaying penalties for temporary signals;
@@ -282,7 +282,7 @@ persisted into active-plan snapshots.
 1. collect enough real Planner Health samples before considering any automatic tuning;
 2. add richer friction attribution only if telemetry shows a repeatable problem, instead of adding more counters pre-emptively;
 3. add Supabase Auth only when account recovery and permanent multi-device identity are worth the friction; the one-time transfer code covers the anonymous phase;
-4. expand Group Polls only after real usage: owner close/reopen and optional multi-choice.
+4. consider optional multi-choice Group Polls only after real usage shows a need for it.
 
 
 ## Manual Vercel deployment
