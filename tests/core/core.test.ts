@@ -2,6 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { openingStatus } from "../../src/lib/opening-hours";
+import {
+  deriveGroupPollOutcome,
+  groupPollCandidateFromPlace,
+  isGroupPollOpen,
+  parseGroupPollCandidates
+} from "../../src/lib/group-poll";
 import { derivePlannerHealth } from "../../src/lib/planner-health";
 import {
   buildEveningPlan,
@@ -338,3 +344,131 @@ test("planner does not force an anchored place through opening-hours guardrails"
   assert.equal(plan.stops[0]?.place.id, fallback.id);
 });
 
+
+
+test("group poll lifecycle closes on manual close or expiry", () => {
+  const now = Date.parse("2026-10-06T12:00:00.000Z");
+
+  assert.equal(
+    isGroupPollOpen(
+      {
+        closedAt: null,
+        expiresAt: "2026-10-06T12:00:01.000Z"
+      },
+      now
+    ),
+    true
+  );
+  assert.equal(
+    isGroupPollOpen(
+      {
+        closedAt: "2026-10-06T11:59:00.000Z",
+        expiresAt: "2026-10-07T12:00:00.000Z"
+      },
+      now
+    ),
+    false
+  );
+  assert.equal(
+    isGroupPollOpen(
+      {
+        closedAt: null,
+        expiresAt: "2026-10-06T12:00:00.000Z"
+      },
+      now
+    ),
+    false
+  );
+  assert.equal(
+    isGroupPollOpen(
+      {
+        closedAt: null,
+        expiresAt: "not-a-date"
+      },
+      now
+    ),
+    false
+  );
+});
+
+test("group poll candidates keep validation and dedupe guardrails", () => {
+  const candidates = parseGroupPollCandidates([
+    {
+      placeId: " cafe-a ",
+      name: " Cafe A ",
+      kind: "Cafe",
+      latitude: "95",
+      longitude: "200",
+      address: "  Hà Nội  ",
+      averageForTwo: "150000",
+      publicRating: 7,
+      match: 105
+    },
+    {
+      placeId: "cafe-b",
+      name: "Cafe B",
+      kind: "Cafe",
+      latitude: 21.03,
+      longitude: 105.84,
+      address: "",
+      averageForTwo: "200000",
+      publicRating: 4.4,
+      match: 82
+    }
+  ]);
+
+  assert.equal(candidates.length, 2);
+  assert.equal(candidates[0]?.placeId, "cafe-a");
+  assert.equal(candidates[0]?.name, "Cafe A");
+  assert.equal(candidates[0]?.latitude, 90);
+  assert.equal(candidates[0]?.longitude, 180);
+  assert.equal(candidates[0]?.publicRating, 5);
+  assert.equal(candidates[0]?.match, 100);
+
+  assert.throws(
+    () =>
+      parseGroupPollCandidates([
+        candidates[0],
+        {
+          ...candidates[1],
+          placeId: candidates[0]!.placeId
+        }
+      ]),
+    /INVALID_BODY/
+  );
+});
+
+test("group poll outcome distinguishes no-vote winner and tie", () => {
+  const first = groupPollCandidateFromPlace(
+    place({ id: "poll-a", name: "Cafe A" })
+  );
+  const second = groupPollCandidateFromPlace(
+    place({ id: "poll-b", name: "Cafe B" })
+  );
+
+  const empty = deriveGroupPollOutcome([
+    { ...first, votes: 0 },
+    { ...second, votes: 0 }
+  ]);
+  assert.equal(empty.state, "no_votes");
+  assert.equal(empty.leaderVotes, 0);
+  assert.equal(empty.leaders.length, 0);
+
+  const winner = deriveGroupPollOutcome([
+    { ...first, votes: 3 },
+    { ...second, votes: 1 }
+  ]);
+  assert.equal(winner.state, "winner");
+  assert.equal(winner.leaderVotes, 3);
+  assert.equal(winner.leaders[0]?.placeId, first.placeId);
+
+  const tie = deriveGroupPollOutcome([
+    { ...first, votes: 2 },
+    { ...second, votes: 2 }
+  ]);
+  assert.equal(tie.state, "tie");
+  assert.deepEqual(
+    tie.leaders.map((candidate) => candidate.placeId),
+    [first.placeId, second.placeId]
+  );
+});
