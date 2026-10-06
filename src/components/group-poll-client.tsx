@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   deriveGroupPollOutcome,
   isGroupPollOpen
@@ -36,6 +36,7 @@ export function GroupPollClient({ slug }: GroupPollClientProps) {
   const [copied, setCopied] = useState(false);
   const [managing, setManaging] = useState(false);
   const [clockMs, setClockMs] = useState(() => Date.now());
+  const mutationVersionRef = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -99,6 +100,47 @@ export function GroupPollClient({ slug }: GroupPollClientProps) {
       clockMs
     );
 
+  useEffect(() => {
+    if (!pollIsOpen) return;
+
+    let active = true;
+
+    async function refreshPoll() {
+      if (document.visibilityState !== "visible") return;
+
+      const version = mutationVersionRef.current;
+      try {
+        const result = await personalApi.groupPoll.get(slug);
+        if (!active || version !== mutationVersionRef.current) return;
+        setPoll(result.poll);
+        setClockMs(Date.now());
+      } catch {
+        // Background refresh is best-effort; keep the last known poll visible.
+      }
+    }
+
+    const intervalId = window.setInterval(() => {
+      void refreshPoll();
+    }, 10_000);
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        void refreshPoll();
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+      document.removeEventListener(
+        "visibilitychange",
+        handleVisibilityChange
+      );
+    };
+  }, [pollIsOpen, slug]);
+
   const outcome = useMemo(
     () =>
       poll
@@ -115,6 +157,7 @@ export function GroupPollClient({ slug }: GroupPollClientProps) {
   async function vote(placeId: string) {
     if (!pollIsOpen || votingId) return;
 
+    mutationVersionRef.current += 1;
     setVotingId(placeId);
     setError(null);
     try {
@@ -135,6 +178,7 @@ export function GroupPollClient({ slug }: GroupPollClientProps) {
   async function setPollOpen(open: boolean) {
     if (!poll?.isOwner || managing) return;
 
+    mutationVersionRef.current += 1;
     setManaging(true);
     setError(null);
     try {
