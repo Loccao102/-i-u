@@ -210,6 +210,7 @@ supabase/migrations/20260927173434_idempotent_active_plan_start.sql
 supabase/migrations/20260927174110_idempotent_personal_visits.sql
 supabase/migrations/20260927174553_idempotent_personal_visits_optional_rating.sql
 supabase/migrations/20260928165500_group_polls_mvp.sql
+supabase/migrations/20261006202520_atomic_group_poll_vote.sql
 supabase/migrations/20260927153331_profile_data_reset.sql
 ```
 

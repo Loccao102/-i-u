@@ -20,6 +20,24 @@ function dbError(error: { message?: string } | null, context: string) {
   }
 }
 
+function groupPollMutationError(
+  error: { message?: string } | null,
+  context: string
+) {
+  const message = error?.message ?? "";
+  for (const code of [
+    "GROUP_POLL_NOT_FOUND",
+    "GROUP_POLL_CLOSED",
+    "INVALID_BODY"
+  ]) {
+    if (message.includes(code)) {
+      throw new Error(code);
+    }
+  }
+
+  dbError(error, context);
+}
+
 function groupPollSlug() {
   return randomBytes(12).toString("base64url");
 }
@@ -162,37 +180,16 @@ export async function castGroupPollVote(
   voterKey: string,
   placeIdRaw: unknown
 ): Promise<GroupPoll> {
-  const row = await getPollRow(slug);
-  if (!row) throw new Error("GROUP_POLL_NOT_FOUND");
-
-  if (
-    !isGroupPollOpen({
-      closedAt: row.closed_at,
-      expiresAt: row.expires_at
-    })
-  ) {
-    throw new Error("GROUP_POLL_CLOSED");
-  }
-
   const placeId = cleanText(placeIdRaw, 180);
-  const candidates = parseGroupPollCandidates(row.candidates);
-  if (!candidates.some((candidate) => candidate.placeId === placeId)) {
-    throw new Error("INVALID_BODY");
-  }
+  if (!placeId) throw new Error("INVALID_BODY");
 
-  const { error } = await getSupabaseAdmin()
-    .from("group_poll_votes")
-    .upsert(
-      {
-        poll_id: row.id,
-        voter_key: voterKey,
-        place_id: placeId,
-        updated_at: new Date().toISOString()
-      },
-      { onConflict: "poll_id,voter_key" }
-    );
+  const { error } = await getSupabaseAdmin().rpc("cast_group_poll_vote", {
+    p_slug: slug,
+    p_voter_key: voterKey,
+    p_place_id: placeId
+  });
 
-  dbError(error, "Vote group poll");
+  groupPollMutationError(error, "Vote group poll");
 
   const poll = await getGroupPoll(slug, voterKey);
   if (!poll) throw new Error("GROUP_POLL_NOT_FOUND");
