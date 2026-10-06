@@ -36,6 +36,7 @@ supabase/migrations/20260927173434_idempotent_active_plan_start.sql
 supabase/migrations/20260927174110_idempotent_personal_visits.sql
 supabase/migrations/20260927174553_idempotent_personal_visits_optional_rating.sql
 supabase/migrations/20260928165500_group_polls_mvp.sql
+supabase/migrations/20261006202520_atomic_group_poll_vote.sql
 supabase/migrations/20260927153331_profile_data_reset.sql
 ```
 
@@ -291,3 +292,16 @@ creating a second visit.
 
 The two-hour window matches the existing product interpretation that repeated
 actions at the same place during one outing should not inflate visit history.
+
+
+### Atomic Group Poll voting
+
+`cast_group_poll_vote` locks the target poll row before checking expiry/closed
+state and writing the voter's choice. This makes the close-vs-vote boundary
+transactional: if the owner closes first, a waiting vote sees the closed row
+and fails; if the vote locks first, it commits before the close can complete.
+
+The function also validates that the requested `place_id` still belongs to
+the poll snapshot and performs the one-vote-per-anonymous-profile upsert inside
+the same transaction. It is `security invoker`, executable only by the
+server-side `service_role`, while browser roles remain denied.
