@@ -274,7 +274,8 @@ deploys both require these tests to pass before the Next.js build.
 
 Current core coverage locks down opening-hours parsing, Planner Health sample
 gates, adaptive replay replacement for closed/over-budget stops, replay
-retention, and the rule that replay metadata is generation-only rather than
+retention, Group Poll candidate validation, expiry and winner/tie/no-vote
+semantics, and the rule that replay metadata is generation-only rather than
 persisted into active-plan snapshots.
 
 ## Next
