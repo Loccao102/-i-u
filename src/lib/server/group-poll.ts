@@ -1,11 +1,16 @@
 import "server-only";
 
 import { randomBytes } from "node:crypto";
+import {
+  GROUP_POLL_DURATION_MS,
+  groupPollCandidateFromPlace,
+  isGroupPollOpen,
+  parseGroupPollCandidates
+} from "../group-poll";
 import { getSupabaseAdmin } from "./supabase";
 import type { Json } from "../database.types";
 import type {
   GroupPoll,
-  GroupPollCandidate,
   Place
 } from "../types";
 
@@ -25,77 +30,11 @@ function validSlug(value: string) {
 
 function cleanText(value: unknown, max: number, fallback = "") {
   if (typeof value !== "string") return fallback;
-  return value.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
-}
-
-function finiteNumber(value: unknown, min: number, max: number) {
-  const parsed =
-    typeof value === "number"
-      ? value
-      : typeof value === "string" && value.trim()
-        ? Number(value)
-        : Number.NaN;
-
-  if (!Number.isFinite(parsed)) throw new Error("INVALID_BODY");
-  return Math.min(max, Math.max(min, parsed));
-}
-
-function candidateFromPlace(place: Place): GroupPollCandidate {
-  return {
-    placeId: cleanText(place.id, 180),
-    name: cleanText(place.name, 100),
-    kind: cleanText(place.kind, 80, "Địa điểm"),
-    latitude: finiteNumber(place.latitude, -90, 90),
-    longitude: finiteNumber(place.longitude, -180, 180),
-    address: cleanText(place.address, 220),
-    averageForTwo: cleanText(place.averageForTwo, 80, "Chưa có dữ liệu"),
-    publicRating: finiteNumber(place.publicRating ?? 0, 0, 5),
-    match: Math.round(finiteNumber(place.match ?? 0, 0, 100))
-  };
-}
-
-function parseCandidate(value: unknown): GroupPollCandidate {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("INVALID_BODY");
-  }
-
-  const row = value as Record<string, unknown>;
-  const placeId = cleanText(row.placeId, 180);
-  const name = cleanText(row.name, 100);
-
-  if (!placeId || !name) throw new Error("INVALID_BODY");
-
-  return {
-    placeId,
-    name,
-    kind: cleanText(row.kind, 80, "Địa điểm"),
-    latitude: finiteNumber(row.latitude, -90, 90),
-    longitude: finiteNumber(row.longitude, -180, 180),
-    address: cleanText(row.address, 220),
-    averageForTwo: cleanText(
-      row.averageForTwo,
-      80,
-      "Chưa có dữ liệu"
-    ),
-    publicRating: finiteNumber(row.publicRating ?? 0, 0, 5),
-    match: Math.round(finiteNumber(row.match ?? 0, 0, 100))
-  };
-}
-
-function parseCandidates(value: unknown): GroupPollCandidate[] {
-  if (!Array.isArray(value) || value.length < 2 || value.length > 3) {
-    throw new Error("INVALID_BODY");
-  }
-
-  const seen = new Set<string>();
-  const candidates = value.map(parseCandidate);
-
-  for (const candidate of candidates) {
-    if (seen.has(candidate.placeId)) throw new Error("INVALID_BODY");
-    seen.add(candidate.placeId);
-  }
-
-  return candidates;
+  return value
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, max);
 }
 
 type PollRow = {
@@ -119,18 +58,11 @@ function mapPoll(
   votes: VoteRow[],
   voterKey: string
 ): GroupPoll {
-  const candidates = parseCandidates(row.candidates);
+  const candidates = parseGroupPollCandidates(row.candidates);
   const counts = new Map<string, number>();
   for (const vote of votes) {
     counts.set(vote.place_id, (counts.get(vote.place_id) ?? 0) + 1);
   }
-
-  const now = Date.now();
-  const expiresAt = new Date(row.expires_at).getTime();
-  const isOpen =
-    row.closed_at === null &&
-    Number.isFinite(expiresAt) &&
-    expiresAt > now;
 
   return {
     slug: row.slug,
@@ -145,7 +77,10 @@ function mapPoll(
     createdAt: row.created_at,
     expiresAt: row.expires_at,
     closedAt: row.closed_at,
-    isOpen,
+    isOpen: isGroupPollOpen({
+      closedAt: row.closed_at,
+      expiresAt: row.expires_at
+    }),
     isOwner: row.owner_key === voterKey
   };
 }
@@ -172,8 +107,8 @@ export async function createGroupPoll(
     candidates: Place[];
   }
 ): Promise<GroupPoll> {
-  const candidates = parseCandidates(
-    input.candidates.map(candidateFromPlace)
+  const candidates = parseGroupPollCandidates(
+    input.candidates.map(groupPollCandidateFromPlace)
   );
   const title =
     cleanText(input.title, 80) || "Chọn chỗ đi cùng nhau";
@@ -230,17 +165,17 @@ export async function castGroupPollVote(
   const row = await getPollRow(slug);
   if (!row) throw new Error("GROUP_POLL_NOT_FOUND");
 
-  const expiresAt = new Date(row.expires_at).getTime();
   if (
-    row.closed_at !== null ||
-    !Number.isFinite(expiresAt) ||
-    expiresAt <= Date.now()
+    !isGroupPollOpen({
+      closedAt: row.closed_at,
+      expiresAt: row.expires_at
+    })
   ) {
     throw new Error("GROUP_POLL_CLOSED");
   }
 
   const placeId = cleanText(placeIdRaw, 180);
-  const candidates = parseCandidates(row.candidates);
+  const candidates = parseGroupPollCandidates(row.candidates);
   if (!candidates.some((candidate) => candidate.placeId === placeId)) {
     throw new Error("INVALID_BODY");
   }
@@ -280,7 +215,7 @@ export async function setGroupPollOpen(
     ? {
         closed_at: null,
         expires_at: new Date(
-          now.getTime() + 24 * 60 * 60 * 1000
+          now.getTime() + GROUP_POLL_DURATION_MS
         ).toISOString()
       }
     : {
@@ -299,4 +234,3 @@ export async function setGroupPollOpen(
   if (!poll) throw new Error("GROUP_POLL_NOT_FOUND");
   return poll;
 }
-
