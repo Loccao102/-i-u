@@ -5,6 +5,7 @@ import {
   deriveGroupPollOutcome,
   isGroupPollOpen
 } from "@/lib/group-poll";
+import { buildGroupPollPlannerHref } from "@/lib/group-poll-handoff";
 import { personalApi } from "@/lib/personal-api";
 import type { GroupPoll } from "@/lib/types";
 
@@ -25,26 +26,6 @@ function formatExpiry(value: string) {
 
 function ratingLabel(value: number) {
   return value > 0 ? "★ " + value.toFixed(1) : "Chưa có rating";
-}
-
-function plannerHandoffHref(
-  slug: string,
-  candidate: GroupPoll["candidates"][number]
-) {
-  const params = new URLSearchParams({
-    fromPoll: slug,
-    anchorId: candidate.placeId,
-    anchorName: candidate.name,
-    anchorKind: candidate.kind,
-    anchorLat: String(candidate.latitude),
-    anchorLng: String(candidate.longitude),
-    anchorAddress: candidate.address,
-    anchorCost: candidate.averageForTwo,
-    anchorRating: String(candidate.publicRating),
-    anchorMatch: String(candidate.match)
-  });
-
-  return "/?" + params.toString();
 }
 
 export function GroupPollClient({ slug }: GroupPollClientProps) {
@@ -254,7 +235,7 @@ export function GroupPollClient({ slug }: GroupPollClientProps) {
                   kết quả sẽ không đổi cho tới khi người tạo mở lại.
                 </small>
               </div>
-              <a href={plannerHandoffHref(slug, leaders[0]!)}>
+              <a href={buildGroupPollPlannerHref(slug, leaders[0]!)}>
                 Chốt kèo & lên plan →
               </a>
             </>
@@ -289,7 +270,7 @@ export function GroupPollClient({ slug }: GroupPollClientProps) {
             api: "1",
             query: candidate.latitude + "," + candidate.longitude
           });
-          const plannerHref = plannerHandoffHref(slug, candidate);
+          const plannerHref = buildGroupPollPlannerHref(slug, candidate);
 
           return (
             <article
