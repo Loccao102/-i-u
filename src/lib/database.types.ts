@@ -640,6 +640,10 @@ export type Database = {
         }
         Returns: Json
       }
+      cast_group_poll_vote: {
+        Args: { p_place_id: string; p_slug: string; p_voter_key: string }
+        Returns: undefined
+      }
       delete_personal_place: {
         Args: { p_owner_key: string; p_place_id: string }
         Returns: boolean
