@@ -8,6 +8,11 @@ import {
   isGroupPollOpen,
   parseGroupPollCandidates
 } from "../../src/lib/group-poll";
+import {
+  buildGroupPollPlannerHref,
+  groupPollPlannerScenario,
+  parseGroupPollPlanAnchor
+} from "../../src/lib/group-poll-handoff";
 import { derivePlannerHealth } from "../../src/lib/planner-health";
 import {
   buildEveningPlan,
@@ -470,5 +475,107 @@ test("group poll outcome distinguishes no-vote winner and tie", () => {
   assert.deepEqual(
     tie.leaders.map((candidate) => candidate.placeId),
     [first.placeId, second.placeId]
+  );
+});
+
+
+test("group poll planner handoff round-trips a winner into an anchor", () => {
+  const candidate = {
+    ...groupPollCandidateFromPlace(
+      place({
+        id: "11111111-1111-4111-8111-111111111111",
+        name: "Bếp Nhà",
+        kind: "Nhà hàng",
+        latitude: 21.028,
+        longitude: 105.835,
+        address: "12 Tràng Tiền, Hà Nội",
+        averageForTwo: "420000",
+        publicRating: 4.7,
+        match: 91
+      })
+    ),
+    votes: 4
+  };
+
+  const href = buildGroupPollPlannerHref("abcdefghijklmnop", candidate);
+  const query = href.slice(href.indexOf("?") + 1);
+  const anchor = parseGroupPollPlanAnchor(new URLSearchParams(query));
+
+  assert.ok(anchor);
+  assert.equal(anchor.id, candidate.placeId);
+  assert.equal(anchor.name, candidate.name);
+  assert.equal(anchor.kind, candidate.kind);
+  assert.equal(anchor.latitude, candidate.latitude);
+  assert.equal(anchor.longitude, candidate.longitude);
+  assert.equal(anchor.address, candidate.address);
+  assert.equal(anchor.averageForTwo, candidate.averageForTwo);
+  assert.equal(anchor.publicRating, candidate.publicRating);
+  assert.equal(anchor.match, candidate.match);
+  assert.equal(anchor.source, "personal");
+  assert.equal(groupPollPlannerScenario(anchor), "food");
+});
+
+test("group poll planner handoff preserves provider identity safely", () => {
+  const candidate = {
+    ...groupPollCandidateFromPlace(
+      place({
+        id: "provider:google-place-123",
+        name: "Workshop Space",
+        kind: "Workshop",
+        latitude: 21.02,
+        longitude: 105.83
+      })
+    ),
+    votes: 2
+  };
+
+  const href = buildGroupPollPlannerHref("abcdefghijklmnop", candidate);
+  const query = href.slice(href.indexOf("?") + 1);
+  const anchor = parseGroupPollPlanAnchor(
+    new URLSearchParams(query),
+    () => "22222222-2222-4222-8222-222222222222"
+  );
+
+  assert.ok(anchor);
+  assert.equal(anchor.id, "22222222-2222-4222-8222-222222222222");
+  assert.equal(anchor.providerId, "google-place-123");
+  assert.equal(anchor.source, "provider");
+  assert.equal(groupPollPlannerScenario(anchor), "fun");
+});
+
+test("group poll planner handoff rejects incomplete or invalid coordinates", () => {
+  assert.equal(
+    parseGroupPollPlanAnchor(
+      new URLSearchParams({
+        anchorName: "Cafe A",
+        anchorLat: "21",
+        anchorLng: "105"
+      })
+    ),
+    null
+  );
+
+  assert.equal(
+    parseGroupPollPlanAnchor(
+      new URLSearchParams({
+        fromPoll: "abcdefghijklmnop",
+        anchorName: "Cafe A",
+        anchorLat: "91",
+        anchorLng: "105"
+      })
+    ),
+    null
+  );
+
+  assert.equal(
+    parseGroupPollPlanAnchor(
+      new URLSearchParams({
+        fromPoll: "abcdefghijklmnop",
+        anchorName: "A",
+        anchorLat: "21",
+        anchorLng: "105"
+      })
+    ),
+    null
   );
 });
