@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import {
+  deriveGroupPollOutcome,
+  isGroupPollOpen
+} from "@/lib/group-poll";
 import { personalApi } from "@/lib/personal-api";
 import type { GroupPoll } from "@/lib/types";
 
@@ -50,6 +54,7 @@ export function GroupPollClient({ slug }: GroupPollClientProps) {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [managing, setManaging] = useState(false);
+  const [clockMs, setClockMs] = useState(() => Date.now());
 
   useEffect(() => {
     let active = true;
@@ -59,6 +64,7 @@ export function GroupPollClient({ slug }: GroupPollClientProps) {
       .then(({ poll: next }) => {
         if (!active) return;
         setPoll(next);
+        setClockMs(Date.now());
         setError(null);
       })
       .catch((cause) => {
@@ -78,32 +84,62 @@ export function GroupPollClient({ slug }: GroupPollClientProps) {
     };
   }, [slug]);
 
-  const leaderVotes = useMemo(
+  useEffect(() => {
+    if (!poll) return;
+
+    setClockMs(Date.now());
+
+    const expiresAt = new Date(poll.expiresAt).getTime();
+    if (
+      poll.closedAt !== null ||
+      !Number.isFinite(expiresAt) ||
+      expiresAt <= Date.now()
+    ) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setClockMs(Date.now());
+    }, Math.max(0, expiresAt - Date.now() + 25));
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [poll?.closedAt, poll?.expiresAt]);
+
+  const pollIsOpen =
+    poll !== null &&
+    poll.isOpen &&
+    isGroupPollOpen(
+      {
+        closedAt: poll.closedAt,
+        expiresAt: poll.expiresAt
+      },
+      clockMs
+    );
+
+  const outcome = useMemo(
     () =>
       poll
-        ? Math.max(0, ...poll.candidates.map((candidate) => candidate.votes))
-        : 0,
+        ? deriveGroupPollOutcome(poll.candidates)
+        : {
+            state: "no_votes" as const,
+            leaderVotes: 0,
+            leaders: []
+          },
     [poll]
   );
-
-  const leaders = useMemo(
-    () =>
-      poll && leaderVotes > 0
-        ? poll.candidates.filter(
-            (candidate) => candidate.votes === leaderVotes
-          )
-        : [],
-    [poll, leaderVotes]
-  );
+  const { leaderVotes, leaders } = outcome;
 
   async function vote(placeId: string) {
-    if (!poll?.isOpen || votingId) return;
+    if (!pollIsOpen || votingId) return;
 
     setVotingId(placeId);
     setError(null);
     try {
       const result = await personalApi.groupPoll.vote(slug, placeId);
       setPoll(result.poll);
+      setClockMs(Date.now());
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -123,6 +159,7 @@ export function GroupPollClient({ slug }: GroupPollClientProps) {
     try {
       const result = await personalApi.groupPoll.setOpen(slug, open);
       setPoll(result.poll);
+      setClockMs(Date.now());
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -175,11 +212,11 @@ export function GroupPollClient({ slug }: GroupPollClientProps) {
               <button
                 type="button"
                 disabled={managing}
-                onClick={() => void setPollOpen(!poll.isOpen)}
+                onClick={() => void setPollOpen(!pollIsOpen)}
               >
                 {managing
                   ? "Đang cập nhật…"
-                  : poll.isOpen
+                  : pollIsOpen
                     ? "Đóng poll"
                     : "Mở lại 24h"}
               </button>
@@ -198,16 +235,16 @@ export function GroupPollClient({ slug }: GroupPollClientProps) {
         <div className="group-poll-meta">
           <span>{poll.totalVotes} lượt vote</span>
           <span>Hết hạn {formatExpiry(poll.expiresAt)}</span>
-          <span>{poll.isOpen ? "Đang mở" : "Đã đóng"}</span>
+          <span>{pollIsOpen ? "Đang mở" : "Đã đóng"}</span>
           {poll.isOwner ? <span>Bạn là người tạo poll</span> : null}
         </div>
       </header>
 
       {error ? <div className="group-poll-error">{error}</div> : null}
 
-      {!poll.isOpen ? (
+      {!pollIsOpen ? (
         <section className="group-poll-result">
-          {leaders.length === 1 ? (
+          {outcome.state === "winner" ? (
             <>
               <div>
                 <span className="eyebrow">Kết quả hiện tại</span>
@@ -221,7 +258,7 @@ export function GroupPollClient({ slug }: GroupPollClientProps) {
                 Chốt kèo & lên plan →
               </a>
             </>
-          ) : leaders.length > 1 ? (
+          ) : outcome.state === "tie" ? (
             <div>
               <span className="eyebrow">Kết quả đang hòa</span>
               <strong>
@@ -284,7 +321,7 @@ export function GroupPollClient({ slug }: GroupPollClientProps) {
               <div className="group-poll-card__actions">
                 <button
                   type="button"
-                  disabled={!poll.isOpen || Boolean(votingId)}
+                  disabled={!pollIsOpen || Boolean(votingId)}
                   className={selected ? "is-selected" : ""}
                   onClick={() => void vote(candidate.placeId)}
                 >
