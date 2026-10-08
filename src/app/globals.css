@@ -573,6 +573,26 @@ textarea:focus-visible {
   inset: 0;
 }
 
+.map-load-error {
+  position: absolute;
+  z-index: 5;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(340px, calc(100% - 32px));
+  display: grid;
+  gap: 10px;
+  padding: 20px;
+  border: 1px solid #f1cbc6;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, .97);
+  box-shadow: 0 15px 45px rgba(20, 25, 20, .16);
+  text-align: center;
+}
+.map-load-error strong { font-size: 15px; }
+.map-load-error span { color: #657068; font-size: 12px; line-height: 1.5; }
+.map-load-error button { border: 0; border-radius: 11px; padding: 10px 12px; background: #ff6458; color: white; font-weight: 800; cursor: pointer; }
+
 .map-floating-top {
   position: absolute;
   top: 14px;
