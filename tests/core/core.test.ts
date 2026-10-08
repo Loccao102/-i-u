@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { openingStatus } from "../../src/lib/opening-hours";
+import { filterPlaces } from "../../src/lib/search";
 import {
   deriveGroupPollOutcome,
   groupPollCandidateFromPlace,
@@ -578,4 +579,32 @@ test("group poll planner handoff rejects incomplete or invalid coordinates", () 
     ),
     null
   );
+});
+
+
+test("POI distance uses the viewed search area without GPS, not a zero-km placeholder", () => {
+  const poi = place({
+    id: "geoapify-cafe",
+    name: "Cafe cách tâm khoảng 1 km",
+    source: "provider",
+    latitude: 21.0278,
+    longitude: 105.8442,
+    distanceKm: 0
+  });
+  const searchCenter = { latitude: 21.0278, longitude: 105.8342 };
+
+  const [withoutGps] = filterPlaces(
+    [poi], "", "all", null, signals, undefined, undefined, undefined, searchCenter
+  );
+  assert.ok(withoutGps.distanceKm > 0.9);
+  assert.ok(withoutGps.distanceKm < 1.2);
+  assert.ok(withoutGps.recommendationReasons.includes("Gần tâm vùng tìm kiếm"));
+  assert.ok(!withoutGps.recommendationReasons.includes("Rất gần bạn"));
+
+  const [withGps] = filterPlaces(
+    [poi], "", "all", { latitude: poi.latitude, longitude: poi.longitude },
+    signals, undefined, undefined, undefined, searchCenter
+  );
+  assert.equal(withGps.distanceKm, 0);
+  assert.ok(withGps.recommendationReasons.includes("Rất gần bạn"));
 });
