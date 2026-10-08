@@ -6592,3 +6592,33 @@ textarea:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .mobile-bottom-nav button:active { transform: none; }
 }
+
+/* Ensure quick view remains actionable on phones without the desktop details pane. */
+.map-focus-toggle__mobile { display: none; }
+.map-place-preview__actions { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.map-place-preview__actions button {
+  min-width: 0;
+  min-height: 42px;
+  white-space: normal;
+  padding: 8px 5px;
+  font-size: 11px;
+  line-height: 1.3;
+}
+.map-place-preview__save {
+  border: 1px solid #d0e4d2;
+  background: #e9f7ed;
+  color: #285f3d;
+}
+.map-place-preview__save[aria-pressed="true"] {
+  background: #2c6545;
+  border-color: #2c6545;
+  color: #fff;
+}
+.map-place-preview__save:hover { border-color: #8db49a; }
+@media (max-width: 760px) {
+  .map-focus-toggle__desktop { display: none; }
+  .map-focus-toggle__mobile { display: inline; font-size: 12px; }
+  .map-floating-top > .map-focus-toggle { font-size: 12px; }
+  .map-place-preview__actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .map-place-preview__actions button { font-size: 11px; min-height: 44px; }
+}
