@@ -913,6 +913,18 @@ export function MapExplorer() {
     [clock, weather]
   );
 
+  // When GPS is not enabled, the map search area's center is the only
+  // meaningful distance reference. Do not present these as GPS distances.
+  const searchAreaCenter = useMemo<UserLocation>(
+    () => discoveryQueryBounds
+      ? {
+          latitude: (discoveryQueryBounds.north + discoveryQueryBounds.south) / 2,
+          longitude: (discoveryQueryBounds.east + discoveryQueryBounds.west) / 2
+        }
+      : { latitude: defaultCenter[1], longitude: defaultCenter[0] },
+    [discoveryQueryBounds]
+  );
+
   const visiblePlaces = useMemo(() => {
     const contextual = filterPlaces(
       allPlaces,
@@ -928,7 +940,8 @@ export function MapExplorer() {
       },
       serverDistances,
       recommendationContext,
-      tasteProfile
+      tasteProfile,
+      searchAreaCenter
     );
 
     const filtered = viewportBounds
@@ -979,7 +992,8 @@ export function MapExplorer() {
     viewportBounds,
     viewportPersonalIds,
     customIds,
-    tasteProfile
+    tasteProfile,
+    searchAreaCenter
   ]);
 
   const rankedAll = useMemo(
@@ -998,7 +1012,8 @@ export function MapExplorer() {
       },
         serverDistances,
         recommendationContext,
-        tasteProfile
+        tasteProfile,
+        searchAreaCenter
       ),
     [
       allPlaces,
@@ -1010,7 +1025,8 @@ export function MapExplorer() {
       serverDistances,
       recommendationContext,
       tasteProfile,
-      planOutcomeProfile
+      planOutcomeProfile,
+      searchAreaCenter
     ]
   );
 
@@ -3927,6 +3943,11 @@ export function MapExplorer() {
                   : "Gợi ý cá nhân"}
             </span>
             <h1>{heading}</h1>
+            <small className="distance-reference-hint">
+              {userLocation
+                ? "Khoảng cách từ vị trí GPS của bạn"
+                : "Khoảng cách ước tính từ tâm khu vực tìm kiếm · Bật vị trí để tính từ bạn"}
+            </small>
           </div>
           {view === "collections" && selectedCollection ? (
             <div className="small-actions">
@@ -4316,7 +4337,7 @@ export function MapExplorer() {
                               : "Mới"}
                         </b>
                         <span>·</span>
-                        <span>{distanceLabel(place.distanceKm)}</span>
+                        <span title={userLocation ? "Khoảng cách từ GPS" : "Khoảng cách từ tâm khu vực tìm kiếm"}>{userLocation ? "" : "≈ "}{distanceLabel(place.distanceKm)}</span>
                         <span>·</span>
                         <span>{priceBadge(place)}</span>
                       </span>
@@ -4623,7 +4644,7 @@ export function MapExplorer() {
               {selectedPersonalRating ? "của bạn" : "tham khảo"}
             </span>
             <span>·</span>
-            <span>{distanceLabel(selected.distanceKm)}</span>
+            <span title={userLocation ? "Khoảng cách từ GPS" : "Khoảng cách từ tâm khu vực tìm kiếm"}>{userLocation ? "" : "≈ "}{distanceLabel(selected.distanceKm)}</span>
             <span>·</span>
             <span>{priceBadge(selected)}</span>
           </div>
