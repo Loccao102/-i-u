@@ -6182,3 +6182,413 @@ textarea:focus-visible {
     height: 60px;
   }
 }
+
+
+/* --------------------------------------------------------------------------
+   Map-first UX: accessible controls, progressive disclosure and mobile flow
+   -------------------------------------------------------------------------- */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+a:focus-visible,
+summary:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid #227c52;
+  outline-offset: 3px;
+}
+.mobile-bottom-nav { display: none; }
+.app-shell { grid-template-columns: 78px 310px minmax(0, 1fr) 338px; }
+@media (min-width: 1041px) and (max-width: 1240px) {
+  .app-shell { grid-template-columns: 72px 280px minmax(0, 1fr) 310px; }
+}
+@media (min-width: 761px) and (max-width: 1040px) {
+  .app-shell { grid-template-columns: 72px 292px minmax(0, 1fr); }
+}
+.app-shell--map-focus { grid-template-columns: 78px minmax(0, 1fr); }
+.app-shell--map-focus .topbar { grid-column: 2 / 3; }
+.app-shell--map-focus .map-pane { grid-column: 2 / 3; }
+.app-shell--map-focus .results-pane,
+.app-shell--map-focus .detail-pane { display: none; }
+@media (min-width: 761px) and (max-width: 1040px) {
+  .app-shell--map-focus { grid-template-columns: 72px minmax(0, 1fr); }
+}
+/* Keep less-frequently-used account actions tucked into one menu. */
+.topbar-actions { gap: 9px; }
+.topbar-tools { position: relative; order: 5; }
+.topbar-tools summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 42px;
+  padding: 0 13px;
+  border: 1px solid #dde9df;
+  border-radius: 12px;
+  background: #fff;
+  color: #405a48;
+  font-size: 12px;
+  font-weight: 750;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.topbar-tools summary::-webkit-details-marker,
+.map-extra-actions summary::-webkit-details-marker { display: none; }
+.topbar-tools[open] summary { background: #ecf7ef; border-color: #bad7c1; }
+.topbar-tools__menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 240px;
+  max-height: min(440px, 72dvh);
+  overflow: auto;
+  padding: 13px;
+  border: 1px solid #e3ece5;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 17px 45px rgba(30,58,40,.18);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  align-content: flex-start;
+}
+.topbar-tools__menu .personal-mode-badge { width: 100%; justify-content: center; }
+.topbar-tools__menu .legal-links { width: 100%; display: flex; gap: 12px; justify-content: center; }
+.topbar-tools__menu .backup-button { min-height: 40px; flex: 1 1 40%; font-size: 12px; }
+/* Put the primary location action first and make its purpose obvious. */
+.topbar-actions .location-button { order: 1; min-height: 42px; }
+.topbar-search {
+  min-height: 44px;
+  border-radius: 14px;
+  background: #fff;
+}
+.topbar-search input { font-size: 14px; min-width: 0; }
+.topbar-search .search-submit { min-width: 58px; min-height: 39px; font-size: 13px; }
+/* Progressive discovery, with only mood chips + active context visible by default. */
+.results-pane { gap: 11px; }
+.discovery-welcome {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: space-between;
+  align-items: center;
+  gap: 9px;
+}
+.discovery-welcome > div { display: grid; gap: 4px; min-width: 0; }
+.discovery-welcome strong { color: #213e2d; font-size: 16px; font-weight: 850; line-height: 1.2; }
+.discovery-welcome span { color: #6a776e; font-size: 11px; line-height: 1.4; }
+.discovery-filter-trigger {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid #cfe2d3;
+  border-radius: 12px;
+  background: #f0f8f1;
+  color: #275d3b;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+.discovery-filter-trigger[aria-expanded="true"] { background: #dff0e4; }
+.results-pane > .scenario-row {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+  padding-bottom: 7px;
+}
+.results-pane .scenario-chip {
+  min-height: 40px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 13px;
+  border-color: #e0e7e1;
+}
+.results-pane .scenario-chip--active {
+  background: #2b6042;
+  color: white;
+  border-color: #2b6042;
+}
+.results-pane .discovery-filter-row { box-shadow: 0 7px 23px rgba(45,72,47,.06); padding: 11px; }
+.results-pane .discovery-filter-row label > span { font-size: 10px; color: #5d7162; }
+.results-pane .discovery-filter-row select { min-height: 42px; font-size: 12px; }
+.results-pane .discovery-open-toggle,
+.results-pane .discovery-filter-reset { min-height: 42px; font-size: 12px; }
+.discovery-context-bar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 35px;
+  padding: 0 0 8px;
+  border-bottom: 1px solid #ecf0eb;
+}
+.discovery-context-bar__count {
+  color: #2d4a35;
+  font-size: 12px;
+  font-weight: 850;
+}
+.discovery-context-bar button {
+  min-height: 30px;
+  padding: 5px 9px;
+  border: 1px solid #c9decf;
+  border-radius: 999px;
+  background: #eff7f1;
+  color: #326147;
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.discovery-context-bar__location {
+  color: #62776a;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.results-heading h1 { font-size: 19px; line-height: 1.25; }
+.distance-reference-hint { font-size: 11px; line-height: 1.45; max-width: 270px; }
+.results-pane .place-card { background: #fff; border: 1px solid #e9ede8; }
+.results-pane .place-card__top strong { font-size: 14px; line-height: 1.35; }
+.results-pane .place-card__meta { font-size: 12px; }
+.results-pane .place-card__status-row em { font-size: 10px; }
+.results-pane .tag-line i { font-size: 11px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.results-pane .place-card__main { min-height: 106px; }
+.results-pane .shortlist-toggle { min-width: 36px; min-height: 36px; font-size: 16px; }
+/* Map actions: one obvious action, one planner action and an overflow menu. */
+.map-floating-top {
+  top: 14px;
+  right: 14px;
+  left: auto;
+  transform: none;
+  padding: 5px;
+  gap: 5px;
+  border-radius: 17px;
+  z-index: 4;
+  max-width: calc(100% - 28px);
+}
+.map-floating-top > button,
+.map-extra-actions summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 42px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.map-floating-top > .map-area-search {
+  background: #2a6243;
+  color: #fff;
+}
+.map-area-search svg { width: 16px; height: 16px; }
+.map-floating-top > .plan-button { background: #fff0eb; color: #a84b35; }
+.map-floating-top > .map-focus-toggle { background: #f2f6f2; color: #3f5d4b; }
+.map-extra-actions { position: relative; }
+.map-extra-actions summary {
+  list-style: none;
+  border: none;
+  background: #f2f6f2;
+  color: #405e4c;
+  cursor: pointer;
+}
+.map-extra-actions[open] summary { background: #e1eee5; }
+.map-extra-actions__menu {
+  position: absolute;
+  z-index: 15;
+  top: calc(100% + 10px);
+  right: 0;
+  display: grid;
+  width: 200px;
+  gap: 5px;
+  padding: 9px;
+  border: 1px solid #e1e9e1;
+  border-radius: 14px;
+  background: white;
+  box-shadow: 0 12px 36px rgba(35,62,46,.2);
+}
+.map-extra-actions__menu button {
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #36523f;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+  text-align: left;
+}
+.map-extra-actions__menu button:hover { background: #ecf6ed; }
+.map-style-switch { top: 76px; }
+.map-style-switch button { min-height: 34px; font-size: 11px; }
+.map-place-preview__close { width: 36px; height: 36px; top: 7px; right: 7px; }
+.map-place-preview__description strong { font-size: 15px; }
+.map-place-preview__meta { font-size: 11px; }
+.map-place-preview__actions button { min-height: 42px; font-size: 12px; }
+/* Make focus & touch targets easy to use without losing layout hierarchy. */
+.rail-action { min-height: 54px; font-size: 11px; }
+.detail-body h2 { font-size: 22px; line-height: 1.25; }
+.detail-score-line { font-size: 12px; }
+.detail-shortlist-button { min-height: 40px; }
+.save-button { min-width: 42px; min-height: 42px; }
+
+@media (max-width: 760px) {
+  .app-shell,
+  .app-shell--map-focus {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 62px minmax(0, 1fr) 70px;
+    height: 100dvh;
+    overflow: hidden;
+  }
+  .topbar,
+  .app-shell--map-focus .topbar {
+    grid-column: 1 / 2;
+    grid-row: 1;
+    z-index: 10;
+    padding: 8px 12px;
+    gap: 8px;
+  }
+  .topbar-search { width: 100%; max-width: none; min-height: 44px; }
+  .topbar-search input { font-size: 14px; }
+  .topbar-actions { display: flex; }
+  .topbar-actions .location-button {
+    display: flex;
+    min-width: 44px;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+  .topbar-actions .location-button span { display: none; }
+  .topbar-tools { display: none; }
+  .map-pane,
+  .app-shell--map-focus .map-pane {
+    grid-column: 1 / 2;
+    grid-row: 2;
+    min-height: 0;
+  }
+  .results-pane,
+  .app-shell--mobile-list .results-pane {
+    display: none;
+    position: absolute;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 70px;
+    grid-column: 1;
+    width: 100%;
+    height: min(61dvh, 560px);
+    min-height: 260px;
+    padding: 15px 13px 10px;
+    gap: 8px;
+    border-top: 1px solid #dfebdf;
+    border-radius: 22px 22px 0 0;
+    background: #fffefa;
+    box-shadow: 0 -12px 30px rgba(35,52,40,.15);
+    z-index: 6;
+    overflow: hidden;
+  }
+  .app-shell--mobile-list .results-pane {
+    display: flex;
+  }
+  .results-pane::before {
+    content: "";
+    width: 37px;
+    height: 4px;
+    margin: -5px auto 2px;
+    border-radius: 999px;
+    background: #cddacf;
+    flex: 0 0 auto;
+  }
+  .mobile-bottom-nav {
+    display: grid;
+    grid-column: 1;
+    grid-row: 3;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 1px;
+    z-index: 9;
+    padding: 5px 6px max(5px, env(safe-area-inset-bottom));
+    border-top: 1px solid #dfe9e0;
+    background: #fff;
+    box-shadow: 0 -4px 16px rgba(26,53,36,.07);
+  }
+  .mobile-bottom-nav button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-width: 0;
+    min-height: 52px;
+    padding: 4px 2px;
+    border: 0;
+    border-radius: 11px;
+    background: transparent;
+    color: #728276;
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 750;
+  }
+  .mobile-bottom-nav button svg { width: 19px; height: 19px; }
+  .mobile-bottom-nav button.is-active { background: #e9f5ed; color: #275e42; }
+  .mobile-bottom-nav button:active { transform: scale(.96); }
+  .results-pane > .scenario-row { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
+  .results-pane .scenario-chip { min-height: 38px; }
+  .results-pane .place-list {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    overflow-x: hidden;
+    overflow-y: auto;
+    gap: 8px;
+    padding-bottom: 16px;
+  }
+  .results-pane .place-card { height: auto; }
+  .results-pane .place-card__main { min-height: 96px; }
+  .discovery-welcome strong { font-size: 15px; }
+  .discovery-welcome span { display: none; }
+  .discovery-context-bar { min-height: 31px; padding-bottom: 6px; }
+  .discovery-context-bar__location { font-size: 10px; }
+  .map-floating-top {
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    justify-content: flex-end;
+    max-width: none;
+    padding: 5px;
+    border-radius: 14px;
+    width: auto;
+  }
+  .map-floating-top > .plan-button { display: none; }
+  .map-floating-top > .map-focus-toggle { font-size: 0; padding: 8px 10px; }
+  .map-floating-top > .map-focus-toggle::after { content: "Danh sách"; font-size: 12px; }
+  .app-shell--mobile-list .map-floating-top > .map-focus-toggle::after { content: "Bản đồ"; }
+  .map-floating-top > .map-area-search { padding: 8px 10px; font-size: 11px; }
+  .map-extra-actions summary { min-height: 42px; padding: 8px; }
+  .map-extra-actions summary span { display: none; }
+  .map-style-switch { top: 75px; left: 10px; }
+  .weather-pill { display: none; }
+  .privacy-pill { bottom: 8px; max-width: calc(100% - 20px); font-size: 9px; }
+  .map-place-preview { bottom: 12px; left: 10px; right: 10px; width: auto; }
+  .map-place-preview__description strong { font-size: 14px; }
+  .app-shell--mobile-list .map-place-preview { display: none; }
+  .detail-pane { display: none; }
+  .app-shell--mobile-list .map-style-switch { display: none; }
+  .app-shell--mobile-list .privacy-pill { display: none; }
+}
+@media (max-width: 385px) {
+  .map-floating-top { gap: 2px; }
+  .map-floating-top > .map-area-search { font-size: 10px; padding: 7px 8px; }
+  .mobile-bottom-nav button { font-size: 9px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mobile-bottom-nav button:active { transform: none; }
+}
