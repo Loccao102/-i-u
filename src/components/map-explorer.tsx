@@ -43,6 +43,7 @@ import {
 } from "@/lib/planner";
 import { placeFromPoiResult, scenarioLabels } from "@/lib/places";
 import { comparisonCost, comparisonHighlights, sortComparisonPlaces, type ComparisonSort } from "@/lib/comparison";
+import { filterLibraryPlaces, librarySourceCounts, librarySourceOf, type LibrarySource } from "@/lib/place-library";
 import { derivePlanOutcomeProfile } from "@/lib/plan-outcomes";
 import { deriveDataRepairPrompts } from "@/lib/data-quality";
 import { analyzePlanQuality } from "@/lib/plan-quality";
@@ -173,7 +174,7 @@ const routingModeLabels: Record<RoutingMode, string> = {
 };
 
 
-type PersonalView = "discover" | "saved" | "history" | "collections";
+type PersonalView = "discover" | "saved" | "history" | "collections" | "mine";
 
 type ExcelRow = {
   row: number; name: string; area: string; mapsUrl: string; note: string; cost: string;
@@ -524,6 +525,11 @@ export function MapExplorer() {
   const [selectedCollectionId, setSelectedCollectionId] = useState<
     string | null
   >(null);
+  const [librarySource, setLibrarySource] = useState<LibrarySource>("all");
+  const [librarySelectedIds, setLibrarySelectedIds] = useState<Set<string>>(() => new Set());
+  const [libraryTargetCollection, setLibraryTargetCollection] = useState("");
+  const [libraryNewCollectionName, setLibraryNewCollectionName] = useState("");
+  const [librarySaving, setLibrarySaving] = useState(false);
 
   const [providerResults, setProviderResults] = useState<PoiSearchResult[]>([]);
   const [discoveredPoiResults, setDiscoveredPoiResults] =
@@ -949,6 +955,11 @@ export function MapExplorer() {
     () => new Set(customPlaces.map((place) => place.id)),
     [customPlaces]
   );
+  const libraryCounts = useMemo(() => librarySourceCounts(customPlaces), [customPlaces]);
+  const filteredLibraryIds = useMemo(
+    () => new Set(filterLibraryPlaces(customPlaces, librarySource).map(place => place.id)),
+    [customPlaces, librarySource]
+  );
 
   const recentVisitByPlace = useMemo(() => {
     const result = new Map<string, VisitRecord>();
@@ -1004,7 +1015,7 @@ export function MapExplorer() {
       searchAreaCenter
     );
 
-    const filtered = viewportBounds
+    const filtered = viewportBounds && view !== "mine"
       ? contextual.filter((place) => {
           if (customIds.has(place.id) && viewportPersonalIds) {
             return viewportPersonalIds.has(place.id);
@@ -1012,6 +1023,10 @@ export function MapExplorer() {
           return placeInsideBounds(place, viewportBounds);
         })
       : contextual;
+
+    if (view === "mine") {
+      return filtered.filter(place => filteredLibraryIds.has(place.id));
+    }
 
     if (view === "saved") {
       return filtered.filter((place) => saved.has(place.id));
@@ -1053,7 +1068,8 @@ export function MapExplorer() {
     viewportPersonalIds,
     customIds,
     tasteProfile,
-    searchAreaCenter
+    searchAreaCenter,
+    filteredLibraryIds
   ]);
 
   const rankedAll = useMemo(
@@ -1890,12 +1906,92 @@ export function MapExplorer() {
 
   function switchView(next: PersonalView) {
     setView(next);
+    setLibrarySelectedIds(new Set());
     setQuery("");
     setScenario("all");
     setProviderResults([]);
     if (next === "collections" && !selectedCollectionId && collections[0]) {
       setSelectedCollectionId(collections[0].id);
     }
+  }
+
+  function toggleLibrarySelection(placeId: string) {
+    setLibrarySelectedIds(current => {
+      const next = new Set(current);
+      if (next.has(placeId)) next.delete(placeId);
+      else if (next.size < 20) next.add(placeId);
+      else setNotice("Chỉ chọn tối đa 20 địa điểm mỗi lượt.");
+      return next;
+    });
+  }
+
+  function selectVisibleLibraryPlaces() {
+    setLibrarySelectedIds(new Set(visiblePlaces.slice(0, 20).map(place => place.id)));
+  }
+
+  async function addLibrarySelectionToCollection() {
+    if (librarySaving) return;
+    const ids = [...librarySelectedIds].filter(id => customIds.has(id));
+    if (ids.length === 0) {
+      setNotice("Chọn địa điểm trong thư viện trước.");
+      return;
+    }
+    const newName = cleanPlainText(libraryNewCollectionName, 60);
+    if (!newName && !libraryTargetCollection) {
+      setNotice("Chọn một bộ sưu tập hoặc nhập tên bộ sưu tập mới.");
+      return;
+    }
+    setLibrarySaving(true);
+    let added = 0;
+    try {
+      const target = newName
+        ? await personalApi.createCollection({
+            name: newName,
+            description: "Danh sách địa điểm từ thư viện ĐiĐâu"
+          })
+        : collections.find(collection => collection.id === libraryTargetCollection);
+      if (!target) throw new Error("Bộ sưu tập đã chọn không còn tồn tại.");
+      const alreadyIncluded = new Set(target.placeIds);
+      const pending = ids.filter(id => !alreadyIncluded.has(id));
+      let failure: string | null = null;
+      for (const id of pending) {
+        try {
+          await personalApi.setCollectionPlace(target.id, id, true);
+          added += 1;
+        } catch (error) {
+          failure = error instanceof Error ? error.message : "Có địa điểm không thể lưu.";
+          break;
+        }
+      }
+      await loadSnapshot();
+      setLibrarySelectedIds(new Set());
+      setLibraryNewCollectionName("");
+      setLibraryTargetCollection(target.id);
+      setSelectedCollectionId(target.id);
+      if (failure) {
+        setNotice("Đã thêm " + added + "/" + pending.length + " địa điểm. " + failure);
+      } else {
+        setView("collections");
+        setNotice("Đã thêm " + added + " địa điểm vào “" + target.name + "”" +
+          (pending.length === 0 ? " (tất cả đã có sẵn)." : "."));
+      }
+    } catch (error) {
+      await loadSnapshot().catch(() => undefined);
+      setNotice((error instanceof Error ? error.message : "Không thể lưu bộ sưu tập.") +
+        (added > 0 ? " Đã lưu được " + added + " địa điểm." : ""));
+    } finally {
+      setLibrarySaving(false);
+    }
+  }
+
+  function shortlistFromLibrary() {
+    const places = customPlaces.filter(place => librarySelectedIds.has(place.id));
+    if (places.length < 2 || places.length > 3) {
+      setNotice("Chọn 2 hoặc 3 địa điểm để so sánh.");
+      return;
+    }
+    setShortlist(places);
+    compareDialogRef.current?.showModal();
   }
 
   async function runPoiSearch(
@@ -3802,7 +3898,9 @@ export function MapExplorer() {
   }
 
   const heading =
-    view === "saved"
+    view === "mine"
+      ? visiblePlaces.length + " địa điểm trong thư viện"
+      : view === "saved"
       ? visiblePlaces.length + " địa điểm đã lưu"
       : view === "history"
         ? visiblePlaces.length +
@@ -3828,6 +3926,13 @@ export function MapExplorer() {
             onClick={() => switchView("discover")}
           >
             <PinIcon /><span>Bản đồ</span>
+          </button>
+          <button
+            className={"rail-action" + (view === "mine" ? " rail-action--active" : "")}
+            type="button"
+            onClick={() => switchView("mine")}
+          >
+            <StarIcon /><span>Thư viện</span>
           </button>
           <button
             className={"rail-action" + (view === "saved" ? " rail-action--active" : "")}
@@ -4182,7 +4287,9 @@ export function MapExplorer() {
         <div className="results-heading">
           <div>
             <span className="eyebrow">
-              {view === "history"
+              {view === "mine"
+                ? "Địa điểm đã nhập · Lưu trên Supabase cá nhân"
+                : view === "history"
                 ? "Trải nghiệm của bạn"
                 : view === "collections"
                   ? selectedCollection?.description || "Bộ sưu tập cá nhân"
@@ -4513,18 +4620,99 @@ export function MapExplorer() {
           </div>
         ) : null}
 
+        {view === "mine" ? (
+          <section className="library-manager" aria-label="Quản lý địa điểm của tôi">
+            <div className="library-manager__header">
+              <div>
+                <strong>Thư viện địa điểm</strong>
+                <span>{libraryCounts.all} địa điểm · Lọc theo nguồn nhập</span>
+              </div>
+              <button type="button" onClick={openExcelDialog} disabled={librarySaving}>
+                ▦ Import Excel
+              </button>
+            </div>
+            <div className="library-source-tabs" role="group" aria-label="Lọc nguồn địa điểm">
+              {([
+                ["all", "Tất cả"], ["excel", "Excel"], ["map", "Từ bản đồ"], ["manual", "Thủ công"]
+              ] as const).map(([source, title]) => (
+                <button
+                  type="button"
+                  key={source}
+                  className={librarySource === source ? "is-active" : ""}
+                  aria-pressed={librarySource === source}
+                  onClick={() => { setLibrarySource(source); setLibrarySelectedIds(new Set()); }}
+                >
+                  {title} <span>{libraryCounts[source]}</span>
+                </button>
+              ))}
+            </div>
+            <div className="library-manager__selection">
+              <span>{librarySelectedIds.size} đang chọn / tối đa 20</span>
+              <div>
+                <button type="button" disabled={librarySaving || !visiblePlaces.length} onClick={selectVisibleLibraryPlaces}>
+                  Chọn tối đa 20
+                </button>
+                <button type="button" disabled={librarySaving || !librarySelectedIds.size} onClick={() => setLibrarySelectedIds(new Set())}>
+                  Bỏ chọn
+                </button>
+              </div>
+            </div>
+            {librarySelectedIds.size > 0 ? (
+              <div className="library-bulk-panel">
+                <strong>Đưa {librarySelectedIds.size} địa điểm vào bộ sưu tập</strong>
+                <label>
+                  <span>Bộ sưu tập hiện có</span>
+                  <select value={libraryTargetCollection} disabled={librarySaving} onChange={event => setLibraryTargetCollection(event.target.value)}>
+                    <option value="">Chọn bộ sưu tập…</option>
+                    {collections.map(collection => (
+                      <option key={collection.id} value={collection.id}>{collection.name} ({collection.placeIds.length})</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>Hoặc tạo bộ sưu tập mới</span>
+                  <input
+                    type="text"
+                    value={libraryNewCollectionName}
+                    maxLength={60}
+                    disabled={librarySaving}
+                    onChange={event => setLibraryNewCollectionName(event.target.value)}
+                    placeholder="Ví dụ: Quán cafe cuối tuần"
+                  />
+                </label>
+                <div className="library-bulk-panel__actions">
+                  <button type="button" className="library-bulk-panel__save" disabled={librarySaving}
+                    onClick={() => void addLibrarySelectionToCollection()}>
+                    {librarySaving ? "Đang lưu…" : "Lưu vào bộ sưu tập"}
+                  </button>
+                  <button type="button" disabled={librarySaving || librarySelectedIds.size < 2 || librarySelectedIds.size > 3}
+                    onClick={shortlistFromLibrary}>So sánh 2–3 nơi</button>
+                </div>
+              </div>
+            ) : (
+              <p className="library-manager__hint">
+                Chọn ô bên cạnh địa điểm để gom vào bộ sưu tập hoặc so sánh nhanh.
+              </p>
+            )}
+          </section>
+        ) : null}
+
         <div className="place-list">
           {visiblePlaces.length === 0 ? (
             <div className="empty-state">
               <strong>
-                {view === "collections" && collections.length === 0
+                {view === "mine" && customPlaces.length === 0
+                  ? "Thư viện chưa có địa điểm."
+                  : view === "collections" && collections.length === 0
                   ? "Chưa có bộ sưu tập."
                   : discoveryLoading && view === "discover"
                     ? "Đang tải địa điểm thật…"
                     : "Chưa có địa điểm trong chế độ này."}
               </strong>
               <span>
-                {view === "collections"
+                {view === "mine"
+                  ? "Import Excel, lưu địa điểm từ bản đồ hoặc thêm địa điểm thủ công để bắt đầu."
+                  : view === "collections"
                   ? "Tạo bộ sưu tập rồi thêm địa điểm từ phần chi tiết."
                   : discoveryLoading
                     ? "Đang lấy POI thật trong viewport hiện tại."
@@ -4547,6 +4735,12 @@ export function MapExplorer() {
                     (selected.id === place.id ? " place-card--active" : "")
                   }
                 >
+                  {view === "mine" ? (
+                    <label className="library-place-select" title={"Chọn " + place.name}>
+                      <input type="checkbox" checked={librarySelectedIds.has(place.id)} disabled={librarySaving}
+                        onChange={() => toggleLibrarySelection(place.id)} aria-label={"Chọn " + place.name} />
+                    </label>
+                  ) : null}
                   <button
                     type="button"
                     className="place-card__main"
@@ -4599,6 +4793,11 @@ export function MapExplorer() {
                             ? " · " + status.detail
                             : ""}
                         </i>
+                        {view === "mine" ? (
+                          <em className="library-origin-label">{librarySourceOf(place) === "excel"
+                            ? "▦ Excel" : librarySourceOf(place) === "map"
+                              ? "⌖ Bản đồ" : "✎ Thủ công"}</em>
+                        ) : null}
                         {place.source === "provider" ? (
                           <em>
                             {place.providerId?.startsWith("geoapify:")
