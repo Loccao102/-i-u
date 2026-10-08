@@ -301,7 +301,8 @@ function personalScore(
   signals?: PersonalSignals,
   stats?: ReadonlyMap<string, { count: number; latestAt: number }>,
   context?: RecommendationContext,
-  tasteProfile?: TasteProfile
+  tasteProfile?: TasteProfile,
+  distanceFromMapCenter = false
 ) {
   let score = 44;
   const reasons: string[] = [];
@@ -398,9 +399,9 @@ function personalScore(
   if (Number.isFinite(distanceKm)) {
     score += Math.max(0, 14 - Math.min(14, distanceKm * 2.2));
     if (distanceKm <= 2) {
-      reasons.push("Rất gần bạn");
+      reasons.push(distanceFromMapCenter ? "Gần tâm vùng tìm kiếm" : "Rất gần bạn");
     } else if (distanceKm <= 5) {
-      reasons.push("Khá gần");
+      reasons.push(distanceFromMapCenter ? "Gần vùng tìm kiếm" : "Khá gần");
     }
   }
 
@@ -418,7 +419,8 @@ export function filterPlaces(
   signals?: PersonalSignals,
   serverDistances?: Readonly<Record<string, number>>,
   context?: RecommendationContext,
-  tasteProfile?: TasteProfile
+  tasteProfile?: TasteProfile,
+  fallbackLocation?: UserLocation | null
 ) {
   const normalized = normalize(query);
   const detected = detectScenarios(query);
@@ -460,12 +462,15 @@ export function filterPlaces(
       return textMatch || contextMatch;
     })
     .map((place) => {
-      const serverDistance = serverDistances?.[place.id];
+      // Without GPS, calculate distance from the current search-area center.
+      // Provider POIs start at 0 km, which is not a real distance to the user.
+      const distanceOrigin = userLocation ?? fallbackLocation;
+      const serverDistance = userLocation ? serverDistances?.[place.id] : undefined;
       const computedDistance =
-        typeof serverDistance === "number"
+        typeof serverDistance === "number" && Number.isFinite(serverDistance)
           ? serverDistance
-          : userLocation
-            ? haversineKm(userLocation, {
+          : distanceOrigin
+            ? haversineKm(distanceOrigin, {
                 latitude: place.latitude,
                 longitude: place.longitude
               })
@@ -480,7 +485,8 @@ export function filterPlaces(
         signals,
         stats ?? undefined,
         context,
-        tasteProfile
+        tasteProfile,
+        !userLocation && Boolean(fallbackLocation)
       );
 
       return {
