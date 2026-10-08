@@ -8,7 +8,7 @@ const csp = [
   "object-src 'none'",
   "script-src 'self' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https://demotiles.maplibre.org",
+  "img-src 'self' data: blob: https://tile.openstreetmap.org https://demotiles.maplibre.org",
   "font-src 'self' data: https://demotiles.maplibre.org",
   "connect-src 'self' https://demotiles.maplibre.org",
   "worker-src 'self' blob:",
