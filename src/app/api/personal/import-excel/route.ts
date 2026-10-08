@@ -21,10 +21,10 @@ function message(error: unknown) {
     case "INVALID_XLSX_TEMPLATE": return "Sai mẫu Excel. Hãy tải mẫu ĐiĐâu và giữ nguyên tên cột.";
     case "EMPTY_EXCEL_FILE": return "File chưa có địa điểm.";
     case "EXCEL_ROW_LIMIT": return "Mỗi lần chỉ nhập tối đa 20 địa điểm.";
-    case "GOOGLE_PLACES_QUOTA": return "Google Places vượt hạn mức. Vui lòng thử lại sau.";
-    case "GOOGLE_PLACES_NOT_CONFIGURED": return "Chưa có GOOGLE_PLACES_API_KEY trên Vercel. Cần bật Places API (New) và billing.";
-    case "GOOGLE_PLACE_NOT_FOUND": return "Google Maps không tìm thấy địa điểm này.";
-    case "GOOGLE_PLACES_UNAVAILABLE": return "Không truy cập được Google Places. Kiểm tra key, Places API (New), billing và giới hạn key.";
+    case "POI_PROVIDER_UNAVAILABLE": return "Nguồn Geoapify/OSM tạm thời không khả dụng. Vui lòng thử lại sau.";
+    case "GEOAPIFY_NOT_CONFIGURED": return "Geoapify chưa được cấu hình trên Vercel.";
+    case "PLACE_NOT_IN_RESULTS": return "Địa điểm chọn không còn khớp kết quả tìm kiếm. Hãy tải lại file để kiểm tra.";
+    case "DATABASE_LOOKUP_FAILED": return "Không thể kiểm tra địa điểm trùng trong Supabase.";
     case "INVALID_BODY": return "Dữ liệu xác nhận không hợp lệ.";
     case "CROSS_ORIGIN_MUTATION": return "Yêu cầu không cùng nguồn đã bị chặn.";
     default:
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
   const profile = resolveAnonymousProfile(request);
   try {
     assertSameOriginRequest(request);
-    if (!excelImportConfigured()) throw new Error("GOOGLE_PLACES_NOT_CONFIGURED");
+    if (!excelImportConfigured()) throw new Error("GEOAPIFY_NOT_CONFIGURED");
     const contentType = request.headers.get("content-type") || "";
     if (!contentType.toLowerCase().startsWith("multipart/form-data")) throw new Error("INVALID_BODY");
     const size = Number(request.headers.get("content-length") ?? "0");
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
       candidates: Awaited<ReturnType<typeof searchExcelRow>>;
       error: string | null;
     }> = [];
-    // Four in-flight lookups at most to limit provider quota and request duration.
+    // Bound concurrent Geoapify queries to avoid using excessive API credits.
     for (let start = 0; start < rows.length; start += 4) {
       const chunk = await Promise.all(rows.slice(start, start + 4).map(async (row) => {
         try {
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
       { error: error instanceof Error && error.message === "EXCEL_FILE_TOO_LARGE"
         ? "File tối đa 1 MB."
         : message(error) },
-      { status: error instanceof Error && error.message === "GOOGLE_PLACES_NOT_CONFIGURED" ? 503 : 400 }
+      { status: error instanceof Error && error.message === "GEOAPIFY_NOT_CONFIGURED" ? 503 : 400 }
     );
   }
 }
@@ -99,7 +99,7 @@ function validatedConfirmed(value: unknown): ConfirmedRow[] {
   for (const entry of value) {
     if (!entry || typeof entry !== "object") throw new Error("INVALID_BODY");
     const v = entry as Partial<ConfirmedRow>;
-    if (typeof v.selectedId !== "string" || !/^[a-zA-Z0-9_-]{8,180}$/.test(v.selectedId) ||
+    if (typeof v.selectedId !== "string" || !/^(geoapify:|osm:)[a-zA-Z0-9:_-]{6,220}$/.test(v.selectedId) ||
       !v.row || typeof v.row !== "object" ||
       !Number.isInteger(v.row.row) || v.row.row < 2 ||
       typeof v.row.name !== "string" || !v.row.name.trim() ||
@@ -116,13 +116,13 @@ function validatedConfirmed(value: unknown): ConfirmedRow[] {
 export async function PUT(request: NextRequest) {
   const profile = resolveAnonymousProfile(request);
   try {
-    if (!excelImportConfigured()) throw new Error("GOOGLE_PLACES_NOT_CONFIGURED");
+    if (!excelImportConfigured()) throw new Error("GEOAPIFY_NOT_CONFIGURED");
     const body = await readJsonObject(request);
     const rows = validatedConfirmed(body.items);
     const result: Array<{ row: number; status: "added" | "duplicate" | "error"; name: string; error?: string }> = [];
     const selectedIds = new Set<string>();
-    // Bound the Google Places + Supabase writes to keep a 20-row import within
-    // one serverless request. Duplicate selected Place IDs are never written twice.
+    // Bound the Geoapify + Supabase writes to keep a 20-row import within
+    // one serverless request. Duplicate selected provider IDs are never written twice.
     const uniqueRows = rows.map(item => {
       const repeated = selectedIds.has(item.selectedId);
       selectedIds.add(item.selectedId);
