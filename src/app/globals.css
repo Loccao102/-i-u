@@ -3192,8 +3192,14 @@ textarea:focus-visible {
   backdrop-filter: blur(8px);
 }
 
-.osm-attribution:hover {
+.osm-attribution a {
+  color: inherit;
   text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.osm-attribution a:hover {
+  color: #264d38;
 }
 
 .real-data-label {
