@@ -5218,3 +5218,182 @@ textarea:focus-visible {
     font-size: 20px;
   }
 }
+
+/* ĐiĐâu map refresh: readable streets, fewer competing markers, softer surfaces. */
+.map-pane {
+  background: #e9efe9;
+}
+.map-style-switch {
+  position: absolute;
+  top: 76px;
+  left: 14px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 5px;
+  border: 1px solid rgba(255, 255, 255, .92);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, .95);
+  box-shadow: 0 8px 28px rgba(37, 56, 48, .13);
+  backdrop-filter: blur(14px);
+}
+.map-style-switch > span {
+  margin: 0 5px;
+  color: #69776f;
+  font-size: 10px;
+  font-weight: 800;
+}
+.map-style-switch button {
+  border: 0;
+  border-radius: 10px;
+  padding: 7px 10px;
+  background: transparent;
+  color: #5e6b61;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.map-style-switch button:hover {
+  background: #f1f5f0;
+}
+.map-style-switch button.is-active {
+  background: #263e32;
+  color: #fff;
+  box-shadow: 0 3px 8px rgba(38, 62, 50, .18);
+}
+.map-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 44px;
+  height: 36px;
+  padding: 0 9px;
+  border: 2px solid #fff;
+  background: #fff;
+  color: #2b4336;
+  font-size: 11px;
+  font-weight: 900;
+  box-shadow: 0 5px 18px rgba(26, 48, 36, .2);
+  transition: background .16s, box-shadow .16s;
+}
+.map-marker:hover {
+  background: #f2f9f3;
+  box-shadow: 0 8px 24px rgba(26, 48, 36, .25);
+}
+.map-marker--cluster {
+  min-width: 42px;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 3px solid #fff;
+  background: #294e3e;
+  color: #fff;
+  font-size: 13px;
+  box-shadow: 0 5px 0 rgba(41,78,62,.13), 0 10px 23px rgba(35,59,43,.23);
+}
+.map-marker--cluster:hover {
+  background: #1c3c2e;
+}
+.map-marker--cluster::after {
+  background: #294e3e;
+}
+.map-marker--active,
+.map-marker--active:hover {
+  max-width: 218px;
+  min-height: 40px;
+  height: 40px;
+  padding: 0 11px;
+  border-color: #fff;
+  background: #ff6558;
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(239, 77, 61, .27);
+}
+.map-marker--active::after {
+  background: #ff6558;
+}
+.map-marker__score {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.map-marker__name {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-left: 8px;
+  border-left: 1px solid rgba(255,255,255,.45);
+  font-size: 11px;
+  font-weight: 800;
+}
+.results-pane {
+  background: #fffefd;
+}
+.results-pane .place-list {
+  scrollbar-color: #cdd7ce transparent;
+}
+.results-pane .place-card {
+  border-radius: 16px;
+  border-color: transparent;
+  transition: border-color .16s, box-shadow .16s, background .16s;
+}
+.results-pane .place-card:hover {
+  border-color: #dae5da;
+  box-shadow: 0 4px 15px rgba(27,48,35,.045);
+}
+.results-pane .place-card--active {
+  border-color: #fbb6ac;
+  background: #fff8f5;
+  box-shadow: 0 5px 19px rgba(236,92,73,.08);
+}
+.results-pane .place-card--active .place-card__main {
+  background: #fff8f5;
+}
+.detail-hero:not(.detail-hero--photo) {
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 20% 19%, rgba(255,255,255,.58), transparent 27%),
+    radial-gradient(circle at 85% 30%, rgba(251,235,191,.45), transparent 35%),
+    linear-gradient(140deg, color-mix(in srgb, var(--place-accent) 55%, #b9d6c1), #385746 95%);
+}
+.detail-hero:not(.detail-hero--photo)::before {
+  content: "";
+  position: absolute;
+  width: 225px;
+  height: 225px;
+  left: -72px;
+  bottom: -118px;
+  border: 1px solid rgba(255,255,255,.38);
+  border-radius: 50%;
+  box-shadow: 0 0 0 35px rgba(255,255,255,.06), 0 0 0 75px rgba(255,255,255,.04);
+  pointer-events: none;
+}
+.detail-hero:not(.detail-hero--photo) .detail-hero__icon {
+  display: grid;
+  place-items: center;
+  width: 104px;
+  height: 104px;
+  border: 1px solid rgba(255,255,255,.57);
+  border-radius: 50%;
+  background: rgba(255,255,255,.17);
+  backdrop-filter: blur(6px);
+  font-size: 43px;
+  box-shadow: 0 20px 45px rgba(25,45,34,.18);
+}
+@media (max-width: 760px) {
+  .map-style-switch {
+    top: 66px;
+    left: 10px;
+  }
+  .map-style-switch > span {
+    display: none;
+  }
+  .map-style-switch button {
+    padding: 6px 8px;
+  }
+  .map-marker__name {
+    max-width: 86px;
+  }
+}
