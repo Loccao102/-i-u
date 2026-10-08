@@ -4,6 +4,7 @@ import test from "node:test";
 import { openingStatus } from "../../src/lib/opening-hours";
 import { comparisonCost, comparisonHighlights, sortComparisonPlaces } from "../../src/lib/comparison";
 import { filterPlaces } from "../../src/lib/search";
+import { filterLibraryPlaces, librarySourceCounts, librarySourceOf } from "../../src/lib/place-library";
 import {
   deriveGroupPollOutcome,
   groupPollCandidateFromPlace,
@@ -655,4 +656,29 @@ test("comparison keeps original order for matching values", () => {
   assert.deepEqual(sortComparisonPlaces([b, a], "match").map(p => p.id), ["b", "a"]);
   assert.deepEqual(sortComparisonPlaces([b, a], "cost").map(p => p.id), ["b", "a"]);
   assert.equal(comparisonHighlights([b, a]).costId, null);
+});
+
+
+test("personal library classifies imported Excel places, map imports and manual entries", () => {
+  const excel = place({
+    id: "xl", name: "From XLSX", source: "provider",
+    providerId: "geoapify:original", communityNote: "Nhập Excel · Geoapify"
+  });
+  const map = place({
+    id: "map", name: "Discovered", source: "provider",
+    providerId: "geoapify:other", communityNote: "Nhập từ Geoapify"
+  });
+  const manual = place({
+    id: "manual", name: "Thêm tay", source: "personal",
+    communityNote: "Địa điểm cá nhân"
+  });
+  const items = [excel, map, manual];
+  assert.equal(librarySourceOf(excel), "excel");
+  assert.equal(librarySourceOf(map), "map");
+  assert.equal(librarySourceOf(manual), "manual");
+  assert.deepEqual(librarySourceCounts(items), { all: 3, excel: 1, map: 1, manual: 1 });
+  assert.deepEqual(filterLibraryPlaces(items, "excel").map(p => p.id), ["xl"]);
+  assert.deepEqual(filterLibraryPlaces(items, "map").map(p => p.id), ["map"]);
+  assert.deepEqual(filterLibraryPlaces(items, "manual").map(p => p.id), ["manual"]);
+  assert.deepEqual(filterLibraryPlaces(items, "all").map(p => p.id), ["xl", "map", "manual"]);
 });
