@@ -5794,3 +5794,95 @@ textarea:focus-visible {
   .app-dialog--excel { width: calc(100vw - 18px); }
   .excel-import-dialog { padding: 13px; max-height: 90dvh; }
 }
+
+/* Import wizard: compact steps and clear provenance without Google billing. */
+.excel-import-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+.excel-import-steps > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px 8px;
+  border: 1px solid #ebefe9;
+  border-radius: 11px;
+  background: #fafbf9;
+  color: #88938a;
+  font-size: 10px;
+  font-weight: 800;
+}
+.excel-import-steps > span b {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid #dce7de;
+  border-radius: 999px;
+  background: #fff;
+  color: #788879;
+  font-size: 11px;
+}
+.excel-import-steps > span.is-current {
+  color: #285a3b;
+  border-color: #cce5d2;
+  background: #eff9f1;
+}
+.excel-import-steps > span.is-current b {
+  color: #fff;
+  border-color: #306e48;
+  background: #306e48;
+}
+.excel-import-source {
+  display: grid;
+  gap: 5px;
+  padding: 10px 12px;
+  border-left: 3px solid #338653;
+  border-radius: 10px;
+  background: #f0f8f2;
+}
+.excel-import-source strong {
+  color: #27623c;
+  font-size: 11px;
+}
+.excel-import-source small {
+  color: #63816b;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.excel-row-status {
+  display: inline-flex;
+  width: fit-content;
+  padding: 4px 7px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 850;
+}
+.excel-row-status.is-selected { background: #e3f4e9; color: #28734a; }
+.excel-row-status.is-unselected { background: #f2f4f2; color: #708077; }
+.excel-row-status.is-error { background: #fff2e9; color: #b45a38; }
+.excel-import-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.excel-import-actions-row button {
+  padding: 8px 11px;
+  border: 1px solid #dee8de;
+  border-radius: 10px;
+  background: #fff;
+  color: #597362;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.excel-import-actions-row button:disabled { opacity: .55; cursor: not-allowed; }
+@media (max-width: 760px) {
+  .excel-import-steps > span { flex-direction: column; gap: 4px; text-align: center; font-size: 9px; }
+  .excel-import-steps > span b { width: 20px; height: 20px; }
+}
