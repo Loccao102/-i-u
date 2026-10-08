@@ -17,6 +17,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: Regenerate lockfile for diagnosis (temporary)
+        run: |
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          echo "LOCK_DATA_BEGIN"
+          base64 -w 800 package-lock.json | sed 's/^/LOCK_DATA:/'
+          echo "LOCK_DATA_END"
       - name: Install dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Typecheck
