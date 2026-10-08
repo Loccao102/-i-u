@@ -1,12 +1,12 @@
 import "server-only";
 
-import { randomUUID } from "node:crypto";
 import ExcelJS from "exceljs";
 import { parseCostAmount, priceLabelForCost } from "../cost-estimation";
-import type { Place } from "../types";
-import { cleanPlainText, suggestScenarios } from "../validation";
-import { upsertPlace } from "./personal-repository";
-import { getSupabaseAdmin } from "./supabase";
+import { placeFromPoiResult } from "../places";
+import type { Place, PoiSearchResult } from "../types";
+import { cleanPlainText } from "../validation";
+import { importProviderPlace } from "./personal-repository";
+import { searchPoi } from "./poi-provider";
 
 const MAX_ROWS = 20;
 
@@ -19,7 +19,7 @@ export type ExcelPlaceRow = {
   cost: string;
 };
 
-export type GoogleExcelCandidate = {
+export type ExcelCandidate = {
   id: string;
   name: string;
   address: string;
@@ -27,22 +27,8 @@ export type GoogleExcelCandidate = {
   longitude: number;
   mapsUrl: string;
   confidence: number;
+  source: "geoapify" | "openstreetmap";
 };
-
-type GooglePlace = {
-  id?: string;
-  displayName?: { text?: string };
-  formattedAddress?: string;
-  location?: { latitude?: number; longitude?: number };
-  googleMapsUri?: string;
-  primaryType?: string;
-};
-
-function googleKey() {
-  const key = process.env.GOOGLE_PLACES_API_KEY?.trim();
-  if (!key) throw new Error("GOOGLE_PLACES_NOT_CONFIGURED");
-  return key;
-}
 
 function safeCell(value: ExcelJS.CellValue): string {
   if (value === null || value === undefined) return "";
@@ -69,79 +55,24 @@ function relevantName(source: string, name: string) {
   return overlap / Math.max(left.size, right.size);
 }
 
-function exactPlaceId(mapsUrl: string) {
-  if (!mapsUrl || mapsUrl.length > 500) return null;
-  try {
-    const parsed = new URL(mapsUrl);
-    if (!/(^|\.)google\.(com|com\.vn)$/.test(parsed.hostname) &&
-        parsed.hostname !== "maps.app.goo.gl") return null;
-    const queryId = parsed.searchParams.get("query_place_id") ||
-      parsed.searchParams.get("place_id");
-    if (queryId && /^[a-zA-Z0-9_-]{8,180}$/.test(queryId)) return queryId;
-    const match = /!1s(ChIJ[a-zA-Z0-9_-]{8,180})/.exec(mapsUrl);
-    return match?.[1] ?? null;
-  } catch {
-    return null;
-  }
-}
-
-function candidate(raw: GooglePlace, sourceName: string): GoogleExcelCandidate | null {
-  if (!raw.id || !/^[a-zA-Z0-9_-]{8,180}$/.test(raw.id)) return null;
-  const name = cleanPlainText(raw.displayName?.text || "", 100);
-  const latitude = raw.location?.latitude;
-  const longitude = raw.location?.longitude;
-  if (!name || typeof latitude !== "number" || typeof longitude !== "number" ||
-      !Number.isFinite(latitude) || !Number.isFinite(longitude) ||
-      Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return null;
-
+function candidateFromPoi(result: PoiSearchResult, name: string): ExcelCandidate {
+  const coordinates = result.latitude + "," + result.longitude;
   return {
-    id: raw.id,
-    name,
-    address: cleanPlainText(raw.formattedAddress || "", 250),
-    latitude,
-    longitude,
-    mapsUrl: raw.googleMapsUri || "https://www.google.com/maps/search/?api=1&query_place_id=" + encodeURIComponent(raw.id),
-    confidence: Math.round(relevantName(sourceName, name) * 100)
+    id: result.providerId,
+    name: result.name,
+    address: result.address ?? result.displayName,
+    latitude: result.latitude,
+    longitude: result.longitude,
+    // Google Maps is a reference link only. The result was found through
+    // Geoapify/OpenStreetMap, not through paid Google Places verification.
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(coordinates),
+    confidence: Math.round(relevantName(name, result.name) * 100),
+    source: result.provider
   };
 }
 
-async function googleFetch(url: string, init?: RequestInit) {
-  const response = await fetch(url, {
-    ...init,
-    headers: {
-      "X-Goog-Api-Key": googleKey(),
-      "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location,places.googleMapsUri,places.primaryType",
-      ...(init?.headers ?? {})
-    },
-    signal: AbortSignal.timeout(9000),
-    cache: "no-store"
-  });
-  if (!response.ok) {
-    console.error("[di-dau] Google Places request failed", response.status);
-    throw new Error(response.status === 429 ? "GOOGLE_PLACES_QUOTA" : "GOOGLE_PLACES_UNAVAILABLE");
-  }
-  return response.json() as Promise<{ places?: GooglePlace[] }>;
-}
-
-async function googleDetails(placeId: string): Promise<GooglePlace> {
-  if (!/^[a-zA-Z0-9_-]{8,180}$/.test(placeId)) throw new Error("INVALID_GOOGLE_PLACE_ID");
-  const response = await fetch(
-    "https://places.googleapis.com/v1/places/" + encodeURIComponent(placeId),
-    {
-      headers: {
-        "X-Goog-Api-Key": googleKey(),
-        "X-Goog-FieldMask": "id,displayName,formattedAddress,location,googleMapsUri,primaryType"
-      },
-      cache: "no-store",
-      signal: AbortSignal.timeout(9000)
-    }
-  );
-  if (!response.ok) throw new Error("GOOGLE_PLACE_NOT_FOUND");
-  return response.json() as Promise<GooglePlace>;
-}
-
 export function excelImportConfigured() {
-  return Boolean(process.env.GOOGLE_PLACES_API_KEY?.trim());
+  return Boolean(process.env.GEOAPIFY_API_KEY?.trim());
 }
 
 export async function buildExcelTemplate(): Promise<Buffer> {
@@ -190,13 +121,13 @@ export async function buildExcelTemplate(): Promise<Buffer> {
     ["ĐiĐâu – Import từ Excel", "Dòng mẫu trong DiaDiem chỉ để tham khảo, xóa trước khi dùng."],
     ["TenDiaDiem", "Bắt buộc. Điền tên trên Google Maps, ví dụ: Văn Miếu - Quốc Tử Giám."],
     ["KhuVucDiaChi", "Rất nên có để tránh nhầm quán trùng tên, ví dụ: Đống Đa, Hà Nội."],
-    ["LinkGoogleMaps", "Không bắt buộc; chỉ hỗ trợ link Google Maps chuẩn. Link rút gọn có thể cần xác nhận bằng tên/địa chỉ."],
+    ["LinkGoogleMaps", "Không bắt buộc, chỉ là đường dẫn tham khảo để tự kiểm tra; không dùng để lấy dữ liệu Google Places."],
     ["GhiChu", "Không bắt buộc; nội dung do bạn tự viết."],
     ["ChiPhi2Nguoi", "Không bắt buộc; VND cho hai người, ví dụ 250000 hoặc 250k."],
     ["Giới hạn", "Mỗi lần kiểm tra tối đa 20 địa điểm. File dưới 1MB."],
-    ["Xác thực", "ĐiĐâu tìm bằng Google Places. Bạn xem và chọn kết quả trước khi lưu."],
+    ["Xác thực", "Địa điểm được đối chiếu Geoapify/OpenStreetMap. Hãy chọn kết quả trước khi lưu."],
     ["Quyền truy cập", "Địa điểm chỉ lưu trong profile cá nhân theo cookie trình duyệt."],
-    ["Chi phí API", "Google Places API cần key và bật billing trong Google Cloud."]
+    ["Chi phí API", "Không cần Google Places key; Geoapify dùng hạn mức API hiện tại. Không thực hiện gọi Google Places trả phí."]
   ].forEach(row => instructions.addRow(row));
   instructions.getRow(1).font = { bold: true, color: { argb: "FF275442" }, size: 12 };
   return Buffer.from(await workbook.xlsx.writeBuffer());
@@ -233,70 +164,52 @@ export async function readExcelPlaces(bytes: Buffer): Promise<ExcelPlaceRow[]> {
   return result;
 }
 
-export async function searchExcelRow(row: ExcelPlaceRow) {
-  const placeId = exactPlaceId(row.mapsUrl);
-  let raw: GooglePlace[] = [];
-  if (placeId) raw = [await googleDetails(placeId)];
-  else {
-    const response = await googleFetch("https://places.googleapis.com/v1/places:searchText", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        textQuery: [row.name, row.area].filter(Boolean).join(", "),
-        languageCode: "vi",
-        maxResultCount: 3
-      })
-    });
-    raw = response.places ?? [];
-  }
-  return raw.map(place => candidate(place, row.name)).filter((x): x is GoogleExcelCandidate => x !== null);
+export async function searchExcelRow(row: ExcelPlaceRow): Promise<ExcelCandidate[]> {
+  if (!excelImportConfigured()) throw new Error("GEOAPIFY_NOT_CONFIGURED");
+  const textQuery = [row.name, row.area].filter(Boolean).join(", ");
+  // Reuse the existing POI search backend and its 5-minute Geoapify cache.
+  // This never uses paid Google Places, including for URLs pasted into Excel.
+  const places = await searchPoi({ query: textQuery });
+  return places
+    .map(result => candidateFromPoi(result, row.name))
+    .filter(item => item.confidence >= 15)
+    .sort((a, b) => b.confidence - a.confidence)
+    .slice(0, 5);
 }
 
 export async function persistExcelRow(
   ownerKey: string, row: ExcelPlaceRow, selectedId: string
 ): Promise<{ duplicate: boolean; place: Place }> {
-  const details = await googleDetails(selectedId);
-  const resolved = candidate(details, row.name);
-  if (!resolved) throw new Error("GOOGLE_PLACE_NOT_FOUND");
-  const supabase = getSupabaseAdmin();
-  const { data: existing, error } = await supabase
-    .from("personal_places")
-    .select("id")
-    .eq("owner_key", ownerKey)
-    .eq("google_place_id", resolved.id)
-    .limit(1);
-  if (error) throw new Error("DATABASE_LOOKUP_FAILED");
-  if (existing?.length) {
-    return { duplicate: true, place: { id: existing[0].id } as Place };
-  }
+  // Never trust the Place ID submitted by the browser. Re-query the source
+  // and confirm the selected candidate is in the current server-side results.
+  const options = await searchExcelRow(row);
+  const chosen = options.find(item => item.id === selectedId);
+  if (!chosen) throw new Error("PLACE_NOT_IN_RESULTS");
 
+  const original: PoiSearchResult = {
+    provider: chosen.source,
+    providerId: chosen.id,
+    name: chosen.name,
+    displayName: chosen.address || chosen.name,
+    kind: "Địa điểm",
+    latitude: chosen.latitude,
+    longitude: chosen.longitude,
+    scenarios: [],
+    accent: "#487e63",
+    address: chosen.address
+  };
   const cost = parseCostAmount(row.cost);
-  const scenarios = suggestScenarios(row.note + " " + resolved.name);
   const place: Place = {
-    id: randomUUID(),
-    name: resolved.name,
-    kind: "Địa điểm từ Google Maps",
-    description: "",
-    latitude: resolved.latitude,
-    longitude: resolved.longitude,
-    distanceKm: 0,
-    priceLabel: cost === null ? "$" : priceLabelForCost(cost),
+    ...placeFromPoiResult(original),
+    id: crypto.randomUUID(),
+    description: row.note,
+    note: cleanPlainText(row.note, 300),
     averageForTwo: cost === null ? "Chưa có dữ liệu" : String(cost),
+    priceLabel: cost === null ? "$" : priceLabelForCost(cost),
     costSource: cost === null ? "unknown" : "user",
     costConfidence: cost === null ? 0 : 100,
-    publicRating: 0,
-    match: 75,
-    communityNote: "Nhập Excel · Google Maps",
-    openUntil: "Chưa rõ",
-    bestTime: "Chưa có dữ liệu",
-    noise: "Vừa", crowd: "Vừa",
-    tags: scenarios, scenarios,
-    note: cleanPlainText(row.note, 300),
-    accent: "#487e63",
-    source: "personal",
-    googlePlaceId: resolved.id,
-    address: resolved.address
+    communityNote: chosen.source === "geoapify"
+      ? "Nhập Excel · Geoapify" : "Nhập Excel · OpenStreetMap"
   };
-  await upsertPlace(ownerKey, place);
-  return { duplicate: false, place };
+  return importProviderPlace(ownerKey, place);
 }
