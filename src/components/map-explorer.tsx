@@ -175,6 +175,27 @@ const routingModeLabels: Record<RoutingMode, string> = {
 
 type PersonalView = "discover" | "saved" | "history" | "collections";
 
+type ExcelRow = {
+  row: number; name: string; area: string; mapsUrl: string; note: string; cost: string;
+};
+type ExcelCandidate = {
+  id: string; name: string; address: string; latitude: number;
+  longitude: number; mapsUrl: string; confidence: number;
+};
+type ExcelPreviewRow = {
+  row: ExcelRow; candidates: ExcelCandidate[]; error: string | null;
+};
+
+async function excelApiResponse(response: Response) {
+  const json: unknown = await response.json();
+  if (!json || typeof json !== "object") throw new Error("Phản hồi máy chủ không hợp lệ.");
+  const data = json as Record<string, unknown>;
+  if (!response.ok) {
+    throw new Error(typeof data.error === "string" ? data.error : "Import Excel không thành công.");
+  }
+  return data;
+}
+
 const discoveryCategoryOptions: Array<{
   value: PoiDiscoveryFilters["category"];
   label: string;
@@ -537,6 +558,12 @@ export function MapExplorer() {
     useState<OwnedItineraryShare[]>([]);
   const [serverDistances, setServerDistances] = useState<Record<string, number>>({});
   const [backupLoading, setBackupLoading] = useState(false);
+  const [excelLoading, setExcelLoading] = useState(false);
+  const [excelFileName, setExcelFileName] = useState("");
+  const [excelPreview, setExcelPreview] = useState<ExcelPreviewRow[]>([]);
+  const [excelSelected, setExcelSelected] = useState<Record<number, string>>({});
+  const [excelImportResult, setExcelImportResult] = useState<string | null>(null);
+  const [excelError, setExcelError] = useState<string | null>(null);
   const [shareLoading, setShareLoading] = useState(false);
   const [groupPollLoading, setGroupPollLoading] = useState(false);
   const [comparisonSort, setComparisonSort] = useState<ComparisonSort>("match");
@@ -621,6 +648,7 @@ export function MapExplorer() {
   const mapRef = useRef<MapLibreMap | null>(null);
   const markerRefs = useRef<MapLibreMarker[]>([]);
   const addDialogRef = useRef<HTMLDialogElement | null>(null);
+  const excelDialogRef = useRef<HTMLDialogElement | null>(null);
   const editDialogRef = useRef<HTMLDialogElement | null>(null);
   const ratingDialogRef = useRef<HTMLDialogElement | null>(null);
   const planFeedbackDialogRef = useRef<HTMLDialogElement | null>(null);
@@ -3234,6 +3262,88 @@ export function MapExplorer() {
     }
   }
 
+  function openExcelDialog() {
+    addDialogRef.current?.close();
+    setExcelError(null);
+    excelDialogRef.current?.showModal();
+  }
+
+  async function previewExcelFile(file: File) {
+    if (!/\.xlsx$/i.test(file.name) || file.size > 1024 * 1024) {
+      setExcelError("Chỉ nhận file .xlsx dưới 1 MB.");
+      return;
+    }
+    setExcelLoading(true);
+    setExcelError(null);
+    setExcelImportResult(null);
+    setExcelPreview([]);
+    setExcelSelected({});
+    setExcelFileName(file.name);
+    try {
+      const form = new FormData();
+      form.set("file", file);
+      const response = await fetch("/api/personal/import-excel", {
+        method: "POST", body: form, credentials: "same-origin", cache: "no-store"
+      });
+      const data = await excelApiResponse(response);
+      const results = (data.results ?? []) as ExcelPreviewRow[];
+      setExcelPreview(results);
+      const picks: Record<number, string> = {};
+      for (const result of results) {
+        const first = result.candidates[0];
+        const second = result.candidates[1];
+        // Auto-pick only a strongly matched and unambiguous Google result.
+        if (first && first.confidence >= 85 &&
+            (!second || first.confidence - second.confidence >= 20)) {
+          picks[result.row.row] = first.id;
+        }
+      }
+      setExcelSelected(picks);
+    } catch (error) {
+      setExcelError(error instanceof Error ? error.message : "Không thể đọc Excel.");
+    } finally {
+      setExcelLoading(false);
+    }
+  }
+
+  async function confirmExcelImport() {
+    const items = excelPreview.flatMap(({ row }) =>
+      excelSelected[row.row] ? [{ row, selectedId: excelSelected[row.row] }] : []
+    );
+    if (!items.length) {
+      setExcelError("Chọn ít nhất một địa điểm Google Maps đã xác minh.");
+      return;
+    }
+    setExcelLoading(true);
+    setExcelError(null);
+    try {
+      const response = await fetch("/api/personal/import-excel", {
+        method: "PUT",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+        cache: "no-store"
+      });
+      const data = await excelApiResponse(response);
+      const results = (data.results ?? []) as Array<{ row: number; status: string; error?: string }>;
+      const added = results.filter(item => item.status === "added").length;
+      const duplicate = results.filter(item => item.status === "duplicate").length;
+      const failed = results.filter(item => item.status === "error");
+      setExcelImportResult("Đã lưu " + added + " địa điểm, bỏ qua " + duplicate +
+        " địa điểm trùng" + (failed.length ? ", lỗi " + failed.length + " dòng." : "."));
+      if (failed.length) setExcelError(failed.map(v => "Dòng " + v.row + ": " + (v.error || "Không thể nhập")).join(" · "));
+      if (added > 0) {
+        await loadSnapshot();
+        setNotice("Đã thêm " + added + " địa điểm từ Google Maps vào Supabase cá nhân.");
+      }
+      setExcelSelected({});
+    } catch (error) {
+      setExcelError(error instanceof Error ? error.message : "Không thể lưu địa điểm.");
+    } finally {
+      setExcelLoading(false);
+    }
+  }
+
   async function submitNewPlace(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
@@ -4539,14 +4649,19 @@ export function MapExplorer() {
           </div>
         ) : null}
 
-        <button
-          className="wide-secondary"
-          type="button"
-          onClick={() => addDialogRef.current?.showModal()}
-        >
-          <PlusIcon />
-          Thêm địa điểm thủ công
-        </button>
+        <div className="place-import-actions">
+          <button
+            className="wide-secondary"
+            type="button"
+            onClick={() => addDialogRef.current?.showModal()}
+          >
+            <PlusIcon />
+            Thêm địa điểm thủ công
+          </button>
+          <button className="excel-import-entry" type="button" onClick={openExcelDialog}>
+            <span aria-hidden="true">▦</span> Import Excel · Google Maps
+          </button>
+        </div>
       </section>
 
       <section className="map-pane" aria-label="Bản đồ">
@@ -5599,6 +5714,104 @@ export function MapExplorer() {
         </div>
       </dialog>
 
+      <dialog className="app-dialog app-dialog--excel" ref={excelDialogRef}>
+        <div className="dialog-card excel-import-dialog">
+          <div className="dialog-header">
+            <div>
+              <span className="eyebrow">Nhập dữ liệu · Google Places</span>
+              <h2>Import địa điểm từ Excel</h2>
+            </div>
+            <button className="icon-button" type="button" onClick={() => excelDialogRef.current?.close()} aria-label="Đóng"><CloseIcon /></button>
+          </div>
+          <p className="dialog-copy">
+            Tải mẫu, điền tên địa điểm và khu vực, rồi chọn kết quả phù hợp trên Google Maps trước khi lưu vào profile cá nhân.
+          </p>
+          <div className="excel-import-instructions">
+            <a href="/api/personal/import-excel" download="DiDau-Mau-Import-GoogleMaps.xlsx">
+              ↓ Tải mẫu Excel (.xlsx)
+            </a>
+            <span>Tối đa 20 địa điểm/lần · 1 MB · Cần Google Places API (New)</span>
+          </div>
+          <label className="excel-upload-field">
+            <strong>Chọn file Excel đã điền</strong>
+            <input
+              type="file"
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              disabled={excelLoading}
+              onChange={event => {
+                const file = event.target.files?.[0];
+                if (file) void previewExcelFile(file);
+                event.currentTarget.value = "";
+              }}
+            />
+            <small>{excelFileName || "Chưa chọn file"}</small>
+          </label>
+          {excelLoading ? <p role="status" className="excel-import-loading">Đang kiểm tra với Google Maps / Supabase…</p> : null}
+          {excelError ? <p role="alert" className="excel-import-error">{excelError}</p> : null}
+          {excelImportResult ? <p role="status" className="excel-import-success">{excelImportResult}</p> : null}
+          {excelPreview.length ? (
+            <div className="excel-preview-area">
+              <div className="excel-preview-area__head">
+                <strong>Xem trước {excelPreview.length} dòng</strong>
+                <span>{Object.keys(excelSelected).length} đã chọn · Dòng không khớp sẽ bỏ qua</span>
+              </div>
+              {excelPreview.map(({ row, candidates, error }) => (
+                <section key={row.row} className="excel-preview-row">
+                  <div className="excel-preview-row__label">
+                    <b>#{row.row} · {row.name}</b>
+                    <small>{row.area || "Chưa có khu vực"}</small>
+                    {row.note ? <small>Ghi chú: {row.note}</small> : null}
+                  </div>
+                  {error ? <span className="excel-preview-row__error">{error}</span>
+                    : !candidates.length ? <span className="excel-preview-row__error">Google Maps không tìm thấy địa điểm phù hợp.</span>
+                    : (
+                      <div className="excel-preview-row__choices">
+                        <label>
+                          <span>Địa điểm trên Google Maps</span>
+                          <select
+                            value={excelSelected[row.row] ?? ""}
+                            onChange={event => setExcelSelected(current => {
+                              const next = { ...current };
+                              if (!event.target.value) delete next[row.row];
+                              else next[row.row] = event.target.value;
+                              return next;
+                            })}
+                          >
+                            <option value="">Bỏ qua / chưa chắc chắn</option>
+                            {candidates.map(candidate => (
+                              <option key={candidate.id} value={candidate.id}>
+                                {candidate.name} · {candidate.address} ({candidate.confidence}% trùng tên)
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        {candidates.find(item => item.id === excelSelected[row.row]) ? (
+                          <a
+                            href={candidates.find(item => item.id === excelSelected[row.row])!.mapsUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >Kiểm tra trên Google Maps ↗</a>
+                        ) : null}
+                      </div>
+                    )}
+                </section>
+              ))}
+            </div>
+          ) : null}
+          <button
+            className="primary-button primary-button--wide"
+            type="button"
+            disabled={excelLoading || !Object.keys(excelSelected).length}
+            onClick={() => void confirmExcelImport()}
+          >
+            Xác nhận nhập {Object.keys(excelSelected).length} địa điểm đã chọn
+          </button>
+          <small className="excel-import-footnote">
+            Không tự lưu kết quả khớp mơ hồ. Địa điểm trùng Google Place ID sẽ được bỏ qua; chi phí trong Excel là thông tin do bạn cung cấp.
+          </small>
+        </div>
+      </dialog>
+
       <dialog className="app-dialog" ref={addDialogRef}>
         <form className="dialog-card" onSubmit={submitNewPlace}>
           <div className="dialog-header">
@@ -5608,6 +5821,9 @@ export function MapExplorer() {
           <p className="dialog-copy">
             Pin được đặt tại tâm bản đồ. App tự suy ra context từ ghi chú.
           </p>
+          <button type="button" className="excel-import-inline" onClick={openExcelDialog}>
+            ▦ Nhập nhiều địa điểm bằng Excel từ Google Maps →
+          </button>
           <label className="field">
             <span>Tên</span>
             <input name="name" required minLength={2} maxLength={80} />
