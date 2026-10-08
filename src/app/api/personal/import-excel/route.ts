@@ -120,16 +120,30 @@ export async function PUT(request: NextRequest) {
     const body = await readJsonObject(request);
     const rows = validatedConfirmed(body.items);
     const result: Array<{ row: number; status: "added" | "duplicate" | "error"; name: string; error?: string }> = [];
-    for (const { row, selectedId } of rows) {
-      try {
-        const imported = await persistExcelRow(profile.ownerKey, row, selectedId);
-        result.push({
-          row: row.row, name: row.name,
-          status: imported.duplicate ? "duplicate" : "added"
-        });
-      } catch (error) {
-        result.push({ row: row.row, name: row.name, status: "error", error: message(error) });
-      }
+    const selectedIds = new Set<string>();
+    // Bound the Google Places + Supabase writes to keep a 20-row import within
+    // one serverless request. Duplicate selected Place IDs are never written twice.
+    const uniqueRows = rows.map(item => {
+      const repeated = selectedIds.has(item.selectedId);
+      selectedIds.add(item.selectedId);
+      return { ...item, repeated };
+    });
+    for (let offset = 0; offset < uniqueRows.length; offset += 4) {
+      const group = await Promise.all(uniqueRows.slice(offset, offset + 4).map(async ({ row, selectedId, repeated }) => {
+        if (repeated) {
+          return { row: row.row, name: row.name, status: "duplicate" as const };
+        }
+        try {
+          const imported = await persistExcelRow(profile.ownerKey, row, selectedId);
+          return {
+            row: row.row, name: row.name,
+            status: imported.duplicate ? "duplicate" as const : "added" as const
+          };
+        } catch (error) {
+          return { row: row.row, name: row.name, status: "error" as const, error: message(error) };
+        }
+      }));
+      result.push(...group);
     }
     return profileJson(profile, { results: result }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
