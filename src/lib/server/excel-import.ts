@@ -1,6 +1,7 @@
 import "server-only";
 
 import ExcelJS from "exceljs";
+import { randomUUID } from "node:crypto";
 import { parseCostAmount, priceLabelForCost } from "../cost-estimation";
 import { placeFromPoiResult } from "../places";
 import type { Place, PoiSearchResult } from "../types";
@@ -145,6 +146,7 @@ export async function readExcelPlaces(bytes: Buffer): Promise<ExcelPlaceRow[]> {
   const expected = ["tendiadiem", "khuvudiachi", "linkgooglemaps", "ghichu", "chiphi2nguoi"];
   const actual = expected.map((_, i) => normal(safeCell(sheet.getRow(1).getCell(i + 1).value)).replace(/\s/g, ""));
   if (expected.some((key, i) => key !== actual[i])) throw new Error("INVALID_XLSX_TEMPLATE");
+  if (sheet.rowCount > 201) throw new Error("EXCEL_ROW_LIMIT");
   const result: ExcelPlaceRow[] = [];
   for (let number = 2; number <= sheet.rowCount; number++) {
     const row = sheet.getRow(number);
@@ -164,15 +166,42 @@ export async function readExcelPlaces(bytes: Buffer): Promise<ExcelPlaceRow[]> {
   return result;
 }
 
-export async function searchExcelRow(row: ExcelPlaceRow): Promise<ExcelCandidate[]> {
+// Read a coordinate hint from a full Google Maps URL locally, without
+// requesting any Google endpoint or following shortened links.
+function googleLinkLocation(value: string) {
+  if (!value || value.length > 500) return undefined;
+  try {
+    const url = new URL(value);
+    if (!/(^|\\.)google\\.(com|com\\.vn)$/.test(url.hostname)) return undefined;
+    const match = /@(-?\\d+(?:\\.\\d+)?),(-?\\d+(?:\\.\\d+)?)/.exec(value) ??
+      /[?&]q=(-?\\d+(?:\\.\\d+)?),(-?\\d+(?:\\.\\d+)?)/.exec(value);
+    if (!match) return undefined;
+    const latitude = Number(match[1]);
+    const longitude = Number(match[2]);
+    return Number.isFinite(latitude) && Number.isFinite(longitude) &&
+      Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180
+      ? { latitude, longitude } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function sourceResults(row: ExcelPlaceRow) {
   if (!excelImportConfigured()) throw new Error("GEOAPIFY_NOT_CONFIGURED");
-  const textQuery = [row.name, row.area].filter(Boolean).join(", ");
-  // Reuse the existing POI search backend and its 5-minute Geoapify cache.
-  // This never uses paid Google Places, including for URLs pasted into Excel.
-  const places = await searchPoi({ query: textQuery });
+  const hint = googleLinkLocation(row.mapsUrl);
+  return searchPoi({
+    query: [row.name, row.area].filter(Boolean).join(", "),
+    latitude: hint?.latitude,
+    longitude: hint?.longitude
+  });
+}
+
+export async function searchExcelRow(row: ExcelPlaceRow): Promise<ExcelCandidate[]> {
+  const places = await sourceResults(row);
+  // Keep weak matches visible so users can manually review place names in
+  // another language; no row is auto-imported by the backend.
   return places
     .map(result => candidateFromPoi(result, row.name))
-    .filter(item => item.confidence >= 15)
     .sort((a, b) => b.confidence - a.confidence)
     .slice(0, 5);
 }
@@ -180,35 +209,21 @@ export async function searchExcelRow(row: ExcelPlaceRow): Promise<ExcelCandidate
 export async function persistExcelRow(
   ownerKey: string, row: ExcelPlaceRow, selectedId: string
 ): Promise<{ duplicate: boolean; place: Place }> {
-  // Never trust the Place ID submitted by the browser. Re-query the source
-  // and confirm the selected candidate is in the current server-side results.
-  const options = await searchExcelRow(row);
-  const chosen = options.find(item => item.id === selectedId);
-  if (!chosen) throw new Error("PLACE_NOT_IN_RESULTS");
-
-  const original: PoiSearchResult = {
-    provider: chosen.source,
-    providerId: chosen.id,
-    name: chosen.name,
-    displayName: chosen.address || chosen.name,
-    kind: "Địa điểm",
-    latitude: chosen.latitude,
-    longitude: chosen.longitude,
-    scenarios: [],
-    accent: "#487e63",
-    address: chosen.address
-  };
+  // Re-fetch candidates in the backend and accept only a provider ID which
+  // was actually found for this Excel row, never trusting browser-supplied geo.
+  const places = await sourceResults(row);
+  const original = places.find(item => item.providerId === selectedId);
+  if (!original) throw new Error("PLACE_NOT_IN_RESULTS");
   const cost = parseCostAmount(row.cost);
   const place: Place = {
     ...placeFromPoiResult(original),
-    id: crypto.randomUUID(),
-    description: row.note,
+    id: randomUUID(),
     note: cleanPlainText(row.note, 300),
     averageForTwo: cost === null ? "Chưa có dữ liệu" : String(cost),
     priceLabel: cost === null ? "$" : priceLabelForCost(cost),
     costSource: cost === null ? "unknown" : "user",
     costConfidence: cost === null ? 0 : 100,
-    communityNote: chosen.source === "geoapify"
+    communityNote: original.provider === "geoapify"
       ? "Nhập Excel · Geoapify" : "Nhập Excel · OpenStreetMap"
   };
   return importProviderPlace(ownerKey, place);
