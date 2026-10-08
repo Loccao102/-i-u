@@ -5575,3 +5575,86 @@ textarea:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .map-place-preview { animation: none; }
 }
+
+/* Honest comparison: allow users to switch priorities without hiding provenance. */
+.comparison-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 9px 0;
+}
+.comparison-toolbar > span {
+  color: #5a655d;
+  font-size: 11px;
+  font-weight: 850;
+}
+.comparison-toolbar__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.comparison-toolbar__options button {
+  padding: 8px 11px;
+  border: 1px solid #e1e8e1;
+  border-radius: 999px;
+  background: #f8faf7;
+  color: #566b5a;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.comparison-toolbar__options button.is-active {
+  border-color: #2b4d38;
+  background: #2b4d38;
+  color: #fff;
+}
+.comparison-disclaimer {
+  margin: 0 0 13px;
+  padding: 10px 12px;
+  border: 1px solid #e6ebe4;
+  border-radius: 11px;
+  background: #f8faf6;
+  color: #607166;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.compare-card__highlights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 8px 0;
+  min-height: 28px;
+  align-content: start;
+}
+.compare-card__highlights span {
+  border-radius: 999px;
+  padding: 5px 7px;
+  background: #e8f5ea;
+  color: #28573b;
+  font-size: 9px;
+  font-weight: 850;
+}
+.compare-card__highlights span:first-child {
+  background: #fff0e7;
+  color: #bb5141;
+}
+.compare-cost-hint {
+  margin-left: 5px;
+  color: #898e81;
+  font-size: 8px;
+  font-weight: 650;
+}
+@media (max-width: 760px) {
+  .comparison-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .comparison-toolbar__options button {
+    flex: 1 1 auto;
+  }
+  .compare-card__highlights {
+    min-height: 0;
+  }
+}
