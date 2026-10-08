@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { openingStatus } from "../../src/lib/opening-hours";
+import { comparisonCost, comparisonHighlights, sortComparisonPlaces } from "../../src/lib/comparison";
 import { filterPlaces } from "../../src/lib/search";
 import {
   deriveGroupPollOutcome,
@@ -607,4 +608,51 @@ test("POI distance uses the viewed search area without GPS, not a zero-km placeh
   );
   assert.equal(withGps.distanceKm, 0);
   assert.ok(withGps.recommendationReasons.includes("Rất gần bạn"));
+});
+
+
+test("comparison sorts by match, distance, and known costs without inventing prices", () => {
+  const pricey = place({
+    id: "pricey",
+    name: "Đắt mà hợp gu",
+    match: 95,
+    distanceKm: 4,
+    averageForTwo: "500k",
+    costSource: "provider_estimate"
+  });
+  const cheap = place({
+    id: "cheap",
+    name: "Giá rẻ hơn",
+    match: 81,
+    distanceKm: 1,
+    averageForTwo: "180k",
+    costSource: "user"
+  });
+  const unknown = place({
+    id: "unknown",
+    name: "Chưa xác định giá",
+    match: 90,
+    distanceKm: 6,
+    costSource: "unknown",
+    averageForTwo: "Chưa có dữ liệu"
+  });
+  const options = [pricey, unknown, cheap];
+  assert.deepEqual(sortComparisonPlaces(options, "match").map(p => p.id), ["pricey", "unknown", "cheap"]);
+  assert.deepEqual(sortComparisonPlaces(options, "distance").map(p => p.id), ["cheap", "pricey", "unknown"]);
+  assert.deepEqual(sortComparisonPlaces(options, "cost").map(p => p.id), ["cheap", "pricey", "unknown"]);
+  assert.equal(comparisonCost(unknown), null);
+  assert.equal(comparisonCost(pricey), 500000);
+  assert.deepEqual(comparisonHighlights(options), {
+    matchId: "pricey",
+    distanceId: "cheap",
+    costId: "cheap"
+  });
+});
+
+test("comparison keeps original order for matching values", () => {
+  const b = place({ id: "b", name: "B", match: 70, distanceKm: 2, costSource: "unknown" });
+  const a = place({ id: "a", name: "A", match: 70, distanceKm: 2, costSource: "unknown" });
+  assert.deepEqual(sortComparisonPlaces([b, a], "match").map(p => p.id), ["b", "a"]);
+  assert.deepEqual(sortComparisonPlaces([b, a], "cost").map(p => p.id), ["b", "a"]);
+  assert.equal(comparisonHighlights([b, a]).costId, null);
 });
