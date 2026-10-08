@@ -621,6 +621,9 @@ export function MapExplorer() {
   const [mapPreviewId, setMapPreviewId] = useState<string | null>(null);
   const [mapTheme, setMapTheme] = useState<"streets" | "minimal">("streets");
   const [mapLoadError, setMapLoadError] = useState(false);
+  const [mapFocus, setMapFocus] = useState(false);
+  const [mobilePanel, setMobilePanel] = useState<"map" | "list">("map");
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   const [ratingStars, setRatingStars] = useState(5);
@@ -1904,8 +1907,22 @@ export function MapExplorer() {
     await refreshDiscovery(discoveryQueryBounds, true, true);
   }
 
+  // MapLibre must recalculate its canvas when sidebars or mobile sheets move.
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const map = mapRef.current;
+    const frame = window.requestAnimationFrame(() => map.resize());
+    const delayed = window.setTimeout(() => map.resize(), 280);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(delayed);
+    };
+  }, [mapFocus, mobilePanel]);
+
   function switchView(next: PersonalView) {
     setView(next);
+    setMobilePanel(next === "discover" ? "map" : "list");
+    setMapFocus(false);
     setLibrarySelectedIds(new Set());
     setQuery("");
     setScenario("all");
@@ -3901,6 +3918,16 @@ export function MapExplorer() {
     );
   }
 
+  const activeFilterCount =
+    Number(discoveryFilters.category !== "all") +
+    Number(discoveryFilters.amenity !== "any") +
+    Number(discoveryFilters.radiusKm !== 0) +
+    Number(discoveryFilters.openNow);
+  const activeScenarioLabel = readableScenario(scenario);
+  const locationReference = userLocation
+    ? "Từ vị trí của bạn"
+    : "Từ tâm khu vực tìm kiếm";
+
   const heading =
     view === "mine"
       ? visiblePlaces.length + " địa điểm trong thư viện"
@@ -3916,7 +3943,13 @@ export function MapExplorer() {
           : visiblePlaces.length + " địa điểm phù hợp";
 
   return (
-    <main className="app-shell">
+    <main
+      className={
+        "app-shell" +
+        (mapFocus ? " app-shell--map-focus" : "") +
+        (mobilePanel === "list" ? " app-shell--mobile-list" : "")
+      }
+    >
       <aside className="rail" aria-label="Điều hướng chính">
         <div className="rail-brand">
           <span className="rail-brand__mark"><PinIcon /></span>
@@ -3998,6 +4031,12 @@ export function MapExplorer() {
         </form>
 
         <div className="topbar-actions">
+          <details className="topbar-tools">
+            <summary aria-label="Mở công cụ dữ liệu và tài khoản">
+              <span aria-hidden="true">☰</span>
+              <span>Công cụ</span>
+            </summary>
+            <div className="topbar-tools__menu">
           <span
             className={
               "personal-mode-badge" +
@@ -4046,6 +4085,9 @@ export function MapExplorer() {
           >
             Links{itineraryShares.length > 0 ? " " + itineraryShares.length : ""}
           </button>
+
+            </div>
+          </details>
           <input
             ref={backupInputRef}
             className="visually-hidden"
@@ -4056,6 +4098,7 @@ export function MapExplorer() {
               if (file) void importBackupFile(file);
             }}
           />
+
 
           <button
             className={
@@ -4079,7 +4122,26 @@ export function MapExplorer() {
       </header>
 
       <section className="results-pane" aria-label="Danh sách địa điểm">
-        <div className="scenario-row">
+        <div className="discovery-welcome">
+          <div>
+            <strong>{view === "discover" ? "Khám phá quanh bạn" : view === "mine" ? "Thư viện của tôi" : "Địa điểm của tôi"}</strong>
+            <span>Chọn một địa điểm để xem, lưu hoặc lên lịch trình.</span>
+          </div>
+          {view === "discover" ? (
+            <button
+              type="button"
+              className="discovery-filter-trigger"
+              aria-expanded={showAdvancedFilters}
+              aria-controls="discovery-advanced-filters"
+              onClick={() => setShowAdvancedFilters(value => !value)}
+            >
+              <span aria-hidden="true">⚙</span>
+              Bộ lọc{activeFilterCount ? " · " + activeFilterCount : ""}
+              <span aria-hidden="true">{showAdvancedFilters ? "⌃" : "⌄"}</span>
+            </button>
+          ) : null}
+        </div>
+        <div className="scenario-row" role="group" aria-label="Chọn phong cách đi chơi">
           {scenarios.map((item) => (
             <button
               type="button"
@@ -4088,6 +4150,7 @@ export function MapExplorer() {
                 "scenario-chip" +
                 (scenario === item ? " scenario-chip--active" : "")
               }
+              aria-pressed={scenario === item}
               onClick={() => setScenario(item)}
             >
               {item !== "all" ? <span>{scenarioEmoji[item]}</span> : null}
@@ -4096,8 +4159,8 @@ export function MapExplorer() {
           ))}
         </div>
 
-        {view === "discover" ? (
-          <div className="discovery-filter-row">
+        {view === "discover" && showAdvancedFilters ? (
+          <div className="discovery-filter-row" id="discovery-advanced-filters">
             <label>
               <span>Loại</span>
               <select
@@ -4197,6 +4260,40 @@ export function MapExplorer() {
                 Xóa lọc
               </button>
             ) : null}
+          </div>
+        ) : null}
+
+        {view === "discover" ? (
+          <div className="discovery-context-bar" aria-label="Bộ lọc đang áp dụng">
+            <span className="discovery-context-bar__count">{visiblePlaces.length} địa điểm</span>
+            {scenario !== "all" ? (
+              <button type="button" onClick={() => setScenario("all")} aria-label={"Bỏ mood " + activeScenarioLabel}>
+                {activeScenarioLabel} ×
+              </button>
+            ) : null}
+            {discoveryFilters.category !== "all" ? (
+              <button type="button" onClick={() => setDiscoveryFilters(current => ({ ...current, category: "all" }))}>
+                {discoveryCategoryOptions.find(item => item.value === discoveryFilters.category)?.label} ×
+              </button>
+            ) : null}
+            {discoveryFilters.amenity !== "any" ? (
+              <button type="button" onClick={() => setDiscoveryFilters(current => ({ ...current, amenity: "any" }))}>
+                {discoveryAmenityOptions.find(item => item.value === discoveryFilters.amenity)?.label} ×
+              </button>
+            ) : null}
+            {discoveryFilters.radiusKm !== 0 ? (
+              <button type="button" onClick={() => setDiscoveryFilters(current => ({ ...current, radiusKm: 0 }))}>
+                Trong {discoveryFilters.radiusKm} km ×
+              </button>
+            ) : null}
+            {discoveryFilters.openNow ? (
+              <button type="button" onClick={() => setDiscoveryFilters(current => ({ ...current, openNow: false }))}>
+                Đang mở ×
+              </button>
+            ) : null}
+            <span className="discovery-context-bar__location" title="Khoảng cách đường chim bay, không phải quãng đường đi">
+              ⌖ {locationReference}
+            </span>
           </div>
         ) : null}
 
@@ -4701,7 +4798,7 @@ export function MapExplorer() {
           </section>
         ) : null}
 
-        <div className="place-list">
+        <div className="place-list" id="mobile-place-list" aria-label="Kết quả địa điểm">
           {visiblePlaces.length === 0 ? (
             <div className="empty-state">
               <strong>
@@ -4749,7 +4846,11 @@ export function MapExplorer() {
                   <button
                     type="button"
                     className="place-card__main"
-                    onClick={() => setSelectedId(place.id)}
+                    onClick={() => {
+                      setSelectedId(place.id);
+                      setMapPreviewId(place.id);
+                      setMobilePanel("map");
+                    }}
                   >
                     <span
                       className={
@@ -4923,56 +5024,43 @@ export function MapExplorer() {
           </div>
         ) : null}
         <div className="map-floating-top">
-          <span>
-            {viewportBounds
-              ? "Đang lọc khu vực bản đồ"
-              : view === "discover"
-                ? "Ranking theo gu + bối cảnh hiện tại"
-                : view === "collections"
-                  ? "Bộ sưu tập cá nhân"
-                  : view === "history"
-                    ? "Lịch sử đã đi"
-                    : "Địa điểm đã lưu"}
-          </span>
           <button
             type="button"
-            className="plan-button"
-            onClick={openPlanBuilder}
-          >
-            ◫ Kế hoạch
-          </button>
-          <button
-            type="button"
-            className="daily-discovery-button"
-            onClick={() => void openDailyDiscovery()}
-          >
-            ☀ Hôm nay
-          </button>
-          <button
-            type="button"
-            className="surprise-button"
-            onClick={surpriseMe}
-          >
-            ✨ Bất ngờ
-          </button>
-          {viewportBounds ? (
-            <button
-              type="button"
-              className="map-secondary-action"
-              onClick={clearViewportFilter}
-            >
-              Bỏ vùng
-            </button>
-          ) : null}
-          <button
-            type="button"
+            className="map-area-search"
             onClick={() => void searchCurrentArea()}
             disabled={viewportLoading || discoveryLoading}
           >
-            {viewportLoading || discoveryLoading
-              ? "Đang tìm…"
-              : "Tìm khu vực này"}
+            <SearchIcon />
+            {viewportLoading || discoveryLoading ? "Đang tìm…" : "Tìm trong khu vực này"}
           </button>
+          <button type="button" className="plan-button" onClick={openPlanBuilder}>
+            ◫ Lên kế hoạch
+          </button>
+          <button
+            type="button"
+            className="map-focus-toggle"
+            onClick={() => {
+              if (window.matchMedia("(max-width: 760px)").matches) {
+                setMobilePanel(previous => previous === "list" ? "map" : "list");
+              } else {
+                setMapFocus(previous => !previous);
+              }
+            }}
+            aria-pressed={mapFocus}
+          >
+            {mapFocus ? "Hiện danh sách" : "Xem rộng"}
+          </button>
+          <details className="map-extra-actions">
+            <summary aria-label="Các công cụ bản đồ khác">⋯ <span>Khác</span></summary>
+            <div className="map-extra-actions__menu">
+              <button type="button" onClick={() => void openDailyDiscovery()}>☀ Gợi ý hôm nay</button>
+              <button type="button" onClick={surpriseMe}>✨ Đi đâu bất ngờ?</button>
+              {viewportBounds ? (
+                <button type="button" onClick={clearViewportFilter}>Bỏ giới hạn vùng</button>
+              ) : null}
+              <button type="button" onClick={() => switchView("mine")}>Thư viện của tôi</button>
+            </div>
+          </details>
         </div>
 
         {mapPreviewPlace ? (
@@ -7330,6 +7418,43 @@ export function MapExplorer() {
           ) : null}
         </div>
       </dialog>
+      <nav className="mobile-bottom-nav" aria-label="Điều hướng điện thoại">
+        <button
+          type="button"
+          className={mobilePanel === "map" && view === "discover" ? "is-active" : ""}
+          onClick={() => { setView("discover"); setMobilePanel("map"); }}
+          aria-pressed={mobilePanel === "map" && view === "discover"}
+        >
+          <PinIcon /><span>Bản đồ</span>
+        </button>
+        <button
+          type="button"
+          className={mobilePanel === "list" && view === "discover" ? "is-active" : ""}
+          onClick={() => { setView("discover"); setMobilePanel("list"); }}
+          aria-pressed={mobilePanel === "list" && view === "discover"}
+        >
+          <SearchIcon /><span>Khám phá</span>
+        </button>
+        <button
+          type="button"
+          className={view === "saved" ? "is-active" : ""}
+          onClick={() => switchView("saved")}
+          aria-pressed={view === "saved"}
+        >
+          <HeartIcon /><span>Đã lưu</span>
+        </button>
+        <button
+          type="button"
+          className={view === "mine" ? "is-active" : ""}
+          onClick={() => switchView("mine")}
+          aria-pressed={view === "mine"}
+        >
+          <StarIcon /><span>Thư viện</span>
+        </button>
+        <button type="button" onClick={openPlanBuilder}>
+          <PlusIcon /><span>Lịch trình</span>
+        </button>
+      </nav>
     </main>
   );
 }
