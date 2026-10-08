@@ -12,7 +12,7 @@ function parseTileCoordinate(value: string): number | null {
   return Number.isSafeInteger(parsed) ? parsed : null;
 }
 
-export async function GET(_request: Request, { params }: TileContext) {
+export async function GET(request: Request, { params }: TileContext) {
   const raw = await params;
   const z = parseTileCoordinate(raw.z);
   const x = parseTileCoordinate(raw.x);
@@ -30,9 +30,9 @@ export async function GET(_request: Request, { params }: TileContext) {
     return NextResponse.json({ error: "MAP_PROVIDER_NOT_CONFIGURED" }, { status: 503 });
   }
 
-  // Keep the Geoapify key on the server rather than embedding it in browser requests.
+  // Restrict selectable styles: no arbitrary URLs or providers can be requested.\n  const styleQuery = new URL(request.url).searchParams.get("style");\n  const style = styleQuery === "positron" ? "positron" : "osm-bright";\n\n  // Keep the Geoapify key on the server rather than embedding it in browser requests.
   const tileUrl = new URL(
-    `https://maps.geoapify.com/v1/tile/positron/${z}/${x}/${y}.png`
+    `https://maps.geoapify.com/v1/tile/${style}/${z}/${x}/${y}.png`
   );
   tileUrl.searchParams.set("apiKey", key);
 
