@@ -581,6 +581,7 @@ export function MapExplorer() {
   >("idle");
   const [mapReady, setMapReady] = useState(false);
   const [mapViewRevision, setMapViewRevision] = useState(0);
+  const [mapPreviewId, setMapPreviewId] = useState<string | null>(null);
   const [mapTheme, setMapTheme] = useState<"streets" | "minimal">("streets");
   const [mapLoadError, setMapLoadError] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -1166,6 +1167,7 @@ export function MapExplorer() {
     emptyPlace;
 
   const hasSelectedPlace = Boolean(selected.id);
+  const mapPreviewPlace = mapPreviewId === selected.id && hasSelectedPlace ? selected : null;
   const selectedPersonalRating = hasSelectedPlace
     ? ratings[selected.id] ?? null
     : null;
@@ -1594,7 +1596,10 @@ export function MapExplorer() {
           }
           element.setAttribute("aria-label", "Mở " + place.name);
           element.title = place.name;
-          element.addEventListener("click", () => setSelectedId(place.id));
+          element.addEventListener("click", () => {
+            setSelectedId(place.id);
+            setMapPreviewId(place.id);
+          });
         }
 
         const longitude = places.reduce((sum, item) => sum + item.longitude, 0) / places.length;
@@ -4594,6 +4599,75 @@ export function MapExplorer() {
               : "Tìm khu vực này"}
           </button>
         </div>
+
+        {mapPreviewPlace ? (
+          <section className="map-place-preview" aria-label={"Xem nhanh " + mapPreviewPlace.name}>
+            <button
+              type="button"
+              className="map-place-preview__close"
+              aria-label="Đóng xem nhanh"
+              onClick={() => setMapPreviewId(null)}
+            >
+              ×
+            </button>
+            <div className="map-place-preview__content">
+              <div
+                className="map-place-preview__thumb"
+                style={{ "--place-accent": mapPreviewPlace.accent } as CSSProperties}
+              >
+                {placeCovers[mapPreviewPlace.id] ? (
+                  <img src={placeCovers[mapPreviewPlace.id]} alt={"Ảnh " + mapPreviewPlace.name} />
+                ) : (
+                  <span aria-hidden="true">{placeIcon(mapPreviewPlace)}</span>
+                )}
+              </div>
+              <div className="map-place-preview__description">
+                <span className="map-place-preview__eyebrow">
+                  {mapPreviewPlace.kind} <i>·</i> {mapPreviewPlace.match}% phù hợp
+                </span>
+                <strong title={mapPreviewPlace.name}>{mapPreviewPlace.name}</strong>
+                <span className="map-place-preview__meta">
+                  {userLocation ? "" : "≈ "}
+                  {distanceLabel(mapPreviewPlace.distanceKm)}
+                  {userLocation ? " từ bạn" : " từ tâm vùng tìm kiếm"}
+                  {" · "}
+                  {priceBadge(mapPreviewPlace)}
+                </span>
+                {mapPreviewPlace.recommendationReasons?.[0] ? (
+                  <span className="map-place-preview__reason">
+                    {mapPreviewPlace.recommendationReasons[0]}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+            <div className="map-place-preview__actions">
+              <button
+                type="button"
+                className="map-place-preview__route"
+                onClick={() => {
+                  const destination = encodeURIComponent(
+                    mapPreviewPlace.latitude + "," + mapPreviewPlace.longitude
+                  );
+                  window.open(
+                    "https://www.google.com/maps/dir/?api=1&destination=" + destination,
+                    "_blank",
+                    "noopener,noreferrer"
+                  );
+                }}
+              >
+                Chỉ đường ↗
+              </button>
+              <button
+                type="button"
+                className="map-place-preview__shortlist"
+                aria-pressed={shortlistIds.has(mapPreviewPlace.id)}
+                onClick={() => toggleShortlist(mapPreviewPlace)}
+              >
+                {shortlistIds.has(mapPreviewPlace.id) ? "✓ Đã chọn so sánh" : "+ Chọn so sánh"}
+              </button>
+            </div>
+          </section>
+        ) : null}
 
         <div className="map-style-switch" role="group" aria-label="Kiểu nền bản đồ">
           <span>Kiểu bản đồ</span>
