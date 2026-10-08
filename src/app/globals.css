@@ -408,10 +408,19 @@ textarea:focus-visible {
 .place-list {
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
   gap: 8px;
   padding-right: 3px;
 }
+
+/* Keep each result at its natural height instead of compressing rows to fit the viewport. */
+.place-list > * {
+  min-height: max-content;
+}
+
 
 .place-card {
   width: 100%;
