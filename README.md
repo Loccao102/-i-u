@@ -35,6 +35,7 @@ The core is useful for one person first. Accounts and Groups remain optional lat
 - smarter personal ranking with visible recommendation reasons;
 - learned **Taste Profile** from rating, revisit intent and repeat visits; similar places inherit preference signals for scenario, price, noise and crowd level;
 - collection-based recommendations;
+- one-click **Collection → Planner**: generate an outing solely from places in the selected collection, preserving ranking and all existing opening-hours, distance, time and budget guardrails; clear the collection scope to return to general discovery;
 - duplicate-safe provider imports;
 - PostGIS-backed nearby distance lookup for persisted places;
 - PostGIS viewport search for the map area currently on screen;
