@@ -48,6 +48,7 @@ import { derivePlanOutcomeProfile } from "@/lib/plan-outcomes";
 import { deriveDataRepairPrompts } from "@/lib/data-quality";
 import { analyzePlanQuality } from "@/lib/plan-quality";
 import { derivePlannerHealth } from "@/lib/planner-health";
+import { filterCollectionPlannerPlaces } from "@/lib/collection-planner";
 import { openingStatus } from "@/lib/opening-hours";
 import {
   deriveTasteProfile,
@@ -604,6 +605,7 @@ export function MapExplorer() {
   const [planReplayTemplate, setPlanReplayTemplate] =
     useState<PlannerReplayTemplate | null>(null);
   const [planAnchor, setPlanAnchor] = useState<Place | null>(null);
+  const [planCollectionId, setPlanCollectionId] = useState<string | null>(null);
   const [plannerMetrics, setPlannerMetrics] =
     useState<PlannerMetricsSummary | null>(null);
   const [activePlan, setActivePlan] = useState<EveningPlan | null>(null);
@@ -731,6 +733,7 @@ export function MapExplorer() {
     setScenario("all");
     setSelectedId(anchor.id);
     setPlanReplayTemplate(null);
+    setPlanCollectionId(null);
     setPlanVariant(0);
     setPlanWeather(null);
     setActivePlan(null);
@@ -2272,6 +2275,7 @@ export function MapExplorer() {
         .flatMap((item) => item.placeKeys)
     );
 
+    setPlanCollectionId(null);
     setPlanScenario(routeScenario);
     setPlanStartTime(routeStartTime);
     setPlanVariant(variant);
@@ -2287,7 +2291,8 @@ export function MapExplorer() {
       routeStartTime,
       recentRouteKeys,
       null,
-      "generated_initial"
+      "generated_initial",
+      null
     );
 
     if (!result || result.stops.length === 0) return;
@@ -2379,7 +2384,8 @@ export function MapExplorer() {
     avoidPlaceKeys?: ReadonlySet<string>,
     replayTemplateOverride?: PlannerReplayTemplate | null,
     telemetryKind: "generated_initial" | "rerolled" =
-      nextVariant === 0 ? "generated_initial" : "rerolled"
+      nextVariant === 0 ? "generated_initial" : "rerolled",
+    collectionIdOverride: string | null | undefined = undefined
   ) {
     const replayTemplate =
       replayTemplateOverride === undefined
@@ -2425,14 +2431,25 @@ export function MapExplorer() {
       tasteProfile
     );
 
-    const source = viewportBounds
-      ? forecastRanked.filter((place) => {
-          if (customIds.has(place.id) && viewportPersonalIds) {
-            return viewportPersonalIds.has(place.id);
-          }
-          return placeInsideBounds(place, viewportBounds);
-        })
-      : forecastRanked;
+    const effectiveCollectionId = collectionIdOverride === undefined
+      ? planCollectionId
+      : collectionIdOverride;
+    const collectionForPlan = effectiveCollectionId
+      ? collections.find((item) => item.id === effectiveCollectionId)
+      : null;
+    const source = effectiveCollectionId
+      ? filterCollectionPlannerPlaces(
+          forecastRanked,
+          collectionForPlan?.placeIds ?? []
+        )
+      : viewportBounds
+        ? forecastRanked.filter((place) => {
+            if (customIds.has(place.id) && viewportPersonalIds) {
+              return viewportPersonalIds.has(place.id);
+            }
+            return placeInsideBounds(place, viewportBounds);
+          })
+        : forecastRanked;
 
     const preferredSource =
       avoidPlaceKeys && avoidPlaceKeys.size > 0
@@ -2560,7 +2577,9 @@ export function MapExplorer() {
         .then(({ metrics }) => setPlannerMetrics(metrics))
         .catch(() => undefined);
       setNotice(
-        "Chưa đủ địa điểm phù hợp. Thử tăng bán kính hoặc đổi mood."
+        effectiveCollectionId
+          ? "Bộ sưu tập chưa có địa điểm đáp ứng giờ mở cửa, khoảng cách, ngân sách và thời lượng. Thử nới điều kiện hoặc thêm địa điểm vào bộ sưu tập."
+          : "Chưa đủ địa điểm phù hợp. Thử tăng bán kính hoặc đổi mood."
       );
     }
 
@@ -2568,6 +2587,7 @@ export function MapExplorer() {
   }
 
   function openPlanBuilder() {
+    setPlanCollectionId(null);
     setPlanReplayTemplate(null);
     setPlanScenario(scenario === "all" ? "date" : scenario);
     setPlanVariant(0);
@@ -2575,6 +2595,16 @@ export function MapExplorer() {
     setPlanWeatherLoading(false);
     setActivePlan(null);
     planDialogRef.current?.showModal();
+  }
+
+  function openCollectionPlanBuilder(collection: Collection) {
+    if (collection.placeIds.length === 0) {
+      setNotice("Hãy thêm ít nhất một địa điểm vào bộ sưu tập trước.");
+      return;
+    }
+    openPlanBuilder();
+    setPlanAnchor(null);
+    setPlanCollectionId(collection.id);
   }
 
   function openPlanRoute() {
@@ -3862,6 +3892,7 @@ export function MapExplorer() {
       }
     }
 
+    setPlanCollectionId(null);
     setPlanReplayTemplate(template);
     setPlanScenario(replayScenario);
     setPlanRoutingMode(plan.plan.routeMode);
@@ -4406,6 +4437,13 @@ export function MapExplorer() {
           </div>
           {view === "collections" && selectedCollection ? (
             <div className="small-actions">
+              <button
+                type="button"
+                disabled={selectedCollection.placeIds.length === 0}
+                onClick={() => openCollectionPlanBuilder(selectedCollection)}
+              >
+                Lên lịch trình
+              </button>
               <button type="button" onClick={() => openEditCollection(selectedCollection)}>
                 Sửa
               </button>
@@ -6831,6 +6869,24 @@ export function MapExplorer() {
           <p className="dialog-copy">
             Ghép các chặng gần nhau theo gu, budget, mood và dự báo thời tiết đúng giờ bạn định đi.
           </p>
+
+          {planCollectionId ? (
+            <section className="plan-replay-banner">
+              <div>
+                <span className="eyebrow">Chỉ lấy địa điểm trong bộ sưu tập</span>
+                <strong>{collections.find((item) => item.id === planCollectionId)?.name ?? "Bộ sưu tập không còn tồn tại"}</strong>
+                <small>
+                  Không tự thêm điểm ngoài bộ sưu tập. Các quy tắc giờ mở cửa, ngân sách, khoảng cách và thời lượng vẫn được áp dụng.
+                </small>
+              </div>
+              <button type="button" onClick={() => {
+                setPlanCollectionId(null);
+                setActivePlan(null);
+              }}>
+                Dùng mọi địa điểm
+              </button>
+            </section>
+          ) : null}
 
           {planAnchor ? (
             <section className="plan-replay-banner">
