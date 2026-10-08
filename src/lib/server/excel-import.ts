@@ -205,7 +205,7 @@ export async function buildExcelTemplate(): Promise<Buffer> {
 export async function readExcelPlaces(bytes: Buffer): Promise<ExcelPlaceRow[]> {
   const workbook = new ExcelJS.Workbook();
   try {
-    await workbook.xlsx.load(bytes);
+    await workbook.xlsx.load(bytes as unknown as Parameters<typeof workbook.xlsx.load>[0]);
   } catch {
     throw new Error("INVALID_XLSX_FILE");
   }
