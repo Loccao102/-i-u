@@ -181,6 +181,7 @@ type ExcelRow = {
 type ExcelCandidate = {
   id: string; name: string; address: string; latitude: number;
   longitude: number; mapsUrl: string; confidence: number;
+  source: "geoapify" | "openstreetmap";
 };
 type ExcelPreviewRow = {
   row: ExcelRow; candidates: ExcelCandidate[]; error: string | null;
@@ -3292,8 +3293,8 @@ export function MapExplorer() {
       for (const result of results) {
         const first = result.candidates[0];
         const second = result.candidates[1];
-        // Auto-pick only a strongly matched and unambiguous Google result.
-        if (first && result.row.area.trim() && first.confidence >= 85 &&
+        // Suggest only a high-confidence name match, never commit automatically.
+        if (first && result.row.area.trim() && first.confidence >= 92 &&
             (!second || first.confidence - second.confidence >= 20)) {
           picks[result.row.row] = first.id;
         }
@@ -3311,7 +3312,7 @@ export function MapExplorer() {
       excelSelected[row.row] ? [{ row, selectedId: excelSelected[row.row] }] : []
     );
     if (!items.length) {
-      setExcelError("Chọn ít nhất một địa điểm Google Maps đã xác minh.");
+      setExcelError("Hãy kiểm tra và chọn ít nhất một kết quả từ Geoapify/OpenStreetMap.");
       return;
     }
     setExcelLoading(true);
@@ -3334,7 +3335,7 @@ export function MapExplorer() {
       if (failed.length) setExcelError(failed.map(v => "Dòng " + v.row + ": " + (v.error || "Không thể nhập")).join(" · "));
       if (added > 0) {
         await loadSnapshot();
-        setNotice("Đã thêm " + added + " địa điểm từ Google Maps vào Supabase cá nhân.");
+        setNotice("Đã thêm " + added + " địa điểm từ Excel vào Supabase cá nhân.");
       }
       setExcelSelected({});
     } catch (error) {
@@ -4659,7 +4660,7 @@ export function MapExplorer() {
             Thêm địa điểm thủ công
           </button>
           <button className="excel-import-entry" type="button" onClick={openExcelDialog}>
-            <span aria-hidden="true">▦</span> Import Excel · Google Maps
+            <span aria-hidden="true">▦</span> Import danh sách Excel
           </button>
         </div>
       </section>
@@ -5718,19 +5719,28 @@ export function MapExplorer() {
         <div className="dialog-card excel-import-dialog">
           <div className="dialog-header">
             <div>
-              <span className="eyebrow">Nhập dữ liệu · Google Places</span>
+              <span className="eyebrow">Nhập Excel · Không cần Google API key</span>
               <h2>Import địa điểm từ Excel</h2>
             </div>
             <button className="icon-button" type="button" onClick={() => excelDialogRef.current?.close()} aria-label="Đóng"><CloseIcon /></button>
           </div>
           <p className="dialog-copy">
-            Tải mẫu, điền tên địa điểm và khu vực, rồi chọn kết quả phù hợp trên Google Maps trước khi lưu vào profile cá nhân.
+            Tải mẫu, điền tên và khu vực, đối chiếu kết quả từ Geoapify/OpenStreetMap rồi xác nhận trước khi lưu. Link Google Maps (nếu có) chỉ để bạn tham khảo.
           </p>
+          <div className="excel-import-steps" aria-label="Các bước nhập Excel">
+            <span className="is-current"><b>1</b> Chọn Excel</span>
+            <span className={excelPreview.length ? "is-current" : ""}><b>2</b> Kiểm tra địa điểm</span>
+            <span className={excelImportResult ? "is-current" : ""}><b>3</b> Lưu vào ĐiĐâu</span>
+          </div>
+          <div className="excel-import-source">
+            <strong>Đang dùng nguồn miễn phí trong cấu hình hiện tại</strong>
+            <small>Geoapify / OpenStreetMap · Không gọi Places API trả phí của Google. Dữ liệu Geoapify vẫn chịu hạn mức API.</small>
+          </div>
           <div className="excel-import-instructions">
             <a href="/api/personal/import-excel" download="DiDau-Mau-Import-GoogleMaps.xlsx">
               ↓ Tải mẫu Excel (.xlsx)
             </a>
-            <span>Tối đa 20 địa điểm/lần · 1 MB · Cần Google Places API (New)</span>
+            <span>Tối đa 20 địa điểm/lần · 1 MB · Sử dụng Geoapify hiện có</span>
           </div>
           <label className="excel-upload-field">
             <strong>Chọn file Excel đã điền</strong>
@@ -5746,28 +5756,31 @@ export function MapExplorer() {
             />
             <small>{excelFileName || "Chưa chọn file"}</small>
           </label>
-          {excelLoading ? <p role="status" className="excel-import-loading">Đang kiểm tra với Google Maps / Supabase…</p> : null}
+          {excelLoading ? <p role="status" className="excel-import-loading">Đang đối chiếu với Geoapify / OpenStreetMap…</p> : null}
           {excelError ? <p role="alert" className="excel-import-error">{excelError}</p> : null}
           {excelImportResult ? <p role="status" className="excel-import-success">{excelImportResult}</p> : null}
           {excelPreview.length ? (
             <div className="excel-preview-area">
               <div className="excel-preview-area__head">
                 <strong>Xem trước {excelPreview.length} dòng</strong>
-                <span>{Object.keys(excelSelected).length} đã chọn · Dòng không khớp sẽ bỏ qua</span>
+                <span>{Object.keys(excelSelected).length} đã chọn · {excelPreview.filter(item => !item.candidates.length || Boolean(item.error)).length} chưa tìm thấy · Còn lại được bỏ qua</span>
               </div>
               {excelPreview.map(({ row, candidates, error }) => (
                 <section key={row.row} className="excel-preview-row">
                   <div className="excel-preview-row__label">
                     <b>#{row.row} · {row.name}</b>
+                    <span className={"excel-row-status " + (excelSelected[row.row] ? "is-selected" : error || !candidates.length ? "is-error" : "is-unselected")}>
+                      {excelSelected[row.row] ? "✓ Đã chọn" : error || !candidates.length ? "Cần bổ sung" : "Chờ xác nhận"}
+                    </span>
                     <small>{row.area || "Chưa có khu vực"}</small>
                     {row.note ? <small>Ghi chú: {row.note}</small> : null}
                   </div>
                   {error ? <span className="excel-preview-row__error">{error}</span>
-                    : !candidates.length ? <span className="excel-preview-row__error">Google Maps không tìm thấy địa điểm phù hợp.</span>
+                    : !candidates.length ? <span className="excel-preview-row__error">Chưa tìm thấy kết quả phù hợp. Hãy bổ sung khu vực, tên chính xác rồi thử lại.</span>
                     : (
                       <div className="excel-preview-row__choices">
                         <label>
-                          <span>Địa điểm trên Google Maps</span>
+                          <span>Kết quả tìm thấy</span>
                           <select
                             value={excelSelected[row.row] ?? ""}
                             onChange={event => setExcelSelected(current => {
@@ -5780,7 +5793,7 @@ export function MapExplorer() {
                             <option value="">Bỏ qua / chưa chắc chắn</option>
                             {candidates.map(candidate => (
                               <option key={candidate.id} value={candidate.id}>
-                                {candidate.name} · {candidate.address} ({candidate.confidence}% trùng tên)
+                                {candidate.name} · {candidate.address} ({candidate.confidence}% tương đồng tên, {candidate.source === "geoapify" ? "Geoapify" : "OSM"})
                               </option>
                             ))}
                           </select>
@@ -5790,12 +5803,26 @@ export function MapExplorer() {
                             href={candidates.find(item => item.id === excelSelected[row.row])!.mapsUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                          >Kiểm tra trên Google Maps ↗</a>
+                          >Mở tọa độ trên Google Maps để đối chiếu ↗</a>
                         ) : null}
                       </div>
                     )}
                 </section>
               ))}
+            </div>
+          ) : null}
+          {excelPreview.length ? (
+            <div className="excel-import-actions-row">
+              <button
+                type="button"
+                disabled={excelLoading}
+                onClick={() => { setExcelSelected({}); setExcelError(null); }}
+              >Bỏ chọn tất cả</button>
+              <button
+                type="button"
+                disabled={excelLoading}
+                onClick={() => { setExcelPreview([]); setExcelSelected({}); setExcelFileName(""); setExcelError(null); setExcelImportResult(null); }}
+              >Nhập file khác</button>
             </div>
           ) : null}
           <button
@@ -5807,7 +5834,7 @@ export function MapExplorer() {
             Xác nhận nhập {Object.keys(excelSelected).length} địa điểm đã chọn
           </button>
           <small className="excel-import-footnote">
-            Không tự lưu kết quả khớp mơ hồ. Địa điểm trùng Google Place ID sẽ được bỏ qua; chi phí trong Excel là thông tin do bạn cung cấp.
+            Chỉ nhập những dòng bạn xác nhận. Địa điểm trùng ID Geoapify/OSM sẽ được bỏ qua. Chi phí Excel là thông tin tự nhập, không phải giá xác minh.
           </small>
         </div>
       </dialog>
@@ -5822,7 +5849,7 @@ export function MapExplorer() {
             Pin được đặt tại tâm bản đồ. App tự suy ra context từ ghi chú.
           </p>
           <button type="button" className="excel-import-inline" onClick={openExcelDialog}>
-            ▦ Nhập nhiều địa điểm bằng Excel từ Google Maps →
+            ▦ Nhập nhiều địa điểm từ Excel →
           </button>
           <label className="field">
             <span>Tên</span>
