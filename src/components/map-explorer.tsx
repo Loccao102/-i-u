@@ -1424,9 +1424,9 @@ export function MapExplorer() {
           sources: {
             streets: {
               type: "raster",
-              tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+              tiles: ["/api/map/tiles/{z}/{x}/{y}"],
               tileSize: 256,
-              attribution: "© OpenStreetMap contributors"
+              attribution: "Powered by Geoapify | © OpenStreetMap contributors | © OpenMapTiles"
             }
           },
           layers: [{ id: "streets", type: "raster", source: "streets" }]
@@ -1452,8 +1452,8 @@ export function MapExplorer() {
       });
 
       map.on("error", (event) => {
-        if (active && !map.isStyleLoaded()) {
-          console.error("[di-dau] Map style failed to load", event.error);
+        if (active) {
+          console.error("[di-dau] Map tile or style failed to load", event.error);
           setMapLoadError(true);
         }
       });
@@ -4460,7 +4460,7 @@ export function MapExplorer() {
 
       <section className="map-pane" aria-label="Bản đồ">
         <div ref={mapNodeRef} className="map-canvas" />
-        {mapLoadError && !mapReady ? (
+        {mapLoadError ? (
           <div className="map-load-error" role="alert">
             <strong>Không tải được nền bản đồ</strong>
             <span>Kiểm tra kết nối hoặc thử tải lại trang. Danh sách địa điểm vẫn có thể sử dụng.</span>
@@ -4546,14 +4546,13 @@ export function MapExplorer() {
             : "Supabase không lưu GPS hiện tại"}
         </div>
 
-        <a
-          className="osm-attribution"
-          href="https://www.openstreetmap.org/copyright"
-          target="_blank"
-          rel="noreferrer"
-        >
-          © OpenStreetMap contributors
-        </a>
+        <div className="osm-attribution" aria-label="Nguồn dữ liệu bản đồ">
+          <a href="https://www.geoapify.com/" target="_blank" rel="noopener noreferrer">Powered by Geoapify</a>
+          {" · "}
+          <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap</a>
+          {" · "}
+          <a href="https://openmaptiles.org/" target="_blank" rel="noopener noreferrer">© OpenMapTiles</a>
+        </div>
       </section>
 
       <aside className="detail-pane" aria-label="Chi tiết địa điểm">
