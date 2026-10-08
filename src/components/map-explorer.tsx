@@ -5049,8 +5049,7 @@ export function MapExplorer() {
                 setMapFocus(previous => !previous);
               }
             }}
-            aria-pressed={mapFocus}
-            aria-label={mapFocus ? "Hiện danh sách địa điểm" : "Chế độ bản đồ rộng"}
+            aria-label="Chuyển giữa bản đồ và danh sách địa điểm"
           >
             <span className="map-focus-toggle__desktop">{mapFocus ? "Hiện danh sách" : "Xem rộng"}</span>
             <span className="map-focus-toggle__mobile" aria-hidden="true">{mobilePanel === "list" ? "Bản đồ" : "Danh sách"}</span>
