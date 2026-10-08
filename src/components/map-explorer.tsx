@@ -185,6 +185,7 @@ type ExcelCandidate = {
 };
 type ExcelPreviewRow = {
   row: ExcelRow; candidates: ExcelCandidate[]; error: string | null;
+  needsRetry?: boolean;
 };
 
 async function excelApiResponse(response: Response) {
@@ -3289,19 +3290,62 @@ export function MapExplorer() {
       const data = await excelApiResponse(response);
       const results = (data.results ?? []) as ExcelPreviewRow[];
       setExcelPreview(results);
-      const picks: Record<number, string> = {};
-      for (const result of results) {
-        const first = result.candidates[0];
-        const second = result.candidates[1];
-        // Suggest only a high-confidence name match, never commit automatically.
-        if (first && result.row.area.trim() && first.confidence >= 92 &&
-            (!second || first.confidence - second.confidence >= 20)) {
-          picks[result.row.row] = first.id;
-        }
-      }
-      setExcelSelected(picks);
+      // Preview does not silently select matches: the user confirms each POI.
+      setExcelSelected({});
     } catch (error) {
       setExcelError(error instanceof Error ? error.message : "Không thể đọc Excel.");
+    } finally {
+      setExcelLoading(false);
+    }
+  }
+
+  function changeExcelRow(rowNumber: number, field: "name" | "area", value: string) {
+    setExcelPreview(previous => previous.map(item =>
+      item.row.row === rowNumber
+        ? {
+            ...item,
+            row: { ...item.row, [field]: value },
+            candidates: [],
+            error: null,
+            needsRetry: true
+          }
+        : item
+    ));
+    setExcelSelected(previous => {
+      const next = { ...previous };
+      delete next[rowNumber];
+      return next;
+    });
+  }
+
+  async function retryExcelMatch(rowNumber: number) {
+    const item = excelPreview.find(entry => entry.row.row === rowNumber);
+    if (!item) return;
+    if (item.row.name.trim().length < 2) {
+      setExcelError("Dòng " + rowNumber + ": nhập tên địa điểm có ít nhất 2 ký tự.");
+      return;
+    }
+    setExcelError(null);
+    setExcelLoading(true);
+    try {
+      const response = await fetch("/api/personal/import-excel", {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ row: item.row }),
+        cache: "no-store"
+      });
+      const result = await excelApiResponse(response);
+      setExcelPreview(previous => previous.map(entry =>
+        entry.row.row === rowNumber
+          ? { ...entry, candidates: (result.candidates ?? []) as ExcelCandidate[], error: null, needsRetry: false }
+          : entry
+      ));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Không thể đối chiếu.";
+      setExcelPreview(previous => previous.map(entry =>
+        entry.row.row === rowNumber ? { ...entry, error: message, needsRetry: true } : entry
+      ));
     } finally {
       setExcelLoading(false);
     }
@@ -5774,9 +5818,40 @@ export function MapExplorer() {
                     </span>
                     <small>{row.area || "Chưa có khu vực"}</small>
                     {row.note ? <small>Ghi chú: {row.note}</small> : null}
+                    <details className="excel-row-editor">
+                      <summary>Sửa tên/khu vực và tìm lại</summary>
+                      <label>
+                        <span>Tên địa điểm</span>
+                        <input
+                          type="text"
+                          value={row.name}
+                          maxLength={100}
+                          disabled={excelLoading}
+                          onChange={event => changeExcelRow(row.row, "name", event.target.value)}
+                        />
+                      </label>
+                      <label>
+                        <span>Khu vực</span>
+                        <input
+                          type="text"
+                          value={row.area}
+                          maxLength={180}
+                          placeholder="Ví dụ: Tây Hồ, Hà Nội"
+                          disabled={excelLoading}
+                          onChange={event => changeExcelRow(row.row, "area", event.target.value)}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        disabled={excelLoading}
+                        onClick={() => void retryExcelMatch(row.row)}
+                      >
+                        Tìm lại
+                      </button>
+                    </details>
                   </div>
                   {error ? <span className="excel-preview-row__error">{error}</span>
-                    : !candidates.length ? <span className="excel-preview-row__error">Chưa tìm thấy kết quả phù hợp. Hãy bổ sung khu vực, tên chính xác rồi thử lại.</span>
+                    : !candidates.length ? <span className="excel-preview-row__error">Chưa tìm thấy kết quả. Mở “Sửa tên/khu vực và tìm lại” ở bên trái để tìm chính xác hơn.</span>
                     : (
                       <div className="excel-preview-row__choices">
                         <label>
