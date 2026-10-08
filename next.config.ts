@@ -10,7 +10,7 @@ const csp = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://tile.openstreetmap.org https://demotiles.maplibre.org",
   "font-src 'self' data: https://demotiles.maplibre.org",
-  "connect-src 'self' https://demotiles.maplibre.org",
+  "connect-src 'self' https://tile.openstreetmap.org https://demotiles.maplibre.org",
   "worker-src 'self' blob:",
   "upgrade-insecure-requests"
 ].join("; ");
