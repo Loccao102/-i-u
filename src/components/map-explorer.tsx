@@ -42,6 +42,7 @@ import {
   toActivePlanSnapshot
 } from "@/lib/planner";
 import { placeFromPoiResult, scenarioLabels } from "@/lib/places";
+import { comparisonCost, comparisonHighlights, sortComparisonPlaces, type ComparisonSort } from "@/lib/comparison";
 import { derivePlanOutcomeProfile } from "@/lib/plan-outcomes";
 import { deriveDataRepairPrompts } from "@/lib/data-quality";
 import { analyzePlanQuality } from "@/lib/plan-quality";
@@ -538,6 +539,7 @@ export function MapExplorer() {
   const [backupLoading, setBackupLoading] = useState(false);
   const [shareLoading, setShareLoading] = useState(false);
   const [groupPollLoading, setGroupPollLoading] = useState(false);
+  const [comparisonSort, setComparisonSort] = useState<ComparisonSort>("match");
   const [profileTransferLoading, setProfileTransferLoading] = useState(false);
   const [profileTransferCode, setProfileTransferCode] = useState("");
   const [profileTransferExpiresAt, setProfileTransferExpiresAt] =
@@ -1152,6 +1154,15 @@ export function MapExplorer() {
   const shortlistIds = useMemo(
     () => new Set(shortlist.map((item) => item.id)),
     [shortlist]
+  );
+
+  const comparisonPlaces = useMemo(
+    () => sortComparisonPlaces(shortlistView, comparisonSort),
+    [shortlistView, comparisonSort]
+  );
+  const comparisonWinners = useMemo(
+    () => comparisonHighlights(shortlistView),
+    [shortlistView]
   );
 
   const runningCurrentStop =
@@ -5420,24 +5431,57 @@ export function MapExplorer() {
           </div>
 
           <p className="dialog-copy">
-            So sánh tối đa 3 chỗ theo đúng context hiện tại. Shortlist chỉ sống
-            trong phiên trình duyệt, không tạo thêm dữ liệu dài hạn.
+            So sánh tối đa 3 địa điểm theo gu và dữ liệu hiện có. Shortlist chỉ
+            lưu trong phiên trình duyệt, không ghi thêm dữ liệu dài hạn.
+          </p>
+
+          <div className="comparison-toolbar">
+            <span>Ưu tiên so sánh</span>
+            <div className="comparison-toolbar__options" role="group" aria-label="Sắp xếp so sánh">
+              {([
+                ["match", "Hợp gu nhất"],
+                ["distance", "Gần nhất"],
+                ["cost", "Chi phí thấp"]
+              ] as const).map(([mode, label]) => (
+                <button
+                  type="button"
+                  key={mode}
+                  className={comparisonSort === mode ? "is-active" : ""}
+                  aria-pressed={comparisonSort === mode}
+                  onClick={() => setComparisonSort(mode)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <p className="comparison-disclaimer">
+            {userLocation
+              ? "Khoảng cách đường chim bay từ vị trí GPS (không phải thời gian di chuyển)."
+              : "Chưa bật GPS: khoảng cách đường chim bay tính từ tâm khu vực tìm kiếm, không phải từ vị trí của bạn."}
+            {" "}Giá từ nhà cung cấp chỉ là ước tính, có thể khác giá thực tế.
           </p>
 
           <div
             className="compare-grid"
             style={{
               gridTemplateColumns:
-                "repeat(" + Math.max(1, shortlistView.length) + ", minmax(0, 1fr))"
+                "repeat(" + Math.max(1, comparisonPlaces.length) + ", minmax(0, 1fr))"
             }}
           >
-            {shortlistView.map((place) => {
+            {comparisonPlaces.map((place) => {
               const status = openingStatus(place.openUntil, clock);
               const rating = ratings[place.id];
               const cover = placeCovers[place.id];
 
               return (
                 <article className="compare-card" key={place.id}>
+                  <div className="compare-card__highlights">
+                    {comparisonWinners.matchId === place.id ? <span>✦ Hợp gu nhất</span> : null}
+                    {comparisonWinners.distanceId === place.id ? <span>⌖ Gần nhất</span> : null}
+                    {comparisonWinners.costId === place.id ? <span>₫ Chi phí thấp</span> : null}
+                  </div>
                   <div
                     className={
                       "compare-card__hero" +
@@ -5467,11 +5511,16 @@ export function MapExplorer() {
                     <dl>
                       <div>
                         <dt>Khoảng cách</dt>
-                        <dd>{distanceLabel(place.distanceKm)}</dd>
+                        <dd>{userLocation ? "" : "≈ "}{distanceLabel(place.distanceKm)}</dd>
                       </div>
                       <div>
-                        <dt>Giá</dt>
-                        <dd>{priceBadge(place)}</dd>
+                        <dt>Giá cho 2 người</dt>
+                        <dd>
+                          {comparisonCost(place) !== null
+                            ? (place.costSource === "provider_estimate" ? "≈ " : "") + moneyLabel(comparisonCost(place)!)
+                            : "Chưa có dữ liệu"}
+                          {place.costSource === "provider_estimate" ? <small className="compare-cost-hint">Ước tính</small> : null}
+                        </dd>
                       </div>
                       <div>
                         <dt>Mở cửa</dt>
