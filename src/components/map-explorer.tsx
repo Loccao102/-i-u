@@ -1971,6 +1971,10 @@ export function MapExplorer() {
       if (failure) {
         setNotice("Đã thêm " + added + "/" + pending.length + " địa điểm. " + failure);
       } else {
+        setQuery("");
+        setScenario("all");
+        setViewportBounds(null);
+        setViewportPersonalIds(null);
         setView("collections");
         setNotice("Đã thêm " + added + " địa điểm vào “" + target.name + "”" +
           (pending.length === 0 ? " (tất cả đã có sẵn)." : "."));
@@ -4732,7 +4736,8 @@ export function MapExplorer() {
                   key={place.id}
                   className={
                     "place-card" +
-                    (selected.id === place.id ? " place-card--active" : "")
+                    (selected.id === place.id ? " place-card--active" : "") +
+                    (view === "mine" ? " place-card--library" : "")
                   }
                 >
                   {view === "mine" ? (
