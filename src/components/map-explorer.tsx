@@ -96,6 +96,31 @@ import {
 
 const defaultCenter: [number, number] = [105.8342, 21.0278];
 
+// Collapse dense, nearby markers into one interactive cluster at lower zooms.
+// The selected place is always shown separately, so it remains discoverable.
+function groupVisibleMapPlaces(places: Place[], selectedId: string, map: MapLibreMap) {
+  const zoom = map.getZoom();
+  const cells = new Map<string, Place[]>();
+  const radius = 76;
+
+  for (const place of places) {
+    const point = map.project([place.longitude, place.latitude]);
+    const key =
+      zoom >= 16 || place.id === selectedId
+        ? "place:" + place.id
+        : Math.floor(point.x / radius) + ":" + Math.floor(point.y / radius);
+    const entries = cells.get(key) ?? [];
+    entries.push(place);
+    cells.set(key, entries);
+  }
+
+  return [...cells.values()].sort((a, b) => {
+    const activeA = a.some((place) => place.id === selectedId);
+    const activeB = b.some((place) => place.id === selectedId);
+    return Number(activeA) - Number(activeB);
+  });
+}
+
 const emptyPlace: Place = {
   id: "",
   name: "",
@@ -555,6 +580,8 @@ export function MapExplorer() {
     "idle" | "loading" | "ready" | "denied"
   >("idle");
   const [mapReady, setMapReady] = useState(false);
+  const [mapViewRevision, setMapViewRevision] = useState(0);
+  const [mapTheme, setMapTheme] = useState<"streets" | "minimal">("streets");
   const [mapLoadError, setMapLoadError] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -1424,7 +1451,7 @@ export function MapExplorer() {
           sources: {
             streets: {
               type: "raster",
-              tiles: ["/api/map/tiles/{z}/{x}/{y}"],
+              tiles: ["/api/map/tiles/{z}/{x}/{y}?style=osm-bright"],
               tileSize: 256,
               attribution: "Powered by Geoapify | © OpenStreetMap contributors | © OpenMapTiles"
             }
@@ -1443,6 +1470,10 @@ export function MapExplorer() {
         }),
         "bottom-right"
       );
+
+      map.on("moveend", () => {
+        if (active) setMapViewRevision((revision) => revision + 1);
+      });
 
       map.on("load", () => {
         if (active) {
@@ -1519,31 +1550,58 @@ export function MapExplorer() {
 
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
+    const map = mapRef.current;
+    let disposed = false;
 
     markerRefs.current.forEach((marker) => marker.remove());
     markerRefs.current = [];
 
     void import("maplibre-gl").then((maplibre) => {
-      if (!mapRef.current) return;
+      if (disposed || mapRef.current !== map) return;
 
-      for (const place of visiblePlaces) {
+      const groups = groupVisibleMapPlaces(visiblePlaces, selectedId, map);
+      for (const places of groups) {
+        const selectedPlace = places.find((place) => place.id === selectedId);
+        const place = selectedPlace ?? places[0];
+        if (!place) continue;
+
         const element = document.createElement("button");
         element.type = "button";
-        element.className =
-          "map-marker" +
-          (place.id === selectedId ? " map-marker--active" : "");
-        element.setAttribute("aria-label", "Mở " + place.name);
-        element.textContent = place.match + "%";
+        element.className = "map-marker" +
+          (places.length > 1 ? " map-marker--cluster" : "") +
+          (selectedPlace ? " map-marker--active" : "");
         element.style.setProperty("--marker-accent", place.accent);
-        element.addEventListener("click", () => setSelectedId(place.id));
 
-        const marker = new maplibre.Marker({
-          element,
-          anchor: "bottom"
-        })
-          .setLngLat([place.longitude, place.latitude])
-          .addTo(mapRef.current);
+        if (places.length > 1) {
+          element.textContent = String(places.length);
+          element.setAttribute("aria-label", places.length + " địa điểm gần nhau. Nhấn để phóng to");
+          element.title = places.length + " địa điểm · Nhấn để xem gần hơn";
+          element.addEventListener("click", () => {
+            const lng = places.reduce((sum, item) => sum + item.longitude, 0) / places.length;
+            const lat = places.reduce((sum, item) => sum + item.latitude, 0) / places.length;
+            map.easeTo({ center: [lng, lat], zoom: Math.min(map.getZoom() + 2, 17), duration: 450 });
+          });
+        } else {
+          const score = document.createElement("span");
+          score.className = "map-marker__score";
+          score.textContent = place.match + "%";
+          element.append(score);
+          if (selectedPlace) {
+            const label = document.createElement("span");
+            label.className = "map-marker__name";
+            label.textContent = place.name;
+            element.append(label);
+          }
+          element.setAttribute("aria-label", "Mở " + place.name);
+          element.title = place.name;
+          element.addEventListener("click", () => setSelectedId(place.id));
+        }
 
+        const longitude = places.reduce((sum, item) => sum + item.longitude, 0) / places.length;
+        const latitude = places.reduce((sum, item) => sum + item.latitude, 0) / places.length;
+        const marker = new maplibre.Marker({ element, anchor: "bottom" })
+          .setLngLat([longitude, latitude])
+          .addTo(map);
         markerRefs.current.push(marker);
       }
 
@@ -1554,11 +1612,28 @@ export function MapExplorer() {
         markerRefs.current.push(
           new maplibre.Marker({ element: dot })
             .setLngLat([userLocation.longitude, userLocation.latitude])
-            .addTo(mapRef.current)
+            .addTo(map)
         );
       }
     });
-  }, [mapReady, visiblePlaces, selectedId, userLocation]);
+
+    return () => {
+      disposed = true;
+      markerRefs.current.forEach((marker) => marker.remove());
+      markerRefs.current = [];
+    };
+  }, [mapReady, mapViewRevision, visiblePlaces, selectedId, userLocation]);
+
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const mapSource = mapRef.current.getSource("streets") as
+      | { setTiles: (tiles: string[]) => void }
+      | undefined;
+    mapSource?.setTiles([
+      "/api/map/tiles/{z}/{x}/{y}?style=" +
+        (mapTheme === "streets" ? "osm-bright" : "positron")
+    ]);
+  }, [mapTheme, mapReady]);
 
   useEffect(() => {
     if (!mapReady || !mapRef.current || !hasSelectedPlace) return;
@@ -4517,6 +4592,26 @@ export function MapExplorer() {
             {viewportLoading || discoveryLoading
               ? "Đang tìm…"
               : "Tìm khu vực này"}
+          </button>
+        </div>
+
+        <div className="map-style-switch" role="group" aria-label="Kiểu nền bản đồ">
+          <span>Kiểu bản đồ</span>
+          <button
+            type="button"
+            className={mapTheme === "streets" ? "is-active" : ""}
+            aria-pressed={mapTheme === "streets"}
+            onClick={() => setMapTheme("streets")}
+          >
+            Đường phố
+          </button>
+          <button
+            type="button"
+            className={mapTheme === "minimal" ? "is-active" : ""}
+            aria-pressed={mapTheme === "minimal"}
+            onClick={() => setMapTheme("minimal")}
+          >
+            Tối giản
           </button>
         </div>
 
