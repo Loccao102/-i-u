@@ -3293,7 +3293,7 @@ export function MapExplorer() {
         const first = result.candidates[0];
         const second = result.candidates[1];
         // Auto-pick only a strongly matched and unambiguous Google result.
-        if (first && first.confidence >= 85 &&
+        if (first && result.row.area.trim() && first.confidence >= 85 &&
             (!second || first.confidence - second.confidence >= 20)) {
           picks[result.row.row] = first.id;
         }
