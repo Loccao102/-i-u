@@ -1403,9 +1403,18 @@ export function MapExplorer() {
 
       const map = new maplibre.Map({
         container: mapNodeRef.current,
-        style:
-          process.env.NEXT_PUBLIC_MAP_STYLE_URL ??
-          "https://demotiles.maplibre.org/style.json",
+        style: {
+          version: 8,
+          sources: {
+            streets: {
+              type: "raster",
+              tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+              tileSize: 256,
+              attribution: "© OpenStreetMap contributors"
+            }
+          },
+          layers: [{ id: "streets", type: "raster", source: "streets" }]
+        },
         center: defaultCenter,
         zoom: 11.8,
         attributionControl: false
