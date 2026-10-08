@@ -555,6 +555,7 @@ export function MapExplorer() {
     "idle" | "loading" | "ready" | "denied"
   >("idle");
   const [mapReady, setMapReady] = useState(false);
+  const [mapLoadError, setMapLoadError] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   const [ratingStars, setRatingStars] = useState(5);
@@ -1419,7 +1420,17 @@ export function MapExplorer() {
       );
 
       map.on("load", () => {
-        if (active) setMapReady(true);
+        if (active) {
+          setMapReady(true);
+          setMapLoadError(false);
+        }
+      });
+
+      map.on("error", (event) => {
+        if (active && !map.isStyleLoaded()) {
+          console.error("[di-dau] Map style failed to load", event.error);
+          setMapLoadError(true);
+        }
       });
 
       mapRef.current = map;
@@ -4419,6 +4430,13 @@ export function MapExplorer() {
 
       <section className="map-pane" aria-label="Bản đồ">
         <div ref={mapNodeRef} className="map-canvas" />
+        {mapLoadError && !mapReady ? (
+          <div className="map-load-error" role="alert">
+            <strong>Không tải được nền bản đồ</strong>
+            <span>Kiểm tra kết nối hoặc thử tải lại trang. Danh sách địa điểm vẫn có thể sử dụng.</span>
+            <button type="button" onClick={() => window.location.reload()}>Tải lại bản đồ</button>
+          </div>
+        ) : null}
         <div className="map-floating-top">
           <span>
             {viewportBounds
