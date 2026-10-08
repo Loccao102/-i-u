@@ -5658,3 +5658,139 @@ textarea:focus-visible {
     min-height: 0;
   }
 }
+
+/* Spreadsheet import – confined to a scrollable dialog, not page scrolling. */
+.place-import-actions {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+.place-import-actions > .wide-secondary { width: 100%; }
+.excel-import-entry {
+  display: flex;
+  width: 100%;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid #bcdaca;
+  border-radius: 13px;
+  background: #eef8f1;
+  color: #286446;
+  font-size: 11px;
+  font-weight: 850;
+  cursor: pointer;
+}
+.excel-import-entry:hover { background: #def2e5; }
+.excel-import-entry > span { font-size: 18px; line-height: 1; }
+.excel-import-inline {
+  border: 1px dashed #aed2bd;
+  border-radius: 12px;
+  padding: 11px 12px;
+  background: #f3fbf5;
+  color: #306348;
+  cursor: pointer;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 800;
+}
+.excel-import-inline:hover { background: #e8f7ec; }
+.app-dialog--excel { width: min(780px, calc(100vw - 28px)); }
+.excel-import-dialog {
+  max-height: min(90dvh, 850px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  gap: 12px;
+}
+.excel-import-instructions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 13px;
+  background: #f1f8f3;
+}
+.excel-import-instructions a {
+  padding: 10px 13px;
+  border-radius: 10px;
+  background: #285740;
+  color: white;
+  font-size: 11px;
+  font-weight: 850;
+  text-decoration: none;
+}
+.excel-import-instructions span,
+.excel-import-footnote {
+  color: #68776a;
+  font-size: 10px;
+  line-height: 1.55;
+}
+.excel-upload-field {
+  display: grid;
+  gap: 7px;
+  padding: 15px;
+  border: 1px dashed #b1cfbc;
+  border-radius: 13px;
+  background: #fffefa;
+}
+.excel-upload-field > strong { font-size: 12px; }
+.excel-upload-field input { width: 100%; font-size: 11px; }
+.excel-upload-field small { color: #647469; }
+.excel-import-loading, .excel-import-success, .excel-import-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 11px;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.excel-import-loading { background: #f1f5ff; color: #496598; }
+.excel-import-success { background: #e7f7ee; color: #235f41; }
+.excel-import-error { background: #fff0eb; color: #a64235; }
+.excel-preview-area { display: grid; gap: 7px; }
+.excel-preview-area__head {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 6px 2px;
+}
+.excel-preview-area__head strong { font-size: 12px; }
+.excel-preview-area__head span { color: #718075; font-size: 10px; }
+.excel-preview-row {
+  display: grid;
+  grid-template-columns: minmax(120px, .75fr) minmax(180px, 1.25fr);
+  gap: 13px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid #e6ece5;
+  border-radius: 13px;
+  background: white;
+}
+.excel-preview-row__label { display: grid; gap: 5px; min-width: 0; }
+.excel-preview-row__label b { color: #283e30; font-size: 12px; }
+.excel-preview-row__label small { color: #77867a; font-size: 10px; overflow-wrap: anywhere; }
+.excel-preview-row__choices { display: grid; gap: 7px; min-width: 0; }
+.excel-preview-row__choices label { display: grid; gap: 6px; min-width: 0; }
+.excel-preview-row__choices label > span { font-size: 10px; color: #526758; font-weight: 750; }
+.excel-preview-row__choices select {
+  width: 100%;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid #cbdccc;
+  border-radius: 9px;
+  background: #fcfdfb;
+  color: #304235;
+  font-size: 11px;
+}
+.excel-preview-row__choices a { font-size: 10px; font-weight: 750; color: #27614b; }
+.excel-preview-row__error { color: #a24537; font-size: 10px; line-height: 1.5; }
+.excel-import-dialog > .primary-button { position: sticky; bottom: -1px; z-index: 1; }
+@media (max-width: 760px) {
+  .place-import-actions { display: flex; flex-direction: column; }
+  .excel-preview-row { grid-template-columns: 1fr; }
+  .app-dialog--excel { width: calc(100vw - 18px); }
+  .excel-import-dialog { padding: 13px; max-height: 90dvh; }
+}
