@@ -17,6 +17,7 @@ import {
   parseGroupPollPlanAnchor
 } from "../../src/lib/group-poll-handoff";
 import { derivePlannerHealth } from "../../src/lib/planner-health";
+import { filterCollectionPlannerPlaces } from "../../src/lib/collection-planner";
 import {
   buildEveningPlan,
   toActivePlanSnapshot
@@ -681,4 +682,22 @@ test("personal library classifies imported Excel places, map imports and manual 
   assert.deepEqual(filterLibraryPlaces(items, "map").map(p => p.id), ["map"]);
   assert.deepEqual(filterLibraryPlaces(items, "manual").map(p => p.id), ["manual"]);
   assert.deepEqual(filterLibraryPlaces(items, "all").map(p => p.id), ["xl", "map", "manual"]);
+});
+
+
+test("collection planner keeps the ranked order and only selects collection members", () => {
+  const ranked = [
+    place({ id: "a", name: "Ngoài bộ sưu tập" }),
+    place({ id: "b", name: "Quán cafe" }),
+    place({ id: "c", name: "Công viên" })
+  ];
+  const selected = filterCollectionPlannerPlaces(ranked, ["c", "b", "b", "missing"]);
+  assert.deepEqual(selected.map((candidate) => candidate.id), ["b", "c"]);
+  assert.deepEqual(ranked.map((candidate) => candidate.id), ["a", "b", "c"]);
+});
+
+test("collection planner never falls back to unrelated candidates", () => {
+  const ranked = [place({ id: "a", name: "Cafe" })];
+  assert.deepEqual(filterCollectionPlannerPlaces(ranked, []), []);
+  assert.deepEqual(filterCollectionPlannerPlaces(ranked, ["missing"]), []);
 });
