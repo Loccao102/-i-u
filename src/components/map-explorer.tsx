@@ -3173,6 +3173,7 @@ export function MapExplorer() {
       await personalApi.setSaved(target.id, !wasSaved);
       await loadSnapshot();
       setSelectedId(target.id);
+      setMapPreviewId(target.id);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Không thể lưu.");
     }
@@ -4848,8 +4849,10 @@ export function MapExplorer() {
                     className="place-card__main"
                     onClick={() => {
                       setSelectedId(place.id);
-                      setMapPreviewId(place.id);
-                      setMobilePanel("map");
+                      if (window.matchMedia("(max-width: 760px)").matches) {
+                        setMapPreviewId(place.id);
+                        setMobilePanel("map");
+                      }
                     }}
                   >
                     <span
@@ -5047,8 +5050,10 @@ export function MapExplorer() {
               }
             }}
             aria-pressed={mapFocus}
+            aria-label={mapFocus ? "Hiện danh sách địa điểm" : "Chế độ bản đồ rộng"}
           >
-            {mapFocus ? "Hiện danh sách" : "Xem rộng"}
+            <span className="map-focus-toggle__desktop">{mapFocus ? "Hiện danh sách" : "Xem rộng"}</span>
+            <span className="map-focus-toggle__mobile" aria-hidden="true">{mobilePanel === "list" ? "Bản đồ" : "Danh sách"}</span>
           </button>
           <details className="map-extra-actions">
             <summary aria-label="Các công cụ bản đồ khác">⋯ <span>Khác</span></summary>
@@ -5122,11 +5127,19 @@ export function MapExplorer() {
               </button>
               <button
                 type="button"
+                className="map-place-preview__save"
+                aria-pressed={saved.has(mapPreviewPlace.id)}
+                onClick={() => void toggleSaved(mapPreviewPlace.id)}
+              >
+                {saved.has(mapPreviewPlace.id) ? "♥ Đã lưu" : "♡ Lưu nơi này"}
+              </button>
+              <button
+                type="button"
                 className="map-place-preview__shortlist"
                 aria-pressed={shortlistIds.has(mapPreviewPlace.id)}
                 onClick={() => toggleShortlist(mapPreviewPlace)}
               >
-                {shortlistIds.has(mapPreviewPlace.id) ? "✓ Đã chọn so sánh" : "+ Chọn so sánh"}
+                {shortlistIds.has(mapPreviewPlace.id) ? "✓ Đã chọn" : "+ So sánh"}
               </button>
             </div>
           </section>
