@@ -30,7 +30,11 @@ export async function GET(request: Request, { params }: TileContext) {
     return NextResponse.json({ error: "MAP_PROVIDER_NOT_CONFIGURED" }, { status: 503 });
   }
 
-  // Restrict selectable styles: no arbitrary URLs or providers can be requested.\n  const styleQuery = new URL(request.url).searchParams.get("style");\n  const style = styleQuery === "positron" ? "positron" : "osm-bright";\n\n  // Keep the Geoapify key on the server rather than embedding it in browser requests.
+  // Restrict selectable styles: no arbitrary URLs or providers can be requested.
+  const styleQuery = new URL(request.url).searchParams.get("style");
+  const style = styleQuery === "positron" ? "positron" : "osm-bright";
+
+  // Keep the Geoapify key on the server rather than embedding it in browser requests.
   const tileUrl = new URL(
     `https://maps.geoapify.com/v1/tile/${style}/${z}/${x}/${y}.png`
   );
