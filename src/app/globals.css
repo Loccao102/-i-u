@@ -5397,3 +5397,181 @@ textarea:focus-visible {
     max-width: 86px;
   }
 }
+
+/* Quick-view card: appears only after an explicit marker click, so the map
+   remains uncluttered until the user asks for more information. */
+.map-place-preview {
+  position: absolute;
+  z-index: 5;
+  right: 22px;
+  bottom: 62px;
+  width: min(352px, calc(100% - 42px));
+  box-sizing: border-box;
+  padding: 14px;
+  border-radius: 22px;
+  border: 1px solid rgba(255,255,255,.95);
+  background: rgba(255,255,255,.98);
+  box-shadow: 0 18px 52px rgba(26, 47, 35, .23), 0 4px 13px rgba(26,47,35,.07);
+  backdrop-filter: blur(14px);
+  animation: map-preview-enter .2s ease-out both;
+}
+@keyframes map-preview-enter {
+  from { opacity: 0; transform: translateY(9px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.map-place-preview__close {
+  position: absolute;
+  z-index: 1;
+  top: 9px;
+  right: 10px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid #e6eae6;
+  border-radius: 50%;
+  background: #f8faf8;
+  color: #647168;
+  font-size: 19px;
+  line-height: 1;
+  cursor: pointer;
+}
+.map-place-preview__close:hover {
+  background: #ecf2ed;
+}
+.map-place-preview__content {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding-right: 18px;
+  min-width: 0;
+}
+.map-place-preview__thumb {
+  --place-accent: #b1cbb7;
+  width: 76px;
+  height: 83px;
+  flex: 0 0 76px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 76% 16%, rgba(255,255,255,.68), transparent 32%),
+    linear-gradient(135deg, color-mix(in srgb, var(--place-accent) 72%, #dbebde), #344d40);
+  color: white;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.28);
+}
+.map-place-preview__thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.map-place-preview__thumb > span {
+  font-size: 25px;
+}
+.map-place-preview__description {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+}
+.map-place-preview__eyebrow {
+  color: #d9584c;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.map-place-preview__eyebrow i {
+  font-style: normal;
+  color: #9da69f;
+  margin: 0 3px;
+}
+.map-place-preview__description strong {
+  font-size: 15px;
+  font-weight: 850;
+  color: #26362c;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.map-place-preview__meta {
+  color: #707a73;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+.map-place-preview__reason {
+  width: fit-content;
+  max-width: 100%;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #eef6ee;
+  color: #496a53;
+  font-size: 9px;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.map-place-preview__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+  margin-top: 12px;
+}
+.map-place-preview__actions button {
+  min-height: 38px;
+  padding: 8px 9px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 850;
+}
+.map-place-preview__route {
+  color: #fff;
+  background: #ff6559;
+  border: 1px solid #ff6559;
+}
+.map-place-preview__route:hover {
+  background: #ec5145;
+}
+.map-place-preview__shortlist {
+  color: #385343;
+  background: #f4f8f4;
+  border: 1px solid #dce9dd;
+}
+.map-place-preview__shortlist[aria-pressed="true"] {
+  background: #e0f1e5;
+  border-color: #b2d7bf;
+}
+@media (max-width: 760px) {
+  .map-place-preview {
+    bottom: 44px;
+    right: 10px;
+    left: 10px;
+    width: auto;
+    padding: 11px;
+    border-radius: 17px;
+  }
+  .map-place-preview__thumb {
+    width: 60px;
+    height: 68px;
+    flex-basis: 60px;
+  }
+  .map-place-preview__description strong {
+    font-size: 13px;
+  }
+  .map-place-preview__actions {
+    margin-top: 9px;
+  }
+  .map-place-preview__actions button {
+    min-height: 34px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .map-place-preview { animation: none; }
+}
