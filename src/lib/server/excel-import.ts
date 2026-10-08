@@ -172,9 +172,9 @@ function googleLinkLocation(value: string) {
   if (!value || value.length > 500) return undefined;
   try {
     const url = new URL(value);
-    if (!/(^|\\.)google\\.(com|com\\.vn)$/.test(url.hostname)) return undefined;
-    const match = /@(-?\\d+(?:\\.\\d+)?),(-?\\d+(?:\\.\\d+)?)/.exec(value) ??
-      /[?&]q=(-?\\d+(?:\\.\\d+)?),(-?\\d+(?:\\.\\d+)?)/.exec(value);
+    if (!/(^|\.)google\.(com|com\.vn)$/.test(url.hostname)) return undefined;
+    const match = /@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/.exec(value) ??
+      /[?&]q=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/.exec(value);
     if (!match) return undefined;
     const latitude = Number(match[1]);
     const longitude = Number(match[2]);
