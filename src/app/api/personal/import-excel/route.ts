@@ -91,6 +91,29 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// Retry matching a single corrected Excel row without reuploading the file.
+export async function PATCH(request: NextRequest) {
+  const profile = resolveAnonymousProfile(request);
+  try {
+    if (!excelImportConfigured()) throw new Error("GEOAPIFY_NOT_CONFIGURED");
+    const body = await readJsonObject(request);
+    const input = body.row;
+    if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("INVALID_BODY");
+    const row = input as Partial<ExcelPlaceRow>;
+    if (!Number.isInteger(row.row) || (row.row ?? 0) < 2 ||
+      typeof row.name !== "string" || row.name.trim().length < 2 || row.name.length > 100 ||
+      typeof row.area !== "string" || row.area.length > 180 ||
+      typeof row.note !== "string" || row.note.length > 300 ||
+      typeof row.cost !== "string" || row.cost.length > 100 ||
+      typeof row.mapsUrl !== "string" || row.mapsUrl.length > 500) throw new Error("INVALID_BODY");
+
+    const results = await searchExcelRow(row as ExcelPlaceRow);
+    return profileJson(profile, { candidates: results }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    return profileJson(profile, { error: message(error) }, { status: 400 });
+  }
+}
+
 type ConfirmedRow = { row: ExcelPlaceRow; selectedId: string };
 
 function validatedConfirmed(value: unknown): ConfirmedRow[] {
@@ -99,7 +122,7 @@ function validatedConfirmed(value: unknown): ConfirmedRow[] {
   for (const entry of value) {
     if (!entry || typeof entry !== "object") throw new Error("INVALID_BODY");
     const v = entry as Partial<ConfirmedRow>;
-    if (typeof v.selectedId !== "string" || !/^(geoapify:|osm:)[a-zA-Z0-9:_-]{6,220}$/.test(v.selectedId) ||
+    if (typeof v.selectedId !== "string" || (!/^(geoapify:|osm:)/.test(v.selectedId) || v.selectedId.length > 260) ||
       !v.row || typeof v.row !== "object" ||
       !Number.isInteger(v.row.row) || v.row.row < 2 ||
       typeof v.row.name !== "string" || !v.row.name.trim() ||
