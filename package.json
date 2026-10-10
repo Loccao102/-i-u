@@ -10,7 +10,7 @@
     "test:core": "node -e \"require('fs').rmSync('.core-test-dist',{recursive:true,force:true})\" && tsc -p tsconfig.core-test.json && node --test .core-test-dist/tests/core/core.test.js"
   },
   "dependencies": {
-    "maplibre-gl": "6.11.2",
+    "maplibre-gl": "6.13.0",
     "next": "16.3.6",
     "react": "19.3.0",
     "react-dom": "19.3.0",
