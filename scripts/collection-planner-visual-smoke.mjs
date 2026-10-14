@@ -51,6 +51,8 @@ async function runCase(label, width, height, empty) {
       : path === "/api/personal/active-plan" ? { activePlan: null }
       : path === "/api/personal/itinerary-shares" ? { shares: [] }
       : path === "/api/personal/planner-metrics" ? { metrics: null }
+      : path === "/api/personal/place-covers" ? { covers: {} }
+      : path.endsWith("/media") ? { userPhotos: [], google: null, googleConfigured: false }
       : path === "/api/context/weather" ? { weather: null }
       : path === "/api/routing/matrix" ? { matrix: null }
       : path === "/api/poi/discover" ? { results: [], nextOffset: null }
