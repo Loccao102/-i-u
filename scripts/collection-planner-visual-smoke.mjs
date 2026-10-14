@@ -66,12 +66,11 @@ async function runCase(label, width, height, empty) {
   try {
     const response = await page.goto(base, { waitUntil: "domcontentloaded", timeout: 30000 });
     if (!response?.ok()) throw new Error(`${label}: route responded ${response?.status()}`);
-    const collectionsNav = page.locator("nav button").filter({ hasText: "Bộ sưu tập" }).first();
+    const navigation = width <= 760 ? ".mobile-bottom-nav" : ".rail-nav";
+    const collectionsNav = page.locator(`${navigation} button`)
+      .filter({ hasText: "Bộ sưu tập" }).first();
     await collectionsNav.waitFor({ state: "visible", timeout: 30000 });
-    // During map hydration the sidebar may be rebuilt while Playwright scrolls
-    // to a target. Dispatch a click atomically on the live element instead.
-    await page.waitForTimeout(1000);
-    await collectionsNav.evaluate(button => button.click());
+    await collectionsNav.click({ timeout: 10000 });
     await page.getByRole("heading", { name: "QA Saved Places" }).waitFor({
       state: "visible", timeout: 20000
     });
