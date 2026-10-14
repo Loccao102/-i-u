@@ -7519,6 +7519,14 @@ export function MapExplorer() {
         >
           <StarIcon /><span>Thư viện</span>
         </button>
+        <button
+          type="button"
+          className={view === "collections" ? "is-active" : ""}
+          onClick={() => switchView("collections")}
+          aria-pressed={view === "collections"}
+        >
+          <StarIcon /><span>Bộ sưu tập</span>
+        </button>
         <button type="button" onClick={openPlanBuilder}>
           <PlusIcon /><span>Lịch trình</span>
         </button>
