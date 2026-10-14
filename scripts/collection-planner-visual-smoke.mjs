@@ -42,6 +42,8 @@ async function runCase(label, width, height, empty) {
   });
   const page = await context.newPage();
   const apiCalls = [];
+  const pageErrors = [];
+  page.on("pageerror", error => pageErrors.push(error.message));
   await page.route("**/api/**", async route => {
     const path = new URL(route.request().url()).pathname;
     apiCalls.push(path);
@@ -64,7 +66,10 @@ async function runCase(label, width, height, empty) {
     if (!response?.ok()) throw new Error(`${label}: route responded ${response?.status()}`);
     const collectionsNav = page.locator("nav button").filter({ hasText: "Bộ sưu tập" }).first();
     await collectionsNav.waitFor({ state: "visible", timeout: 30000 });
-    await collectionsNav.click();
+    // During map hydration the sidebar may be rebuilt while Playwright scrolls
+    // to a target. Dispatch a click atomically on the live element instead.
+    await page.waitForTimeout(1000);
+    await collectionsNav.evaluate(button => button.click());
     await page.getByRole("heading", { name: "QA Saved Places" }).waitFor({
       state: "visible", timeout: 20000
     });
@@ -96,6 +101,13 @@ async function runCase(label, width, height, empty) {
       animations: "disabled"
     });
     assertions.push(`${label}: collection planner dialog retains collection-only banner`);
+  } catch (error) {
+    await page.screenshot({
+      path: `${folder}/${label}-failure.png`, animations: "disabled"
+    }).catch(() => undefined);
+    console.error(`${label} API calls:`, apiCalls.join(", "));
+    console.error(`${label} browser errors:`, pageErrors.join(" | "));
+    throw error;
   } finally {
     await context.close();
   }
