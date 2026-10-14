@@ -696,6 +696,19 @@ test("collection planner keeps the ranked order and only selects collection memb
   assert.deepEqual(ranked.map((candidate) => candidate.id), ["a", "b", "c"]);
 });
 
+test("collection planner collapses duplicate provider/personal entries by ranked place ID", () => {
+  const ranked = [
+    place({ id: "cafe", name: "Best ranked cafe" }),
+    place({ id: "outside", name: "Not saved" }),
+    place({ id: "cafe", name: "Duplicate cafe imported from another source" }),
+    place({ id: "park", name: "Park" })
+  ];
+  const selected = filterCollectionPlannerPlaces(ranked, ["park", "cafe", "cafe"]);
+  assert.deepEqual(selected.map((candidate) => candidate.id), ["cafe", "park"]);
+  assert.equal(selected[0]?.name, "Best ranked cafe");
+  assert.equal(ranked.length, 4, "source ranking must not be mutated");
+});
+
 test("collection planner never falls back to unrelated candidates", () => {
   const ranked = [place({ id: "a", name: "Cafe" })];
   assert.deepEqual(filterCollectionPlannerPlaces(ranked, []), []);
