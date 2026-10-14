@@ -11,5 +11,15 @@ export function filterCollectionPlannerPlaces<T extends Pick<Place, "id">>(
 ): T[] {
   const allowed = new Set(collectionPlaceIds);
   if (allowed.size === 0) return [];
-  return rankedPlaces.filter((place) => allowed.has(place.id));
+  // A place may occur multiple times after merging personal and provider lists.
+  // Keep its highest-ranked occurrence so an itinerary never receives
+  // duplicate candidates for the same saved place.
+  const selected: T[] = [];
+  const seen = new Set<string>();
+  for (const place of rankedPlaces) {
+    if (!allowed.has(place.id) || seen.has(place.id)) continue;
+    seen.add(place.id);
+    selected.push(place);
+  }
+  return selected;
 }
