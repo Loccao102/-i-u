@@ -19,14 +19,14 @@ const places = [
   place("qa-cafe-two", "QA Cafe Two", 21.0300, 105.8530)
 ];
 
-function snapshot(empty) {
+function snapshot(empty, orphan) {
   return {
     version: 3, customPlaces: places, savedIds: places.map(p => p.id),
     ratings: {}, recommendationFeedbacks: {}, visits: [], dailyDiscoveries: [],
     completedPlans: [], collections: [{
       id: "qa-collection", name: "QA Saved Places",
       description: "Collection-only planner browser smoke",
-      placeIds: empty ? [] : places.map(p => p.id),
+      placeIds: orphan ? ["deleted-place-id"] : empty ? [] : places.map(p => p.id),
       createdAt: "2026-10-14T00:00:00.000Z", updatedAt: "2026-10-14T00:00:00.000Z"
     }]
   };
@@ -34,7 +34,7 @@ function snapshot(empty) {
 
 const browser = await chromium.launch({ headless: true });
 const assertions = [];
-async function runCase(label, width, height, empty) {
+async function runCase(label, width, height, empty, orphan = false) {
   const context = await browser.newContext({
     viewport: { width, height },
     deviceScaleFactor: 1,
@@ -47,7 +47,7 @@ async function runCase(label, width, height, empty) {
   await page.route("**/api/**", async route => {
     const path = new URL(route.request().url()).pathname;
     apiCalls.push(path);
-    const result = path === "/api/personal" ? snapshot(empty)
+    const result = path === "/api/personal" ? snapshot(empty, orphan)
       : path === "/api/personal/active-plan" ? { activePlan: null }
       : path === "/api/personal/itinerary-shares" ? { shares: [] }
       : path === "/api/personal/planner-metrics" ? { metrics: null }
@@ -80,11 +80,11 @@ async function runCase(label, width, height, empty) {
     });
 
     const planButton = page.getByRole("button", { name: "Lên lịch trình", exact: true }).first();
-    if (empty) {
+    if (empty || orphan) {
       if (!(await planButton.isDisabled())) {
-        throw new Error(`${label}: empty collection planner button should be disabled`);
+        throw new Error(`${label}: collection without available places must be disabled`);
       }
-      assertions.push(`${label}: empty collection is safely blocked`);
+      assertions.push(`${label}: empty or deleted-only collection is safely blocked`);
       return;
     }
     if (await planButton.isDisabled()) {
@@ -118,6 +118,7 @@ try {
   await runCase("desktop", 1440, 900, false);
   await runCase("mobile", 390, 844, false);
   await runCase("empty", 390, 844, true);
+  await runCase("orphan", 390, 844, false, true);
   console.log("PASS collection-planner synthetic visual smoke:", assertions.join(" | "));
 } finally {
   await browser.close();
