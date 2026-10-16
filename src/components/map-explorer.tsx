@@ -653,6 +653,9 @@ export function MapExplorer() {
   const [collectionName, setCollectionName] = useState("");
   const [collectionDescription, setCollectionDescription] = useState("");
 
+  // Monotonic sequence prevents late weather/routing responses from older
+  // plans overwriting a newly selected collection, reroll, or closed dialog.
+  const planGenerationRequestRef = useRef(0);
   const planStartInFlightRef = useRef(false);
   const checkInInFlightRef = useRef(false);
   const pollHandoffHandledRef = useRef(false);
@@ -2387,6 +2390,8 @@ export function MapExplorer() {
       nextVariant === 0 ? "generated_initial" : "rerolled",
     collectionIdOverride: string | null | undefined = undefined
   ) {
+    const requestId = ++planGenerationRequestRef.current;
+    const isCurrentRequest = () => requestId === planGenerationRequestRef.current;
     const replayTemplate =
       replayTemplateOverride === undefined
         ? planReplayTemplate
@@ -2401,9 +2406,11 @@ export function MapExplorer() {
         origin,
         targetAt.toISOString()
       );
+      if (!isCurrentRequest()) return null;
       forecast = result.weather;
       setPlanWeather(result.weather);
     } catch {
+      if (!isCurrentRequest()) return null;
       setPlanWeather(null);
     }
 
@@ -2515,6 +2522,10 @@ export function MapExplorer() {
       }
     }
 
+    // A newer generation (or dialog close) invalidates this async result.
+    // Never commit stale plans, notices, weather, or metrics.
+    if (!isCurrentRequest()) return null;
+
     const build = (places: Place[]) =>
       buildEveningPlan({
         places,
@@ -2587,6 +2598,7 @@ export function MapExplorer() {
   }
 
   function openPlanBuilder() {
+    planGenerationRequestRef.current += 1;
     setPlanCollectionId(null);
     setPlanReplayTemplate(null);
     setPlanScenario(scenario === "all" ? "date" : scenario);
@@ -6861,7 +6873,11 @@ export function MapExplorer() {
         </div>
       </dialog>
 
-      <dialog className="app-dialog app-dialog--plan" ref={planDialogRef}>
+      <dialog className="app-dialog app-dialog--plan" ref={planDialogRef}
+        onClose={() => {
+          planGenerationRequestRef.current += 1;
+          setPlanWeatherLoading(false);
+        }}>
         <div className="dialog-card plan-dialog-card">
           <div className="dialog-header">
             <div>
@@ -6892,6 +6908,8 @@ export function MapExplorer() {
                 </small>
               </div>
               <button type="button" onClick={() => {
+                planGenerationRequestRef.current += 1;
+                setPlanWeatherLoading(false);
                 setPlanCollectionId(null);
                 setActivePlan(null);
               }}>
