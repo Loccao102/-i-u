@@ -11,7 +11,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,3 +25,30 @@ jobs:
         run: npm run test:core
       - name: Build
         run: npm run build
+      - name: Install Playwright Chromium for synthetic collection visual QA
+        run: |
+          npm install --no-save --no-package-lock playwright
+          npx playwright install --with-deps chromium
+
+      - name: Collection-to-planner visual smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run start -- -p 3000 > /tmp/di-dau-next.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3000/ >/dev/null; then break; fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:3000/ >/dev/null
+          node scripts/collection-planner-visual-smoke.mjs
+
+      - name: Upload collection visual smoke screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collection-planner-visual-qa
+          path: test-results/collection-planner-visual/
+          retention-days: 7
+          if-no-files-found: warn
