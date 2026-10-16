@@ -2597,8 +2597,15 @@ export function MapExplorer() {
     return result;
   }
 
-  function openPlanBuilder() {
+  function invalidatePendingPlan() {
+    // Changing inputs while a weather request is pending must invalidate the
+    // old generated plan even if the dialog remains open.
     planGenerationRequestRef.current += 1;
+    setPlanWeatherLoading(false);
+  }
+
+  function openPlanBuilder() {
+    invalidatePendingPlan();
     setPlanCollectionId(null);
     setPlanReplayTemplate(null);
     setPlanScenario(scenario === "all" ? "date" : scenario);
@@ -6931,6 +6938,7 @@ export function MapExplorer() {
               <button
                 type="button"
                 onClick={() => {
+                  invalidatePendingPlan();
                   setPlanAnchor(null);
                   setActivePlan(null);
                   planAnchorDiscoveryStartedRef.current = false;
@@ -6955,6 +6963,7 @@ export function MapExplorer() {
               <button
                 type="button"
                 onClick={() => {
+                  invalidatePendingPlan();
                   setPlanReplayTemplate(null);
                   setActivePlan(null);
                 }}
@@ -6977,9 +6986,10 @@ export function MapExplorer() {
                       (planScenario === item ? " scenario-chip--active" : "")
                     }
                     onClick={() => {
+                      invalidatePendingPlan();
                       setPlanScenario(item);
                       setActivePlan(null);
-                  setPlanWeather(null);
+                      setPlanWeather(null);
                     }}
                   >
                     <span>{scenarioEmoji[item]}</span>
@@ -6997,6 +7007,7 @@ export function MapExplorer() {
                 type="time"
                 value={planStartTime}
                 onChange={(event) => {
+                  invalidatePendingPlan();
                   setPlanStartTime(event.target.value);
                   setActivePlan(null);
                   setPlanWeather(null);
@@ -7010,6 +7021,7 @@ export function MapExplorer() {
                 value={planRoutingMode}
                 onChange={(event) => {
                   const value = event.target.value as RoutingMode;
+                  invalidatePendingPlan();
                   setPlanRoutingMode(value);
                   setActivePlan(null);
                   void persistPlannerDefaults({ routeMode: value });
@@ -7027,6 +7039,7 @@ export function MapExplorer() {
                 value={planBudget}
                 onChange={(event) => {
                   const value = Number(event.target.value);
+                  invalidatePendingPlan();
                   setPlanBudget(value);
                   setActivePlan(null);
                   setPlanWeather(null);
@@ -7046,6 +7059,7 @@ export function MapExplorer() {
                 value={planDuration}
                 onChange={(event) => {
                   const value = Number(event.target.value) as 2 | 3 | 4;
+                  invalidatePendingPlan();
                   setPlanDuration(value);
                   setActivePlan(null);
                   setPlanWeather(null);
@@ -7064,6 +7078,7 @@ export function MapExplorer() {
                 value={planDistance}
                 onChange={(event) => {
                   const value = Number(event.target.value) as 3 | 5 | 8 | 12;
+                  invalidatePendingPlan();
                   setPlanDistance(value);
                   setActivePlan(null);
                   setPlanWeather(null);
