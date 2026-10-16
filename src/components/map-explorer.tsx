@@ -2602,6 +2602,13 @@ export function MapExplorer() {
       setNotice("Hãy thêm ít nhất một địa điểm vào bộ sưu tập trước.");
       return;
     }
+    // A saved collection may retain IDs of places that were removed or
+    // are no longer accessible. Never open an empty planner for orphan IDs.
+    const existingIds = new Set(allPlaces.map((place) => place.id));
+    if (!collection.placeIds.some((id) => existingIds.has(id))) {
+      setNotice("Các địa điểm trong bộ sưu tập không còn khả dụng. Hãy thêm lại địa điểm trước khi lập lịch trình.");
+      return;
+    }
     openPlanBuilder();
     setPlanAnchor(null);
     setPlanCollectionId(collection.id);
@@ -4439,7 +4446,12 @@ export function MapExplorer() {
             <div className="small-actions">
               <button
                 type="button"
-                disabled={selectedCollection.placeIds.length === 0}
+                disabled={
+                  selectedCollection.placeIds.length === 0 ||
+                  !selectedCollection.placeIds.some((id) =>
+                    allPlaces.some((place) => place.id === id)
+                  )
+                }
                 onClick={() => openCollectionPlanBuilder(selectedCollection)}
               >
                 Lên lịch trình
