@@ -34,7 +34,7 @@ function snapshot(empty, orphan) {
 
 const browser = await chromium.launch({ headless: true });
 const assertions = [];
-async function runCase(label, width, height, empty, orphan = false) {
+async function runCase(label, width, height, empty, orphan = false, staleWeather = false) {
   const context = await browser.newContext({
     viewport: { width, height },
     deviceScaleFactor: 1,
@@ -47,6 +47,9 @@ async function runCase(label, width, height, empty, orphan = false) {
   await page.route("**/api/**", async route => {
     const path = new URL(route.request().url()).pathname;
     apiCalls.push(path);
+    if (staleWeather && path === "/api/context/weather") {
+      await new Promise(resolve => setTimeout(resolve, 1400));
+    }
     const result = path === "/api/personal" ? snapshot(empty, orphan)
       : path === "/api/personal/active-plan" ? { activePlan: null }
       : path === "/api/personal/itinerary-shares" ? { shares: [] }
@@ -102,6 +105,21 @@ async function runCase(label, width, height, empty, orphan = false) {
       animations: "disabled"
     });
     assertions.push(`${label}: collection planner dialog retains collection-only banner`);
+    if (staleWeather) {
+      const dialog = page.locator(".app-dialog--plan");
+      await dialog.getByRole("button", { name: "Tạo kế hoạch", exact: true }).click();
+      await dialog.getByRole("button", { name: "Đóng" }).click();
+      // Closing while a weather request is pending invalidates that request;
+      // reopening must never receive stale plan state or a stuck loading flag.
+      await planButton.click();
+      await page.waitForTimeout(1700);
+      if (await dialog.locator(".plan-weather-card").count()) {
+        throw new Error(`${label}: stale weather response mutated reopened collection planner`);
+      }
+      await dialog.getByRole("button", { name: "Tạo kế hoạch", exact: true })
+        .waitFor({ state: "visible", timeout: 10000 });
+      assertions.push(`${label}: closing and reopening invalidates pending weather`);
+    }
   } catch (error) {
     await page.screenshot({
       path: `${folder}/${label}-failure.png`, animations: "disabled"
@@ -119,6 +137,7 @@ try {
   await runCase("mobile", 390, 844, false);
   await runCase("empty", 390, 844, true);
   await runCase("orphan", 390, 844, false, true);
+  await runCase("stale-weather", 390, 844, false, false, true);
   console.log("PASS collection-planner synthetic visual smoke:", assertions.join(" | "));
 } finally {
   await browser.close();
