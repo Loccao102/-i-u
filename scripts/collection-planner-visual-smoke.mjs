@@ -34,7 +34,7 @@ function snapshot(empty, orphan) {
 
 const browser = await chromium.launch({ headless: true });
 const assertions = [];
-async function runCase(label, width, height, empty, orphan = false, staleWeather = false) {
+async function runCase(label, width, height, empty, orphan = false, staleWeather = false, changeInputs = false) {
   const context = await browser.newContext({
     viewport: { width, height },
     deviceScaleFactor: 1,
@@ -47,7 +47,7 @@ async function runCase(label, width, height, empty, orphan = false, staleWeather
   await page.route("**/api/**", async route => {
     const path = new URL(route.request().url()).pathname;
     apiCalls.push(path);
-    if (staleWeather && path === "/api/context/weather") {
+    if ((staleWeather || changeInputs) && path === "/api/context/weather") {
       await new Promise(resolve => setTimeout(resolve, 1400));
     }
     const result = path === "/api/personal" ? snapshot(empty, orphan)
@@ -105,6 +105,21 @@ async function runCase(label, width, height, empty, orphan = false, staleWeather
       animations: "disabled"
     });
     assertions.push(`${label}: collection planner dialog retains collection-only banner`);
+    if (changeInputs) {
+      const dialog = page.locator(".app-dialog--plan");
+      await dialog.getByRole("button", { name: "Tạo kế hoạch", exact: true }).click();
+      // A budget edit must cancel the pending old generation without
+      // requiring the user to close or reopen the dialog.
+      await dialog.getByLabel("Budget / 2 người").selectOption("1000000");
+      await page.waitForTimeout(1700);
+      if (await dialog.locator(".plan-result").count()) {
+        throw new Error(`${label}: stale plan was committed after changing budget`);
+      }
+      if (await dialog.getByRole("button", { name: "Tạo kế hoạch", exact: true }).count() !== 1) {
+        throw new Error(`${label}: previous weather loading flag remained stuck`);
+      }
+      assertions.push(`${label}: budget edit invalidates in-flight plan`);
+    }
     if (staleWeather) {
       const dialog = page.locator(".app-dialog--plan");
       await dialog.getByRole("button", { name: "Tạo kế hoạch", exact: true }).click();
@@ -138,6 +153,7 @@ try {
   await runCase("empty", 390, 844, true);
   await runCase("orphan", 390, 844, false, true);
   await runCase("stale-weather", 390, 844, false, false, true);
+  await runCase("stale-budget", 390, 844, false, false, false, true);
   console.log("PASS collection-planner synthetic visual smoke:", assertions.join(" | "));
 } finally {
   await browser.close();
