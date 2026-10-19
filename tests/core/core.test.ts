@@ -685,6 +685,42 @@ test("personal library classifies imported Excel places, map imports and manual 
 });
 
 
+test("planner rejects negative road-matrix metrics and falls back to nonnegative travel estimates", () => {
+  const cafe = place({ id: "matrix-cafe", name: "Cafe metric QA" });
+  const baseInput = {
+    places: [cafe],
+    preferences,
+    signals,
+    origin: { latitude: 21.0278, longitude: 105.8342 }
+  };
+
+  for (const metric of [
+    { distanceKm: -3, durationMinutes: 10 },
+    { distanceKm: 1, durationMinutes: -30 }
+  ]) {
+    const plan = buildEveningPlan({
+      ...baseInput,
+      travelMatrix: { __origin__: { [cafe.id]: metric } }
+    });
+    assert.ok(plan);
+    assert.equal(plan.stops[0]?.travelSource, "heuristic");
+    assert.ok(plan.routeKm >= 0);
+    assert.ok(plan.totalDurationMinutes >= plan.stops[0]!.durationMinutes);
+    assert.equal(plan.roadRoutedLegs, 0);
+  }
+
+  // A legitimate zero-distance matrix leg is still valid (same-location route).
+  const sameLocation = buildEveningPlan({
+    ...baseInput,
+    travelMatrix: {
+      __origin__: { [cafe.id]: { distanceKm: 0, durationMinutes: 0 } }
+    }
+  });
+  assert.ok(sameLocation);
+  assert.equal(sameLocation.stops[0]?.travelSource, "road");
+  assert.equal(sameLocation.routeKm, 0);
+});
+
 test("collection planner keeps the ranked order and only selects collection members", () => {
   const ranked = [
     place({ id: "a", name: "Ngoài bộ sưu tập" }),
