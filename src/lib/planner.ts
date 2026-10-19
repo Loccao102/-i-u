@@ -236,7 +236,9 @@ function travelMetric(input: {
   if (
     metric &&
     Number.isFinite(metric.distanceKm) &&
-    Number.isFinite(metric.durationMinutes)
+    Number.isFinite(metric.durationMinutes) &&
+    metric.distanceKm >= 0 &&
+    metric.durationMinutes >= 0
   ) {
     return {
       distanceKm: metric.distanceKm,
