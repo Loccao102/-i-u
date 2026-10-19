@@ -2578,14 +2578,20 @@ export function MapExplorer() {
     if (result) {
       void personalApi.plannerMetrics
         .recordGeneration(telemetryKind)
-        .then(({ metrics }) => setPlannerMetrics(metrics))
+        .then(({ metrics }) => {
+          // A newer plan or closed dialog invalidates this response.
+          if (isCurrentRequest()) setPlannerMetrics(metrics);
+        })
         .catch(() => undefined);
     }
 
     if (!result) {
       void personalApi.plannerMetrics
         .recordGeneration("generation_failed")
-        .then(({ metrics }) => setPlannerMetrics(metrics))
+        .then(({ metrics }) => {
+          // A newer plan or closed dialog invalidates this response.
+          if (isCurrentRequest()) setPlannerMetrics(metrics);
+        })
         .catch(() => undefined);
       setNotice(
         effectiveCollectionId
