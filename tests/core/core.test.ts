@@ -20,6 +20,7 @@ import { derivePlannerHealth } from "../../src/lib/planner-health";
 import { filterCollectionPlannerPlaces } from "../../src/lib/collection-planner";
 import {
   buildEveningPlan,
+  plannerRoutingCandidates,
   toActivePlanSnapshot
 } from "../../src/lib/planner";
 import type {
@@ -684,6 +685,31 @@ test("personal library classifies imported Excel places, map imports and manual 
   assert.deepEqual(filterLibraryPlaces(items, "all").map(p => p.id), ["xl", "map", "manual"]);
 });
 
+
+test("planner and routing preflight reject malformed location coordinates", () => {
+  const invalid = [
+    place({ id: "bad-nan", name: "NaN latitude", latitude: Number.NaN, match: 99 }),
+    place({ id: "bad-infinite", name: "Infinite longitude", longitude: Infinity, match: 99 }),
+    place({ id: "bad-latitude", name: "Out of range latitude", latitude: 91, match: 99 }),
+    place({ id: "bad-longitude", name: "Out of range longitude", longitude: -181, match: 99 })
+  ];
+  const valid = place({ id: "valid-cafe", name: "Valid cafe", match: 65 });
+  const candidates = [...invalid, valid];
+
+  const routingCandidates = plannerRoutingCandidates(candidates, preferences);
+  assert.deepEqual(routingCandidates.map((item) => item.id), [valid.id]);
+
+  const plan = buildEveningPlan({
+    places: candidates,
+    preferences,
+    signals,
+    origin: { latitude: 21.0278, longitude: 105.8342 }
+  });
+  assert.ok(plan);
+  assert.deepEqual(plan.stops.map((stop) => stop.place.id), [valid.id]);
+  assert.ok(Number.isFinite(plan.routeKm));
+  assert.ok(Number.isFinite(plan.totalDurationMinutes));
+});
 
 test("planner rejects physically impossible road legs without rejecting valid provider routes", () => {
   const cafe = place({
