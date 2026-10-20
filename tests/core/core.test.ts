@@ -17,8 +17,10 @@ import {
   parseGroupPollPlanAnchor
 } from "../../src/lib/group-poll-handoff";
 import { derivePlannerHealth } from "../../src/lib/planner-health";
+import { filterCollectionPlannerPlaces } from "../../src/lib/collection-planner";
 import {
   buildEveningPlan,
+  plannerRoutingCandidates,
   toActivePlanSnapshot
 } from "../../src/lib/planner";
 import type {
@@ -681,4 +683,135 @@ test("personal library classifies imported Excel places, map imports and manual 
   assert.deepEqual(filterLibraryPlaces(items, "map").map(p => p.id), ["map"]);
   assert.deepEqual(filterLibraryPlaces(items, "manual").map(p => p.id), ["manual"]);
   assert.deepEqual(filterLibraryPlaces(items, "all").map(p => p.id), ["xl", "map", "manual"]);
+});
+
+
+test("planner and routing preflight reject malformed location coordinates", () => {
+  const invalid = [
+    place({ id: "bad-nan", name: "NaN latitude", latitude: Number.NaN, match: 99 }),
+    place({ id: "bad-infinite", name: "Infinite longitude", longitude: Infinity, match: 99 }),
+    place({ id: "bad-latitude", name: "Out of range latitude", latitude: 91, match: 99 }),
+    place({ id: "bad-longitude", name: "Out of range longitude", longitude: -181, match: 99 })
+  ];
+  const valid = place({ id: "valid-cafe", name: "Valid cafe", match: 65 });
+  const candidates = [...invalid, valid];
+
+  const routingCandidates = plannerRoutingCandidates(candidates, preferences);
+  assert.deepEqual(routingCandidates.map((item) => item.id), [valid.id]);
+
+  const plan = buildEveningPlan({
+    places: candidates,
+    preferences,
+    signals,
+    origin: { latitude: 21.0278, longitude: 105.8342 }
+  });
+  assert.ok(plan);
+  assert.deepEqual(plan.stops.map((stop) => stop.place.id), [valid.id]);
+  assert.ok(Number.isFinite(plan.routeKm));
+  assert.ok(Number.isFinite(plan.totalDurationMinutes));
+});
+
+test("planner rejects physically impossible road legs without rejecting valid provider routes", () => {
+  const cafe = place({
+    id: "distant-matrix-cafe",
+    name: "Cafe xa điểm xuất phát",
+    latitude: 21.0388
+  });
+  const base = {
+    places: [cafe],
+    preferences,
+    signals,
+    origin: { latitude: 21.0278, longitude: 105.8342 }
+  };
+
+  for (const metric of [
+    { distanceKm: 0, durationMinutes: 0 },
+    { distanceKm: 2, durationMinutes: 0 },
+    { distanceKm: 0.2, durationMinutes: 8 }
+  ]) {
+    const plan = buildEveningPlan({
+      ...base,
+      travelMatrix: { __origin__: { [cafe.id]: metric } }
+    });
+    assert.ok(plan);
+    assert.equal(plan.stops[0]?.travelSource, "heuristic");
+    assert.ok(plan.routeKm > 1, "fallback should use the real straight-line distance");
+    assert.equal(plan.roadRoutedLegs, 0);
+  }
+
+  const valid = buildEveningPlan({
+    ...base,
+    travelMatrix: {
+      __origin__: { [cafe.id]: { distanceKm: 2, durationMinutes: 8 } }
+    }
+  });
+  assert.ok(valid);
+  assert.equal(valid.stops[0]?.travelSource, "road");
+  assert.equal(valid.routeKm, 2);
+});
+
+test("planner rejects negative road-matrix metrics and falls back to nonnegative travel estimates", () => {
+  const cafe = place({ id: "matrix-cafe", name: "Cafe metric QA" });
+  const baseInput = {
+    places: [cafe],
+    preferences,
+    signals,
+    origin: { latitude: 21.0278, longitude: 105.8342 }
+  };
+
+  for (const metric of [
+    { distanceKm: -3, durationMinutes: 10 },
+    { distanceKm: 1, durationMinutes: -30 }
+  ]) {
+    const plan = buildEveningPlan({
+      ...baseInput,
+      travelMatrix: { __origin__: { [cafe.id]: metric } }
+    });
+    assert.ok(plan);
+    assert.equal(plan.stops[0]?.travelSource, "heuristic");
+    assert.ok(plan.routeKm >= 0);
+    assert.ok(plan.totalDurationMinutes >= plan.stops[0]!.durationMinutes);
+    assert.equal(plan.roadRoutedLegs, 0);
+  }
+
+  // A legitimate zero-distance matrix leg is still valid (same-location route).
+  const sameLocation = buildEveningPlan({
+    ...baseInput,
+    travelMatrix: {
+      __origin__: { [cafe.id]: { distanceKm: 0, durationMinutes: 0 } }
+    }
+  });
+  assert.ok(sameLocation);
+  assert.equal(sameLocation.stops[0]?.travelSource, "road");
+  assert.equal(sameLocation.routeKm, 0);
+});
+
+test("collection planner keeps the ranked order and only selects collection members", () => {
+  const ranked = [
+    place({ id: "a", name: "Ngoài bộ sưu tập" }),
+    place({ id: "b", name: "Quán cafe" }),
+    place({ id: "c", name: "Công viên" })
+  ];
+  const selected = filterCollectionPlannerPlaces(ranked, ["c", "b", "b", "missing"]);
+  assert.deepEqual(selected.map((candidate) => candidate.id), ["b", "c"]);
+  assert.deepEqual(ranked.map((candidate) => candidate.id), ["a", "b", "c"]);
+});
+
+test("collection planner collapses duplicate provider/personal entries by ranked place ID", () => {
+  const ranked = [
+    place({ id: "cafe", name: "Best ranked cafe" }),
+    place({ id: "outside", name: "Not saved" }),
+    place({ id: "cafe", name: "Duplicate cafe imported from another source" }),
+    place({ id: "park", name: "Park" })
+  ];
+  const selected = filterCollectionPlannerPlaces(ranked, ["park", "cafe", "cafe"]);
+  assert.deepEqual(selected.map((candidate) => candidate.id), ["cafe", "park"]);
+  assert.equal(selected[0]?.name, "Best ranked cafe");
+  assert.equal(ranked.length, 4, "source ranking must not be mutated");
+});
+
+test("collection planner never falls back to unrelated candidates", () => {
+  const ranked = [place({ id: "a", name: "Cafe" })];
+  assert.deepEqual(filterCollectionPlannerPlaces(ranked, []), []);
+  assert.deepEqual(filterCollectionPlannerPlaces(ranked, ["missing"]), []);
 });

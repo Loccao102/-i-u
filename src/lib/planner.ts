@@ -223,6 +223,15 @@ function travelMinutes(
   );
 }
 
+function hasUsableCoordinates(place: Place): boolean {
+  return (
+    Number.isFinite(place.latitude) &&
+    Number.isFinite(place.longitude) &&
+    Math.abs(place.latitude) <= 90 &&
+    Math.abs(place.longitude) <= 180
+  );
+}
+
 function travelMetric(input: {
   origin: UserLocation;
   previous: Place | null;
@@ -232,19 +241,6 @@ function travelMetric(input: {
 }) {
   const fromKey = input.previous?.id ?? "__origin__";
   const metric = input.matrix?.[fromKey]?.[input.place.id];
-
-  if (
-    metric &&
-    Number.isFinite(metric.distanceKm) &&
-    Number.isFinite(metric.durationMinutes)
-  ) {
-    return {
-      distanceKm: metric.distanceKm,
-      durationMinutes: metric.durationMinutes,
-      source: "road" as const
-    };
-  }
-
   const from = input.previous
     ? {
         latitude: input.previous.latitude,
@@ -255,6 +251,24 @@ function travelMetric(input: {
     latitude: input.place.latitude,
     longitude: input.place.longitude
   });
+
+  if (
+    metric &&
+    Number.isFinite(metric.distanceKm) &&
+    Number.isFinite(metric.durationMinutes) &&
+    metric.distanceKm >= 0 &&
+    metric.durationMinutes >= 0 &&
+    // A road route cannot be meaningfully shorter than the straight line.
+    // Impossible zero-time/nonzero-distance legs must not bypass guardrails.
+    metric.distanceKm + 0.05 >= distanceKm &&
+    (metric.distanceKm === 0 || metric.durationMinutes > 0)
+  ) {
+    return {
+      distanceKm: metric.distanceKm,
+      durationMinutes: metric.durationMinutes,
+      source: "road" as const
+    };
+  }
 
   return {
     distanceKm,
@@ -269,6 +283,7 @@ export function plannerRoutingCandidates(
   limit = 6,
   replayTemplate?: PlannerReplayTemplate | null
 ) {
+  const candidates = places.filter(hasUsableCoordinates);
   const chosen: Place[] = [];
   const used = new Set<string>();
   const stages =
@@ -282,7 +297,7 @@ export function plannerRoutingCandidates(
   if (replayTemplate?.stops.length) {
     for (const templateStop of replayTemplate.stops) {
       if (chosen.length >= limit) break;
-      const place = places.find(
+      const place = candidates.find(
         (item) => item.id === templateStop.placeId
       );
       if (!place || used.has(place.id)) continue;
@@ -294,7 +309,7 @@ export function plannerRoutingCandidates(
   }
 
   for (const stage of stages) {
-    for (const place of places) {
+    for (const place of candidates) {
       if (chosen.length >= limit) break;
       if (used.has(place.id) || !matchesStage(place, stage)) continue;
 
@@ -308,7 +323,7 @@ export function plannerRoutingCandidates(
     }
   }
 
-  for (const place of places) {
+  for (const place of candidates) {
     if (chosen.length >= limit) break;
     if (used.has(place.id)) continue;
     chosen.push(place);
@@ -682,6 +697,9 @@ function buildWithGuardrails(input: {
       : Math.max(120_000, rawStageBudget);
 
     const stageCandidates = places
+      // Invalid provider coordinates otherwise leak NaN into routing totals
+      // or get accepted as a score because NaN comparisons are false.
+      .filter(hasUsableCoordinates)
       .filter((place) => !used.has(place.id))
       .filter((place) => matchesStage(place, stage))
       .map((place) => {

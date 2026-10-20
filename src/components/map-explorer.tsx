@@ -48,6 +48,7 @@ import { derivePlanOutcomeProfile } from "@/lib/plan-outcomes";
 import { deriveDataRepairPrompts } from "@/lib/data-quality";
 import { analyzePlanQuality } from "@/lib/plan-quality";
 import { derivePlannerHealth } from "@/lib/planner-health";
+import { filterCollectionPlannerPlaces } from "@/lib/collection-planner";
 import { openingStatus } from "@/lib/opening-hours";
 import {
   deriveTasteProfile,
@@ -604,6 +605,7 @@ export function MapExplorer() {
   const [planReplayTemplate, setPlanReplayTemplate] =
     useState<PlannerReplayTemplate | null>(null);
   const [planAnchor, setPlanAnchor] = useState<Place | null>(null);
+  const [planCollectionId, setPlanCollectionId] = useState<string | null>(null);
   const [plannerMetrics, setPlannerMetrics] =
     useState<PlannerMetricsSummary | null>(null);
   const [activePlan, setActivePlan] = useState<EveningPlan | null>(null);
@@ -651,6 +653,9 @@ export function MapExplorer() {
   const [collectionName, setCollectionName] = useState("");
   const [collectionDescription, setCollectionDescription] = useState("");
 
+  // Monotonic sequence prevents late weather/routing responses from older
+  // plans overwriting a newly selected collection, reroll, or closed dialog.
+  const planGenerationRequestRef = useRef(0);
   const planStartInFlightRef = useRef(false);
   const checkInInFlightRef = useRef(false);
   const pollHandoffHandledRef = useRef(false);
@@ -731,6 +736,7 @@ export function MapExplorer() {
     setScenario("all");
     setSelectedId(anchor.id);
     setPlanReplayTemplate(null);
+    setPlanCollectionId(null);
     setPlanVariant(0);
     setPlanWeather(null);
     setActivePlan(null);
@@ -2272,6 +2278,7 @@ export function MapExplorer() {
         .flatMap((item) => item.placeKeys)
     );
 
+    setPlanCollectionId(null);
     setPlanScenario(routeScenario);
     setPlanStartTime(routeStartTime);
     setPlanVariant(variant);
@@ -2287,7 +2294,8 @@ export function MapExplorer() {
       routeStartTime,
       recentRouteKeys,
       null,
-      "generated_initial"
+      "generated_initial",
+      null
     );
 
     if (!result || result.stops.length === 0) return;
@@ -2379,8 +2387,11 @@ export function MapExplorer() {
     avoidPlaceKeys?: ReadonlySet<string>,
     replayTemplateOverride?: PlannerReplayTemplate | null,
     telemetryKind: "generated_initial" | "rerolled" =
-      nextVariant === 0 ? "generated_initial" : "rerolled"
+      nextVariant === 0 ? "generated_initial" : "rerolled",
+    collectionIdOverride: string | null | undefined = undefined
   ) {
+    const requestId = ++planGenerationRequestRef.current;
+    const isCurrentRequest = () => requestId === planGenerationRequestRef.current;
     const replayTemplate =
       replayTemplateOverride === undefined
         ? planReplayTemplate
@@ -2395,9 +2406,11 @@ export function MapExplorer() {
         origin,
         targetAt.toISOString()
       );
+      if (!isCurrentRequest()) return null;
       forecast = result.weather;
       setPlanWeather(result.weather);
     } catch {
+      if (!isCurrentRequest()) return null;
       setPlanWeather(null);
     }
 
@@ -2425,14 +2438,25 @@ export function MapExplorer() {
       tasteProfile
     );
 
-    const source = viewportBounds
-      ? forecastRanked.filter((place) => {
-          if (customIds.has(place.id) && viewportPersonalIds) {
-            return viewportPersonalIds.has(place.id);
-          }
-          return placeInsideBounds(place, viewportBounds);
-        })
-      : forecastRanked;
+    const effectiveCollectionId = collectionIdOverride === undefined
+      ? planCollectionId
+      : collectionIdOverride;
+    const collectionForPlan = effectiveCollectionId
+      ? collections.find((item) => item.id === effectiveCollectionId)
+      : null;
+    const source = effectiveCollectionId
+      ? filterCollectionPlannerPlaces(
+          forecastRanked,
+          collectionForPlan?.placeIds ?? []
+        )
+      : viewportBounds
+        ? forecastRanked.filter((place) => {
+            if (customIds.has(place.id) && viewportPersonalIds) {
+              return viewportPersonalIds.has(place.id);
+            }
+            return placeInsideBounds(place, viewportBounds);
+          })
+        : forecastRanked;
 
     const preferredSource =
       avoidPlaceKeys && avoidPlaceKeys.size > 0
@@ -2498,6 +2522,10 @@ export function MapExplorer() {
       }
     }
 
+    // A newer generation (or dialog close) invalidates this async result.
+    // Never commit stale plans, notices, weather, or metrics.
+    if (!isCurrentRequest()) return null;
+
     const build = (places: Place[]) =>
       buildEveningPlan({
         places,
@@ -2550,24 +2578,41 @@ export function MapExplorer() {
     if (result) {
       void personalApi.plannerMetrics
         .recordGeneration(telemetryKind)
-        .then(({ metrics }) => setPlannerMetrics(metrics))
+        .then(({ metrics }) => {
+          // A newer plan or closed dialog invalidates this response.
+          if (isCurrentRequest()) setPlannerMetrics(metrics);
+        })
         .catch(() => undefined);
     }
 
     if (!result) {
       void personalApi.plannerMetrics
         .recordGeneration("generation_failed")
-        .then(({ metrics }) => setPlannerMetrics(metrics))
+        .then(({ metrics }) => {
+          // A newer plan or closed dialog invalidates this response.
+          if (isCurrentRequest()) setPlannerMetrics(metrics);
+        })
         .catch(() => undefined);
       setNotice(
-        "Chưa đủ địa điểm phù hợp. Thử tăng bán kính hoặc đổi mood."
+        effectiveCollectionId
+          ? "Bộ sưu tập chưa có địa điểm đáp ứng giờ mở cửa, khoảng cách, ngân sách và thời lượng. Thử nới điều kiện hoặc thêm địa điểm vào bộ sưu tập."
+          : "Chưa đủ địa điểm phù hợp. Thử tăng bán kính hoặc đổi mood."
       );
     }
 
     return result;
   }
 
+  function invalidatePendingPlan() {
+    // Changing inputs while a weather request is pending must invalidate the
+    // old generated plan even if the dialog remains open.
+    planGenerationRequestRef.current += 1;
+    setPlanWeatherLoading(false);
+  }
+
   function openPlanBuilder() {
+    invalidatePendingPlan();
+    setPlanCollectionId(null);
     setPlanReplayTemplate(null);
     setPlanScenario(scenario === "all" ? "date" : scenario);
     setPlanVariant(0);
@@ -2575,6 +2620,23 @@ export function MapExplorer() {
     setPlanWeatherLoading(false);
     setActivePlan(null);
     planDialogRef.current?.showModal();
+  }
+
+  function openCollectionPlanBuilder(collection: Collection) {
+    if (collection.placeIds.length === 0) {
+      setNotice("Hãy thêm ít nhất một địa điểm vào bộ sưu tập trước.");
+      return;
+    }
+    // A saved collection may retain IDs of places that were removed or
+    // are no longer accessible. Never open an empty planner for orphan IDs.
+    const existingIds = new Set(allPlaces.map((place) => place.id));
+    if (!collection.placeIds.some((id) => existingIds.has(id))) {
+      setNotice("Các địa điểm trong bộ sưu tập không còn khả dụng. Hãy thêm lại địa điểm trước khi lập lịch trình.");
+      return;
+    }
+    openPlanBuilder();
+    setPlanAnchor(null);
+    setPlanCollectionId(collection.id);
   }
 
   function openPlanRoute() {
@@ -3862,6 +3924,7 @@ export function MapExplorer() {
       }
     }
 
+    setPlanCollectionId(null);
     setPlanReplayTemplate(template);
     setPlanScenario(replayScenario);
     setPlanRoutingMode(plan.plan.routeMode);
@@ -4406,6 +4469,18 @@ export function MapExplorer() {
           </div>
           {view === "collections" && selectedCollection ? (
             <div className="small-actions">
+              <button
+                type="button"
+                disabled={
+                  selectedCollection.placeIds.length === 0 ||
+                  !selectedCollection.placeIds.some((id) =>
+                    allPlaces.some((place) => place.id === id)
+                  )
+                }
+                onClick={() => openCollectionPlanBuilder(selectedCollection)}
+              >
+                Lên lịch trình
+              </button>
               <button type="button" onClick={() => openEditCollection(selectedCollection)}>
                 Sửa
               </button>
@@ -6811,7 +6886,11 @@ export function MapExplorer() {
         </div>
       </dialog>
 
-      <dialog className="app-dialog app-dialog--plan" ref={planDialogRef}>
+      <dialog className="app-dialog app-dialog--plan" ref={planDialogRef}
+        onClose={() => {
+          planGenerationRequestRef.current += 1;
+          setPlanWeatherLoading(false);
+        }}>
         <div className="dialog-card plan-dialog-card">
           <div className="dialog-header">
             <div>
@@ -6832,6 +6911,26 @@ export function MapExplorer() {
             Ghép các chặng gần nhau theo gu, budget, mood và dự báo thời tiết đúng giờ bạn định đi.
           </p>
 
+          {planCollectionId ? (
+            <section className="plan-replay-banner">
+              <div>
+                <span className="eyebrow">Chỉ lấy địa điểm trong bộ sưu tập</span>
+                <strong>{collections.find((item) => item.id === planCollectionId)?.name ?? "Bộ sưu tập không còn tồn tại"}</strong>
+                <small>
+                  Không tự thêm điểm ngoài bộ sưu tập. Các quy tắc giờ mở cửa, ngân sách, khoảng cách và thời lượng vẫn được áp dụng.
+                </small>
+              </div>
+              <button type="button" onClick={() => {
+                planGenerationRequestRef.current += 1;
+                setPlanWeatherLoading(false);
+                setPlanCollectionId(null);
+                setActivePlan(null);
+              }}>
+                Dùng mọi địa điểm
+              </button>
+            </section>
+          ) : null}
+
           {planAnchor ? (
             <section className="plan-replay-banner">
               <div>
@@ -6845,6 +6944,7 @@ export function MapExplorer() {
               <button
                 type="button"
                 onClick={() => {
+                  invalidatePendingPlan();
                   setPlanAnchor(null);
                   setActivePlan(null);
                   planAnchorDiscoveryStartedRef.current = false;
@@ -6869,6 +6969,7 @@ export function MapExplorer() {
               <button
                 type="button"
                 onClick={() => {
+                  invalidatePendingPlan();
                   setPlanReplayTemplate(null);
                   setActivePlan(null);
                 }}
@@ -6891,9 +6992,10 @@ export function MapExplorer() {
                       (planScenario === item ? " scenario-chip--active" : "")
                     }
                     onClick={() => {
+                      invalidatePendingPlan();
                       setPlanScenario(item);
                       setActivePlan(null);
-                  setPlanWeather(null);
+                      setPlanWeather(null);
                     }}
                   >
                     <span>{scenarioEmoji[item]}</span>
@@ -6911,6 +7013,7 @@ export function MapExplorer() {
                 type="time"
                 value={planStartTime}
                 onChange={(event) => {
+                  invalidatePendingPlan();
                   setPlanStartTime(event.target.value);
                   setActivePlan(null);
                   setPlanWeather(null);
@@ -6924,6 +7027,7 @@ export function MapExplorer() {
                 value={planRoutingMode}
                 onChange={(event) => {
                   const value = event.target.value as RoutingMode;
+                  invalidatePendingPlan();
                   setPlanRoutingMode(value);
                   setActivePlan(null);
                   void persistPlannerDefaults({ routeMode: value });
@@ -6941,6 +7045,7 @@ export function MapExplorer() {
                 value={planBudget}
                 onChange={(event) => {
                   const value = Number(event.target.value);
+                  invalidatePendingPlan();
                   setPlanBudget(value);
                   setActivePlan(null);
                   setPlanWeather(null);
@@ -6960,6 +7065,7 @@ export function MapExplorer() {
                 value={planDuration}
                 onChange={(event) => {
                   const value = Number(event.target.value) as 2 | 3 | 4;
+                  invalidatePendingPlan();
                   setPlanDuration(value);
                   setActivePlan(null);
                   setPlanWeather(null);
@@ -6978,6 +7084,7 @@ export function MapExplorer() {
                 value={planDistance}
                 onChange={(event) => {
                   const value = Number(event.target.value) as 3 | 5 | 8 | 12;
+                  invalidatePendingPlan();
                   setPlanDistance(value);
                   setActivePlan(null);
                   setPlanWeather(null);
@@ -7462,6 +7569,14 @@ export function MapExplorer() {
           aria-pressed={view === "mine"}
         >
           <StarIcon /><span>Thư viện</span>
+        </button>
+        <button
+          type="button"
+          className={view === "collections" ? "is-active" : ""}
+          onClick={() => switchView("collections")}
+          aria-pressed={view === "collections"}
+        >
+          <StarIcon /><span>Bộ sưu tập</span>
         </button>
         <button type="button" onClick={openPlanBuilder}>
           <PlusIcon /><span>Lịch trình</span>
