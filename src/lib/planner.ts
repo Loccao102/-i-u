@@ -232,21 +232,6 @@ function travelMetric(input: {
 }) {
   const fromKey = input.previous?.id ?? "__origin__";
   const metric = input.matrix?.[fromKey]?.[input.place.id];
-
-  if (
-    metric &&
-    Number.isFinite(metric.distanceKm) &&
-    Number.isFinite(metric.durationMinutes) &&
-    metric.distanceKm >= 0 &&
-    metric.durationMinutes >= 0
-  ) {
-    return {
-      distanceKm: metric.distanceKm,
-      durationMinutes: metric.durationMinutes,
-      source: "road" as const
-    };
-  }
-
   const from = input.previous
     ? {
         latitude: input.previous.latitude,
@@ -257,6 +242,24 @@ function travelMetric(input: {
     latitude: input.place.latitude,
     longitude: input.place.longitude
   });
+
+  if (
+    metric &&
+    Number.isFinite(metric.distanceKm) &&
+    Number.isFinite(metric.durationMinutes) &&
+    metric.distanceKm >= 0 &&
+    metric.durationMinutes >= 0 &&
+    // A road route cannot be meaningfully shorter than the straight line.
+    // Impossible zero-time/nonzero-distance legs must not bypass guardrails.
+    metric.distanceKm + 0.05 >= distanceKm &&
+    (metric.distanceKm === 0 || metric.durationMinutes > 0)
+  ) {
+    return {
+      distanceKm: metric.distanceKm,
+      durationMinutes: metric.durationMinutes,
+      source: "road" as const
+    };
+  }
 
   return {
     distanceKm,
