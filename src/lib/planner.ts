@@ -223,6 +223,15 @@ function travelMinutes(
   );
 }
 
+function hasUsableCoordinates(place: Place): boolean {
+  return (
+    Number.isFinite(place.latitude) &&
+    Number.isFinite(place.longitude) &&
+    Math.abs(place.latitude) <= 90 &&
+    Math.abs(place.longitude) <= 180
+  );
+}
+
 function travelMetric(input: {
   origin: UserLocation;
   previous: Place | null;
@@ -274,6 +283,7 @@ export function plannerRoutingCandidates(
   limit = 6,
   replayTemplate?: PlannerReplayTemplate | null
 ) {
+  const candidates = places.filter(hasUsableCoordinates);
   const chosen: Place[] = [];
   const used = new Set<string>();
   const stages =
@@ -287,7 +297,7 @@ export function plannerRoutingCandidates(
   if (replayTemplate?.stops.length) {
     for (const templateStop of replayTemplate.stops) {
       if (chosen.length >= limit) break;
-      const place = places.find(
+      const place = candidates.find(
         (item) => item.id === templateStop.placeId
       );
       if (!place || used.has(place.id)) continue;
@@ -299,7 +309,7 @@ export function plannerRoutingCandidates(
   }
 
   for (const stage of stages) {
-    for (const place of places) {
+    for (const place of candidates) {
       if (chosen.length >= limit) break;
       if (used.has(place.id) || !matchesStage(place, stage)) continue;
 
@@ -313,7 +323,7 @@ export function plannerRoutingCandidates(
     }
   }
 
-  for (const place of places) {
+  for (const place of candidates) {
     if (chosen.length >= limit) break;
     if (used.has(place.id)) continue;
     chosen.push(place);
@@ -687,6 +697,9 @@ function buildWithGuardrails(input: {
       : Math.max(120_000, rawStageBudget);
 
     const stageCandidates = places
+      // Invalid provider coordinates otherwise leak NaN into routing totals
+      // or get accepted as a score because NaN comparisons are false.
+      .filter(hasUsableCoordinates)
       .filter((place) => !used.has(place.id))
       .filter((place) => matchesStage(place, stage))
       .map((place) => {
