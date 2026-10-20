@@ -685,6 +685,45 @@ test("personal library classifies imported Excel places, map imports and manual 
 });
 
 
+test("planner rejects physically impossible road legs without rejecting valid provider routes", () => {
+  const cafe = place({
+    id: "distant-matrix-cafe",
+    name: "Cafe xa điểm xuất phát",
+    latitude: 21.0388
+  });
+  const base = {
+    places: [cafe],
+    preferences,
+    signals,
+    origin: { latitude: 21.0278, longitude: 105.8342 }
+  };
+
+  for (const metric of [
+    { distanceKm: 0, durationMinutes: 0 },
+    { distanceKm: 2, durationMinutes: 0 },
+    { distanceKm: 0.2, durationMinutes: 8 }
+  ]) {
+    const plan = buildEveningPlan({
+      ...base,
+      travelMatrix: { __origin__: { [cafe.id]: metric } }
+    });
+    assert.ok(plan);
+    assert.equal(plan.stops[0]?.travelSource, "heuristic");
+    assert.ok(plan.routeKm > 1, "fallback should use the real straight-line distance");
+    assert.equal(plan.roadRoutedLegs, 0);
+  }
+
+  const valid = buildEveningPlan({
+    ...base,
+    travelMatrix: {
+      __origin__: { [cafe.id]: { distanceKm: 2, durationMinutes: 8 } }
+    }
+  });
+  assert.ok(valid);
+  assert.equal(valid.stops[0]?.travelSource, "road");
+  assert.equal(valid.routeKm, 2);
+});
+
 test("planner rejects negative road-matrix metrics and falls back to nonnegative travel estimates", () => {
   const cafe = place({ id: "matrix-cafe", name: "Cafe metric QA" });
   const baseInput = {
